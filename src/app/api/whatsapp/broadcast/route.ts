@@ -8,6 +8,11 @@ import {
   phoneVariants,
   isRecipientNotAllowedError,
 } from '@/lib/whatsapp/phone-utils'
+import {
+  checkRateLimit,
+  rateLimitResponse,
+  RATE_LIMITS,
+} from '@/lib/rate-limit'
 
 interface BroadcastResult {
   phone: string
@@ -54,6 +59,14 @@ export async function POST(request: Request) {
 
     if (authError || !user) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+
+    // Per-user broadcast budget. Note: this limits how often a user
+    // can *start* a campaign, not how many messages go out inside
+    // one — the fan-out loop below runs without additional gating.
+    const limit = checkRateLimit(`broadcast:${user.id}`, RATE_LIMITS.broadcast)
+    if (!limit.success) {
+      return rateLimitResponse(limit)
     }
 
     const body = await request.json()
