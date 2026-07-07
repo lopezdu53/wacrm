@@ -558,5 +558,186 @@
       "lostThisMonthTooltip": "Deals marked as Lost since the first day of the current month.",
       "howCalculated": "How {label} is calculated"
     }
+  },
+  "Broadcasts": {
+    "page": {
+      "title": "Broadcasts",
+      "subtitle": "Send bulk messages to your contacts using approved templates.",
+      "newBroadcast": "New Broadcast",
+      "noBroadcastsYet": "No broadcasts yet",
+      "createFirst": "Create your first broadcast to reach your contacts at scale.",
+      "table": {
+        "name": "Name",
+        "template": "Template",
+        "recipients": "Recipients",
+        "delivery": "Delivery",
+        "read": "Read",
+        "status": "Status",
+        "date": "Date"
+      },
+      "errorLoad": "Failed to load broadcasts",
+      "retry": "Retry"
+    },
+    "status": {
+      "draft": "Draft",
+      "scheduled": "Scheduled",
+      "sending": "Sending",
+      "sent": "Sent",
+      "failed": "Failed",
+      "pending": "Pending",
+      "delivered": "Delivered",
+      "read": "Read",
+      "replied": "Replied",
+      "unknown": "Unknown"
+    },
+    "detail": {
+      "backToBroadcasts": "Back to Broadcasts",
+      "notFound": "Broadcast not found",
+      "template": "Template: {name}",
+      "createdAt": "Created {date}",
+      "deletePrompt": "Delete this broadcast?",
+      "cancel": "Cancel",
+      "confirm": "Confirm",
+      "deleting": "Deleting…",
+      "delete": "Delete",
+      "cannotDeleteSending": "Cannot delete while a broadcast is actively sending",
+      "deleteHover": "Delete this broadcast",
+      "funnel": "Funnel",
+      "recipientsHeader": "Recipients ({filtered} of {total})",
+      "recipientsHeaderAll": "Recipients ({total})",
+      "allStatuses": "All statuses",
+      "exportCsv": "Export CSV",
+      "noRecipients": "No recipients found.",
+      "noRecipientsFilter": "No recipients match this filter.",
+      "table": {
+        "contact": "Contact",
+        "phone": "Phone",
+        "status": "Status",
+        "sent": "Sent",
+        "delivered": "Delivered",
+        "read": "Read",
+        "error": "Error"
+      },
+      "stats": {
+        "totalRecipients": "Total Recipients",
+        "sent": "Sent",
+        "delivered": "Delivered",
+        "read": "Read",
+        "replied": "Replied",
+        "failed": "Failed"
+      },
+      "toastFailedDelete": "Failed to delete: {error}",
+      "toastDeleted": "Broadcast deleted"
+    },
+    "new": {
+      "title": "New Broadcast",
+      "subtitle": "Create and send a broadcast message to your contacts.",
+      "steps": {
+        "template": "Template",
+        "audience": "Audience",
+        "personalize": "Personalize",
+        "send": "Send"
+      },
+      "toastGiveName": "Give the broadcast a name before saving a draft.",
+      "toastNotSignedIn": "Not signed in.",
+      "toastNotLinked": "Your profile is not linked to an account.",
+      "toastFailedDraft": "Failed to save draft: {error}",
+      "toastDraftSaved": "Draft saved"
+    },
+    "wizard": {
+      "next": "Next",
+      "back": "Back",
+      "cancel": "Cancel",
+      "chooseTemplate": {
+        "title": "Choose a Template",
+        "subtitle": "Select an approved message template for your broadcast.",
+        "noTemplates": "No templates available.",
+        "createFirst": "Create a template in Settings first.",
+        "errorLoad": "Failed to load templates"
+      },
+      "selectAudience": {
+        "title": "Select Audience",
+        "subtitle": "Choose who will receive this broadcast.",
+        "method": {
+          "all": "All Contacts",
+          "tags": "Filter by Tags",
+          "customField": "Custom Field",
+          "csv": "Upload CSV"
+        },
+        "allDesc": "Send to all {count} contacts in your database.",
+        "allDescLoading": "Send to all contacts in your database.",
+        "tagDesc": "Send to contacts matching specific tags.",
+        "customFieldDesc": "Send to contacts matching a custom field rule.",
+        "csvDesc": "Upload a CSV with phone numbers (and optional names).",
+        "selectTags": "Select Tags",
+        "searchTags": "Search tags...",
+        "noTagsFound": "No tags found.",
+        "excludeTags": "Exclude Tags (Optional)",
+        "searchExcludeTags": "Search tags to exclude...",
+        "field": "Field",
+        "selectField": "Select a field...",
+        "operator": "Operator",
+        "operatorIs": "Is",
+        "operatorIsNot": "Is not",
+        "operatorContains": "Contains",
+        "value": "Value",
+        "valuePlaceholder": "Value to match",
+        "uploadCsv": "Upload CSV File",
+        "csvFormatDesc": "Must contain a 'phone' column (E.164 format). 'name' column is optional.",
+        "csvContactsFound": "{count} valid contact(s) found in CSV.",
+        "errorLoadTags": "Failed to load tags",
+        "errorLoadFields": "Failed to load custom fields",
+        "errorCsvParse": "Could not parse CSV file.",
+        "errorCsvMissingPhone": "CSV must have a 'phone' column."
+      },
+      "personalize": {
+        "title": "Personalize Variables",
+        "subtitle": "Map your template variables to contact fields or provide static values.",
+        "headerImage": "Header Image",
+        "headerImageDesc": "This template requires a header image.",
+        "imageUrl": "Image URL",
+        "imageUrlPlaceholder": "https://example.com/image.jpg",
+        "variables": "Variables",
+        "varDesc": "Set values for {{name}}",
+        "type": "Type",
+        "typeStatic": "Static Value",
+        "typeContact": "Contact Field",
+        "typeCustom": "Custom Field",
+        "staticValue": "Static Value",
+        "contactField": "Contact Field",
+        "selectContactField": "Select field...",
+        "customField": "Custom Field",
+        "selectCustomField": "Select custom field...",
+        "preview": "Preview",
+        "previewSample": "Showing preview with sample data.",
+        "noPreview": "Preview not available.",
+        "fieldMap": {
+          "name": "Name",
+          "phone": "Phone",
+          "email": "Email"
+        }
+      },
+      "scheduleSend": {
+        "title": "Review & Send",
+        "subtitle": "Give your broadcast a name and confirm sending.",
+        "broadcastName": "Broadcast Name",
+        "broadcastNamePlaceholder": "e.g., Summer Promo",
+        "summary": "Summary",
+        "template": "Template:",
+        "audience": "Audience:",
+        "audienceAll": "All contacts",
+        "audienceTags": "Filtered by tags",
+        "audienceField": "Filtered by custom field",
+        "audienceCsv": "CSV upload",
+        "variables": "Variables:",
+        "variablesMapped": "{count} mapped",
+        "saveDraft": "Save as Draft",
+        "sendNow": "Send Broadcast",
+        "sending": "Sending...",
+        "preparing": "Preparing...",
+        "progressDesc": "Processing {current} of {total} recipients...",
+        "toastFailedPreview": "Failed to load preview data"
+      }
+    }
   }
 }

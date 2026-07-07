@@ -154,6 +154,7 @@ function Metric({
   label: string;
   value: string;
   tooltip: string;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   t: any;
 }) {
   return (

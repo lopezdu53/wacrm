@@ -378,6 +378,7 @@ function SortableStageRow({
   onColorChange: (v: string) => void;
   onRemove: () => void;
   colors: string[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   t: any;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
@@ -431,6 +432,7 @@ function ColorSwatch({
   value: string;
   onChange: (v: string) => void;
   colors: string[];
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   t: any;
 }) {
   const [open, setOpen] = useState(false);
