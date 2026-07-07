@@ -739,5 +739,182 @@
         "toastFailedPreview": "Failed to load preview data"
       }
     }
+  },
+  "Automations": {
+    "list": {
+      "title": "Automations",
+      "subtitle": "Build workflows that react to WhatsApp® events automatically.",
+      "create": "Create Automation",
+      "retry": "Retry",
+      "templatesTitle": "Quick-start templates",
+      "emptyTitle": "No automations yet",
+      "emptyDesc": "Pick a template above or create one from scratch.",
+      "runs": "{count} run",
+      "runsPlural": "{count} runs",
+      "lastRun": "last {time}",
+      "activate": "Activate",
+      "deactivate": "Deactivate",
+      "edit": "Edit",
+      "duplicate": "Duplicate",
+      "viewLogs": "View Logs",
+      "delete": "Delete",
+      "cancel": "Cancel",
+      "deleteTitle": "Delete automation",
+      "deleteDesc": "This permanently removes {name} and its execution history. This cannot be undone.",
+      "toasts": {
+        "activated": "Automation activated",
+        "paused": "Automation paused",
+        "duplicated": "Automation duplicated",
+        "deleted": "Automation deleted",
+        "updateError": "Failed to update",
+        "duplicateError": "Failed to duplicate",
+        "deleteError": "Failed to delete"
+      }
+    },
+    "edit": {
+      "loading": "Loading...",
+      "loadError": "Failed to load ({status})",
+      "back": "Back to Automations"
+    },
+    "logs": {
+      "title": "Execution logs",
+      "loadError": "Failed to load logs",
+      "emptyTitle": "No executions yet",
+      "emptyDesc": "Trigger this automation to see runs here.",
+      "unknownContact": "Unknown contact",
+      "step": "{count} step",
+      "stepPlural": "{count} steps",
+      "noSteps": "No steps recorded.",
+      "status": {
+        "success": "success",
+        "partial": "partial",
+        "failed": "failed"
+      },
+      "back": "Back",
+      "backAria": "Back"
+    },
+    "builder": {
+      "steps": {
+        "send_message": "Send Message",
+        "send_template": "Send Template",
+        "add_tag": "Add Tag",
+        "remove_tag": "Remove Tag",
+        "assign_conversation": "Assign Conversation",
+        "update_contact_field": "Update Contact Field",
+        "create_deal": "Create Deal",
+        "wait": "Wait",
+        "condition": "Condition (If/Else)",
+        "send_webhook": "Send Webhook",
+        "close_conversation": "Close Conversation"
+      },
+      "triggers": {
+        "new_message_received": { "label": "New Message Received", "hint": "Any incoming message" },
+        "first_inbound_message": { "label": "First Message from Contact", "hint": "First time this contact ever messages you (works for manually-added contacts too)" },
+        "keyword_match": { "label": "Keyword Match", "hint": "Message contains specific keyword(s)" },
+        "new_contact_created": { "label": "New Contact Created", "hint": "When a contact is auto-created from an incoming message" },
+        "conversation_assigned": { "label": "Conversation Assigned", "hint": "When assigned to an agent" },
+        "tag_added": { "label": "Tag Added", "hint": "When a tag is added to a contact" },
+        "time_based": { "label": "Time-Based", "hint": "On a recurring schedule" }
+      },
+      "trigger": "Trigger",
+      "triggerType": "Trigger type",
+      "keywords": "Keywords",
+      "keywordsHint": "Comma-separated list (e.g. hello, help, buy)",
+      "schedule": "Schedule",
+      "scheduleHint": "Cron expression (e.g. 0 9 * * 1-5)",
+      "active": "Active",
+      "activeAria": "Active",
+      "save": "Save",
+      "saveDraft": "Save Draft",
+      "untitled": "Untitled automation",
+      "backToAutomations": "Back to automations",
+      "toasts": {
+        "saved": "Automation saved",
+        "created": "Automation created",
+        "saveFailed": "Save failed"
+      },
+      "tags": {
+        "select": "Select a tag…",
+        "placeholder": "Tag id",
+        "unknown": "{id} (unknown tag)"
+      },
+      "fields": {
+        "name": "Name",
+        "email": "Email",
+        "company": "Company",
+        "customFields": "Custom fields",
+        "unknown": "{id} (unknown field)"
+      },
+      "agents": {
+        "select": "Select an agent…",
+        "placeholder": "Agent id",
+        "unknown": "{id} (unknown agent)"
+      },
+      "pipelines": {
+        "pipelineLabel": "Pipeline",
+        "pipelineIdLabel": "Pipeline id",
+        "stageLabel": "Stage",
+        "stageIdLabel": "Stage id",
+        "selectPipeline": "Select a pipeline…",
+        "selectStage": "Select a stage…",
+        "selectPipelineFirst": "Select a pipeline first…",
+        "unknownPipeline": "{id} (unknown pipeline)",
+        "unknownStage": "{id} (unknown stage)"
+      },
+      "templates": {
+        "templateLabel": "Template",
+        "templateNameLabel": "Template name",
+        "languageLabel": "Language",
+        "select": "Select a template…",
+        "unknown": "{name} ({lang}) — not in approved list",
+        "unknownLang": "unknown"
+      },
+      "branches": {
+        "yes": "Yes",
+        "no": "No"
+      },
+      "addStep": "Add step",
+      "config": {
+        "messageText": "Message text",
+        "placeholderMessageText": "Hi! Thanks for reaching out…",
+        "tagLabel": "Tag",
+        "modeLabel": "Mode",
+        "modes": {
+          "round_robin": "Round-robin",
+          "specific": "Specific agent"
+        },
+        "agentLabel": "Agent",
+        "fieldLabel": "Field",
+        "valueLabel": "Value",
+        "placeholderValue": "Text or {{ vars.x }} / {{ message.text }}",
+        "titleLabel": "Title",
+        "amountLabel": "Amount",
+        "unitLabel": "Unit",
+        "units": {
+          "minutes": "Minutes",
+          "hours": "Hours",
+          "days": "Days"
+        },
+        "subjectLabel": "Subject",
+        "subjects": {
+          "tag_presence": "Tag presence",
+          "contact_field": "Contact field",
+          "message_content": "Message content",
+          "time_of_day": "Time of day"
+        },
+        "operandLabel": "Operand",
+        "placeholderTime": "HH:mm-HH:mm",
+        "placeholderContact": "name / email / company",
+        "placeholderTag": "tag id",
+        "urlLabel": "URL",
+        "headersLabel": "Headers",
+        "placeholderHeaders": "{\"Authorization\": \"Bearer ...\"}",
+        "bodyTemplateLabel": "Body template",
+        "placeholderBody": "{\"id\": \"{{ contact.id }}\"}",
+        "matchType": "Match type",
+        "matchContains": "Contains",
+        "matchExact": "Exact"
+      }
+    }
   }
 }
