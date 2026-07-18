@@ -135,6 +135,11 @@ Full walkthrough with screenshots:
 > _Note: wacrm is MIT-licensed and runs anywhere Node.js does
 > (Vercel, Railway, your own VPS). Hostinger is recommended, not
 > required._
+>
+> _Self-hosting with Docker? The repo ships a root `Dockerfile`, and
+> [`docs/deployment-easypanel.md`](./docs/deployment-easypanel.md) is a
+> step-by-step guide for Easypanel (and any Docker host — Coolify,
+> Dokploy, a plain VPS)._
 
 ## Documentation
 
