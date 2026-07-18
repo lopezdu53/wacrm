@@ -269,10 +269,22 @@ export interface MessageReaction {
 export interface WhatsAppConfig {
   id: string;
   user_id: string;
+  /**
+   * Which transport this account uses. 'meta' is the official Cloud API
+   * (default); 'evolution' is the QR-based Evolution API (migration 037).
+   * Meta columns are null on an Evolution row and vice-versa.
+   */
+  provider?: 'meta' | 'evolution';
   phone_number_id: string;
   waba_id?: string;
   access_token: string;
   verify_token?: string;
+  /** Evolution API server base URL (provider = 'evolution'). */
+  evolution_base_url?: string | null;
+  /** Evolution API key, AES-256-GCM encrypted at rest. */
+  evolution_api_key?: string | null;
+  /** Evolution instance name — unique per account. */
+  evolution_instance?: string | null;
   status: 'connected' | 'disconnected';
   connected_at?: string;
   /**
