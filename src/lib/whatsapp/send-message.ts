@@ -30,6 +30,11 @@ import {
   type MediaKind,
 } from '@/lib/whatsapp/meta-api';
 import {
+  sendEvolutionText,
+  sendEvolutionMedia,
+  type EvolutionMediaType,
+} from '@/lib/whatsapp/evolution-api';
+import {
   validateInteractivePayload,
   interactivePayloadPreviewText,
   type InteractiveMessagePayload,
@@ -262,10 +267,15 @@ export async function sendMessageToConversation(
     );
   }
 
-  const accessToken = decrypt(config.access_token);
+  const isEvolution = config.provider === 'evolution';
+
+  // Meta rows carry an access_token; Evolution rows carry an encrypted
+  // evolution_api_key instead. Decrypt whichever this provider uses.
+  const accessToken = isEvolution ? '' : decrypt(config.access_token);
+  const evolutionApiKey = isEvolution ? decrypt(config.evolution_api_key) : '';
 
   // Self-heal legacy CBC ciphertexts. Fire-and-forget; idempotent.
-  if (isLegacyFormat(config.access_token)) {
+  if (!isEvolution && isLegacyFormat(config.access_token)) {
     void db
       .from('whatsapp_config')
       .update({ access_token: encrypt(accessToken) })
@@ -330,6 +340,36 @@ export async function sendMessageToConversation(
   }
 
   const attempt = async (phone: string): Promise<string> => {
+    // Evolution transport (QR/Baileys). No templates, no 24h window and
+    // no interactive buttons/lists — those Meta-only shapes fall back to
+    // sending their body text so the message still reaches the customer.
+    if (isEvolution) {
+      const evoAuth = {
+        baseUrl: config.evolution_base_url as string,
+        apiKey: evolutionApiKey,
+        instance: config.evolution_instance as string,
+        to: phone,
+      };
+      if (isMediaKind) {
+        const result = await sendEvolutionMedia({
+          ...evoAuth,
+          mediaType: messageType as EvolutionMediaType,
+          mediaUrl: mediaUrl!,
+          caption: contentText || undefined,
+          fileName: filename || undefined,
+        });
+        return result.messageId;
+      }
+      const evoText =
+        messageType === 'interactive'
+          ? interactivePayload!.body
+          : messageType === 'template'
+            ? contentText || templateName || ''
+            : contentText!;
+      const result = await sendEvolutionText({ ...evoAuth, text: evoText });
+      return result.messageId;
+    }
+
     if (messageType === 'template') {
       const result = await sendTemplateMessage({
         phoneNumberId: config.phone_number_id,

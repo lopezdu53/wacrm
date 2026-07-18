@@ -29,12 +29,14 @@ import {
   AccordionTrigger,
   AccordionContent,
 } from '@/components/ui/accordion';
+import { EvolutionConfig } from './evolution-config';
 import type { WhatsAppConfig as WhatsAppConfigType } from '@/types';
 
 const MASKED_TOKEN = '••••••••••••••••';
 
 type ConnectionStatus = 'connected' | 'disconnected' | 'unknown';
 type ResetReason = 'token_corrupted' | 'meta_api_error' | null;
+type Provider = 'meta' | 'evolution';
 
 export function WhatsAppConfig() {
   const t = useTranslations('Settings.whatsapp');
@@ -52,6 +54,9 @@ export function WhatsAppConfig() {
   const [resetting, setResetting] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [config, setConfig] = useState<WhatsAppConfigType | null>(null);
+  // Which transport this account uses. Meta (official Cloud API) is the
+  // default; Evolution is the QR-based alternative added in migration 037.
+  const [provider, setProvider] = useState<Provider>('meta');
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('unknown');
   const [resetReason, setResetReason] = useState<ResetReason>(null);
   const [statusMessage, setStatusMessage] = useState<string>('');
@@ -115,6 +120,8 @@ export function WhatsAppConfig() {
 
       if (data) {
         setConfig(data);
+        // Route the panel to the transport this account is on.
+        setProvider(data.provider === 'evolution' ? 'evolution' : 'meta');
         setPhoneNumberId(data.phone_number_id || '');
         setWabaId(data.waba_id || '');
         setAccessToken(MASKED_TOKEN);
@@ -133,8 +140,10 @@ export function WhatsAppConfig() {
       // Clear any stale probe result when reloading the row.
       setRegistrationProbe(null);
 
-      // Then verify health via the API (decrypts token + pings Meta)
-      if (data) {
+      // Then verify health via the API (decrypts token + pings Meta).
+      // Skip for Evolution rows — that health check is Meta-specific;
+      // the Evolution panel polls its own status endpoint.
+      if (data && data.provider !== 'evolution') {
         try {
           const res = await fetch('/api/whatsapp/config', { method: 'GET' });
           const payload = await res.json();
@@ -393,6 +402,46 @@ export function WhatsAppConfig() {
         title={t("title")}
         description={t("description")}
       />
+
+      {/* Provider selector — Meta (official Cloud API) vs Evolution (QR). */}
+      <div className="mb-6">
+        <p className="mb-2 text-sm font-medium text-foreground">
+          {t('providerLabel')}
+        </p>
+        <div className="inline-flex rounded-lg border border-border bg-card p-1">
+          <button
+            type="button"
+            onClick={() => setProvider('meta')}
+            className={
+              'rounded-md px-4 py-1.5 text-sm font-medium transition-colors ' +
+              (provider === 'meta'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground')
+            }
+          >
+            {t('providerMeta')}
+          </button>
+          <button
+            type="button"
+            onClick={() => setProvider('evolution')}
+            className={
+              'rounded-md px-4 py-1.5 text-sm font-medium transition-colors ' +
+              (provider === 'evolution'
+                ? 'bg-primary text-primary-foreground'
+                : 'text-muted-foreground hover:text-foreground')
+            }
+          >
+            {t('providerEvolution')}
+          </button>
+        </div>
+        <p className="mt-2 text-xs text-muted-foreground">
+          {provider === 'meta' ? t('providerMetaHint') : t('providerEvolutionHint')}
+        </p>
+      </div>
+
+      {provider === 'evolution' ? (
+        <EvolutionConfig />
+      ) : (
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
       {/* Main config form */}
       <div className="space-y-6">
@@ -835,6 +884,7 @@ export function WhatsAppConfig() {
         </Card>
       </div>
     </div>
+      )}
     </section>
   );
 }
