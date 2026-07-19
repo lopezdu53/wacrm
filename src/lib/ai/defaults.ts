@@ -54,8 +54,11 @@ export function buildSystemPrompt(args: {
   mode: 'draft' | 'auto_reply'
   /** Knowledge-base excerpts retrieved for the current question. */
   knowledge?: string[]
+  /** When true, nudge the assistant to gather the buyer's details so a
+   *  formal offer can be prepared (drives lead qualification). */
+  qualify?: boolean
 }): string {
-  const { userPrompt, mode, knowledge } = args
+  const { userPrompt, mode, knowledge, qualify } = args
   const parts: string[] = [
     'You are a customer-messaging assistant for a business that uses a WhatsApp CRM. ' +
       'You are shown the recent WhatsApp conversation between the business (assistant) and a customer (user). ' +
@@ -69,6 +72,17 @@ export function buildSystemPrompt(args: {
   if (mode === 'auto_reply') {
     parts.push(
       `You are replying automatically with no human in the loop. If you cannot confidently and safely help — the customer explicitly asks for a human, is upset or complaining, or the request needs information you do not have — reply with exactly ${HANDOFF_SENTINEL} and nothing else. A human agent will then take over. Prefer handing off over guessing.`,
+    )
+  }
+
+  if (qualify) {
+    parts.push(
+      'Lead qualification: this business wants to prepare a formal quote/offer for interested customers. ' +
+        'When the customer shows buying interest, naturally and politely gather the details needed for a formal offer, ' +
+        'asking for any that are still missing — one or two at a time, never as a rigid form: ' +
+        'full name, email, company/business name, tax id (NIT or CC), and delivery/billing address. ' +
+        'Do not block the conversation to collect them and do not re-ask for details the customer already gave. ' +
+        'Keep replying helpfully about their actual question at the same time.',
     )
   }
 

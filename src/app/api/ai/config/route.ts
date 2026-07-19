@@ -30,7 +30,7 @@ export async function GET() {
       // `api_key` is selected only to derive `has_key` — it is stripped
       // out below and never returned to the client.
       .select(
-        'provider, model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, api_key, embeddings_api_key',
+        'provider, model, system_prompt, is_active, auto_reply_enabled, auto_reply_max_per_conversation, handoff_agent_id, api_key, embeddings_api_key, auto_qualify_enabled, qualify_pipeline_id, qualify_stage_id',
       )
       .eq('account_id', accountId)
       .maybeSingle()
@@ -94,6 +94,49 @@ export async function POST(request: Request) {
     let maxPer = Number(body.auto_reply_max_per_conversation)
     if (!Number.isFinite(maxPer)) maxPer = 3
     maxPer = Math.min(20, Math.max(1, Math.floor(maxPer)))
+
+    // Lead qualification (migration 038). The toggle plus an optional
+    // target pipeline/stage. Both FKs are validated against this account
+    // (defense in depth — the write uses the RLS client, but confirming
+    // ownership keeps a stale/foreign id from being stored). Absent →
+    // left unchanged on update.
+    const autoQualifyEnabled = body.auto_qualify_enabled === true
+    const qualifyProvided =
+      'auto_qualify_enabled' in body ||
+      'qualify_pipeline_id' in body ||
+      'qualify_stage_id' in body
+    let qualifyPipelineId: string | null =
+      typeof body.qualify_pipeline_id === 'string' && body.qualify_pipeline_id.trim()
+        ? body.qualify_pipeline_id.trim()
+        : null
+    let qualifyStageId: string | null =
+      typeof body.qualify_stage_id === 'string' && body.qualify_stage_id.trim()
+        ? body.qualify_stage_id.trim()
+        : null
+    if (qualifyPipelineId) {
+      const { data: pipe } = await supabase
+        .from('pipelines')
+        .select('id')
+        .eq('id', qualifyPipelineId)
+        .eq('account_id', accountId)
+        .maybeSingle()
+      if (!pipe) {
+        // Unknown pipeline for this account — drop both so we fall back
+        // to "first pipeline / first stage" at runtime.
+        qualifyPipelineId = null
+        qualifyStageId = null
+      } else if (qualifyStageId) {
+        const { data: stage } = await supabase
+          .from('pipeline_stages')
+          .select('id')
+          .eq('id', qualifyStageId)
+          .eq('pipeline_id', qualifyPipelineId)
+          .maybeSingle()
+        if (!stage) qualifyStageId = null
+      }
+    } else {
+      qualifyStageId = null
+    }
 
     // Handoff routing target for auto-reply. A non-empty string must be a
     // member of this account (else the conversation would be assigned to a
@@ -209,6 +252,11 @@ export async function POST(request: Request) {
     // Only touch the handoff target when the form actually sent the field,
     // so a partial save (e.g. flipping a toggle) doesn't wipe it.
     if (handoffProvided) shared.handoff_agent_id = handoffAgentId
+    if (qualifyProvided) {
+      shared.auto_qualify_enabled = autoQualifyEnabled
+      shared.qualify_pipeline_id = qualifyPipelineId
+      shared.qualify_stage_id = qualifyStageId
+    }
     if (rawEmbeddingsKey) {
       shared.embeddings_api_key = encrypt(rawEmbeddingsKey)
     } else if (clearEmbeddingsKey) {

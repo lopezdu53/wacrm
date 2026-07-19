@@ -5,6 +5,7 @@ import { retrieveKnowledge } from './knowledge'
 import { generateReply } from './generate'
 import { buildSystemPrompt } from './defaults'
 import { buildHandoffSummary } from './handoff'
+import { qualifyLead } from './qualify'
 import { logAiUsage } from './usage'
 import { latestUserMessage } from './query'
 import { engineSendText } from '@/lib/flows/meta-send'
@@ -110,7 +111,23 @@ export async function dispatchInboundToAiReply(
       userPrompt: config.systemPrompt,
       mode: 'auto_reply',
       knowledge,
+      qualify: config.autoQualifyEnabled,
     })
+
+    // Lead qualification runs off the same conversation context, in the
+    // background — extract the buyer's details, update the contact, and
+    // open a deal once qualified. Best-effort; never blocks the reply.
+    if (config.autoQualifyEnabled) {
+      void qualifyLead({
+        db,
+        accountId,
+        contactId,
+        conversationId,
+        configOwnerUserId,
+        config,
+        messages,
+      })
+    }
 
     const { text, handoff, usage } = await generateReply({
       config,
