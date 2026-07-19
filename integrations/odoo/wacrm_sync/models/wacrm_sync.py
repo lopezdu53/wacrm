@@ -89,8 +89,27 @@ class WacrmSync(models.AbstractModel):
     # ------------------------------------------------------------------
     @api.model
     def _resolve_stage(self, stage):
-        """Map a wacrm stage dict onto a crm.stage, creating it by name if new."""
-        if not stage or not stage.get("name"):
+        """Map a wacrm stage dict onto a crm.stage.
+
+        Order of precedence:
+          1. An explicit row in wacrm.stage.mapping (the Pipeline Mapping
+             screen) — the user's word is final.
+          2. A crm.stage with the same name.
+          3. A brand-new crm.stage created from the wacrm name.
+        """
+        if not stage:
+            return False
+        # 1) Explicit mapping by wacrm stage id.
+        if stage.get("id"):
+            mapping = (
+                self.env["wacrm.stage.mapping"]
+                .sudo()
+                .search([("wacrm_stage_id", "=", stage["id"])], limit=1)
+            )
+            if mapping and mapping.stage_id:
+                return mapping.stage_id.id
+        # 2) / 3) Fall back to by-name find-or-create.
+        if not stage.get("name"):
             return False
         Stage = self.env["crm.stage"].sudo()
         name = stage["name"]

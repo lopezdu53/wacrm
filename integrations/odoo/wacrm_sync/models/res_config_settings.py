@@ -97,3 +97,23 @@ class ResConfigSettings(models.TransientModel):
             "Imported %s contact(s) and %s opportunity(ies) from wacrm."
             % (contacts, deals),
         )
+
+    def action_wacrm_fetch_pipelines(self):
+        """Pull wacrm pipelines and refresh the stage-mapping table."""
+        self.ensure_one()
+        count = self.env["wacrm.stage.mapping"].refresh_from_wacrm()
+        return self._notify(
+            "Pipelines fetched",
+            "Loaded %s wacrm stage(s). Review them under Pipeline Mapping." % count,
+        )
+
+    def action_wacrm_open_stage_mapping(self):
+        """Open the Pipeline Mapping list."""
+        self.ensure_one()
+        return {
+            "type": "ir.actions.act_window",
+            "name": "Pipeline Mapping",
+            "res_model": "wacrm.stage.mapping",
+            "view_mode": "list",
+            "target": "current",
+        }

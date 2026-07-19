@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="wacrm_stage_mapping_view_list" model="ir.ui.view">
+        <field name="name">wacrm.stage.mapping.view.list</field>
+        <field name="model">wacrm.stage.mapping</field>
+        <field name="arch" type="xml">
+            <list editable="bottom">
+                <field name="sequence" column_invisible="1"/>
+                <field name="stage_id" string="Odoo Stage" options="{'no_create': False}"/>
+                <field name="wacrm_pipeline_name" string="wacrm Pipeline" readonly="1"/>
+                <field name="wacrm_stage_name" string="wacrm Stage" readonly="1"/>
+                <field name="wacrm_pipeline_id" optional="hide" readonly="1"/>
+                <field name="wacrm_stage_id" optional="hide" readonly="1"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="wacrm_stage_mapping_view_search" model="ir.ui.view">
+        <field name="name">wacrm.stage.mapping.view.search</field>
+        <field name="model">wacrm.stage.mapping</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="wacrm_stage_name"/>
+                <field name="wacrm_pipeline_name"/>
+                <field name="stage_id"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_pipeline" string="wacrm Pipeline"
+                            context="{'group_by': 'wacrm_pipeline_name'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_wacrm_stage_mapping" model="ir.actions.act_window">
+        <field name="name">Pipeline Mapping</field>
+        <field name="res_model">wacrm.stage.mapping</field>
+        <field name="view_mode">list</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No wacrm stages loaded yet</p>
+            <p>Use <b>Fetch Pipelines</b> in Settings → wacrm Sync to pull
+               your wacrm pipelines, then pick the Odoo stage each wacrm
+               stage should land in.</p>
+        </field>
+    </record>
+
+    <!-- Top-level "wacrm" menu (carries the app icon in the home menu). -->
+    <menuitem id="menu_wacrm_root"
+              name="wacrm"
+              web_icon="wacrm_sync,static/description/icon.png"
+              sequence="95"/>
+    <menuitem id="menu_wacrm_configuration"
+              name="Configuration"
+              parent="menu_wacrm_root"
+              sequence="10"/>
+    <menuitem id="menu_wacrm_stage_mapping"
+              name="Pipeline Mapping"
+              parent="menu_wacrm_configuration"
+              action="action_wacrm_stage_mapping"
+              sequence="10"/>
+</odoo>

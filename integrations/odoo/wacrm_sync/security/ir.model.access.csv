@@ -1,0 +1,4 @@
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_wacrm_stage_mapping_user,wacrm.stage.mapping user,model_wacrm_stage_mapping,base.group_user,1,0,0,0
+access_wacrm_stage_mapping_sale_manager,wacrm.stage.mapping sale manager,model_wacrm_stage_mapping,sales_team.group_sale_manager,1,1,1,1
+access_wacrm_stage_mapping_system,wacrm.stage.mapping system,model_wacrm_stage_mapping,base.group_system,1,1,1,1

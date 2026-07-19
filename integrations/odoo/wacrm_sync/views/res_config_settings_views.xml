@@ -37,6 +37,26 @@
                         </setting>
                     </block>
 
+                    <block title="Pipeline Mapping" name="wacrm_mapping_block"
+                           help="Pull your wacrm pipelines, then choose the Odoo stage each wacrm stage maps to.">
+                        <setting string="Fetch from wacrm"
+                                 help="Load / refresh the list of wacrm pipelines and stages.">
+                            <button name="action_wacrm_fetch_pipelines"
+                                    type="object"
+                                    string="Fetch Pipelines"
+                                    class="btn-secondary"
+                                    icon="fa-download"/>
+                        </setting>
+                        <setting string="Review the mapping"
+                                 help="Open the table to pick the Odoo stage for each wacrm stage.">
+                            <button name="action_wacrm_open_stage_mapping"
+                                    type="object"
+                                    string="Pipeline Mapping"
+                                    class="btn-secondary"
+                                    icon="fa-exchange"/>
+                        </setting>
+                    </block>
+
                     <block title="Sync Schedule" name="wacrm_schedule_block">
                         <setting string="Polling Interval"
                                  help="How often Odoo pulls updates from wacrm (minutes).">
