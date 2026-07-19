@@ -183,6 +183,14 @@ export interface RecordInboundArgs {
   messageId: string;
   /** Message time in ms since epoch. */
   timestampMs: number;
+  /**
+   * True when the message was sent FROM the linked number (a
+   * `fromMe` event — typed on the agent's phone / WhatsApp Web, or an
+   * echo of a platform send). Recorded as an outgoing agent message so
+   * the thread stays in sync, but it never bumps unread, flags a
+   * broadcast reply, or triggers flows / automations / the AI bot.
+   */
+  outbound?: boolean;
 }
 
 /**
@@ -202,6 +210,7 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
     timestampMs,
   } = args;
 
+  const outbound = args.outbound === true;
   const senderPhone = normalizePhone(rawPhone);
   const contentType = ALLOWED_CONTENT_TYPES.has(args.contentType)
     ? args.contentType
@@ -251,12 +260,12 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
 
   const { error: msgError } = await supabaseAdmin().from('messages').insert({
     conversation_id: conversation.id,
-    sender_type: 'customer',
+    sender_type: outbound ? 'agent' : 'customer',
     content_type: contentType,
     content_text: contentText,
     media_url: mediaUrl,
     message_id: messageId || null,
-    status: 'delivered',
+    status: outbound ? 'sent' : 'delivered',
     created_at: new Date(timestampMs).toISOString(),
   });
   if (msgError) {
@@ -269,10 +278,17 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
     .update({
       last_message_text: contentText || `[${contentType}]`,
       last_message_at: new Date().toISOString(),
-      unread_count: (conversation.unread_count || 0) + 1,
+      // Outgoing (fromMe) messages never add to the unread badge.
+      unread_count: outbound
+        ? conversation.unread_count || 0
+        : (conversation.unread_count || 0) + 1,
       updated_at: new Date().toISOString(),
     })
     .eq('id', conversation.id);
+
+  // Everything below is inbound-only: an agent's own message must not
+  // flag a broadcast reply, run the bot, or fire automations.
+  if (outbound) return;
 
   await flagBroadcastReplyIfAny(accountId, contactRecord.id);
 

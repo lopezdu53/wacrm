@@ -191,11 +191,15 @@ export async function POST(request: Request) {
   for (const item of items) {
     try {
       const jid = item.key?.remoteJid ?? '';
-      // Skip our own outgoing echoes, groups, status broadcasts, and
-      // anything without a normal user JID.
-      if (item.key?.fromMe) continue;
+      // Skip groups, status broadcasts, and anything without a normal
+      // 1:1 user JID. `fromMe` is NOT skipped: those are messages the
+      // agent sent from their own phone / WhatsApp Web (or echoes of a
+      // platform send) — we record them as outgoing so the thread stays
+      // in sync. `remoteJid` is always the OTHER party, so the
+      // conversation keys correctly in both directions.
       if (!jid.endsWith('@s.whatsapp.net')) continue;
 
+      const outbound = item.key?.fromMe === true;
       const phone = jid.split('@')[0];
       if (!phone) continue;
 
@@ -225,12 +229,16 @@ export async function POST(request: Request) {
         accountId: config.account_id as string,
         configOwnerUserId: config.user_id as string,
         senderPhone: phone,
-        contactName: item.pushName ?? phone,
+        // On a fromMe event `pushName` is OUR name, not the contact's —
+        // don't let it overwrite the contact. Inbound uses the sender's
+        // pushName as before.
+        contactName: outbound ? '' : (item.pushName ?? phone),
         contentText: parsed.text,
         mediaUrl,
         contentType: parsed.contentType,
         messageId: item.key?.id ?? '',
         timestampMs: coerceTimestampMs(item.messageTimestamp),
+        outbound,
       });
     } catch (err) {
       console.error('[evolution-webhook] failed to process item:', err);
