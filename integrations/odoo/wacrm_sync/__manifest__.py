@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "wacrm Sync",
-    "version": "19.0.1.0.0",
+    "version": "19.0.1.1.0",
     "summary": "Sync contacts and opportunities from wacrm into Odoo",
     "description": """
 wacrm Sync
@@ -24,7 +24,9 @@ repeated syncs update in place rather than duplicating.
     "license": "LGPL-3",
     "depends": ["base", "contacts", "crm"],
     "data": [
+        "security/ir.model.access.csv",
         "data/ir_cron.xml",
+        "views/wacrm_stage_mapping_views.xml",
         "views/res_config_settings_views.xml",
     ],
     "external_dependencies": {"python": ["requests"]},

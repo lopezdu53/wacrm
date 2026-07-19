@@ -32,14 +32,28 @@ Tested against **Odoo 19.0** (Enterprise). Requires the `crm` and
    Interval** (minutes). Save.
 4. Click **Sync Now** for an immediate first import, or wait for the cron.
 
-## Mapping
+## Pipeline Mapping
+
+Like other CRM connectors, you can control exactly which Odoo stage each
+wacrm stage lands in:
+
+1. **Settings → wacrm Sync → Fetch Pipelines** pulls your wacrm pipelines
+   and creates one mapping row per stage (auto-matched to an Odoo stage
+   with the same name when one exists).
+2. Open **Pipeline Mapping** (button in Settings, or the *wacrm* menu →
+   Configuration) and pick/correct the **Odoo Stage** for each row —
+   editable inline.
+3. From then on the sync uses the mapping first; rows without a mapped
+   stage fall back to find-or-create by name.
+
+## Field mapping
 
 | wacrm | Odoo |
 |---|---|
 | Contact name / phone / email / company | `res.partner` name / phone / email / company_name |
 | Deal title | `crm.lead` name |
 | Deal value | `crm.lead` expected_revenue |
-| Deal stage (by name) | `crm.stage` (found or created by name) |
+| Deal stage | Pipeline Mapping row → `crm.stage` (fallback: by name) |
 | Deal contact | `crm.lead` partner (found or created) |
 | Deal status `lost` | opportunity archived |
 
