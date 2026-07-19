@@ -200,6 +200,31 @@ Read or update one contact. Scopes: `contacts:read` / `contacts:write`.
 pass `tags` (an array of tag names) to replace the contact's tags. A
 contact in another account returns `404`.
 
+### `GET /api/v1/deals`
+
+List deals (opportunities), newest first. Scope: `deals:read`.
+Paginated. Optional filters: `?pipeline=<id>`, `?stage=<id>`,
+`?status=<status>` (e.g. `open` / `won` / `lost`), and
+`?updated_since=<iso8601>` for incremental pulls. Each deal embeds its
+`pipeline`, `stage`, and a thin `contact` summary (id, name, phone,
+email, company) so an integration can map foreign keys in one pass.
+
+```bash
+curl "https://your-crm.example.com/api/v1/deals?updated_since=2026-01-01T00:00:00Z" \
+  -H "Authorization: Bearer wacrm_live_..."
+```
+
+### `GET /api/v1/deals/{id}`
+
+Read one deal. Scope: `deals:read`. `404` if it belongs to another
+account.
+
+### `GET /api/v1/pipelines`
+
+List the account's pipelines, each with its ordered `stages` (id, name,
+color, position). Scope: `deals:read`. Not paginated. Use it to map a
+deal's `pipeline_id` / `stage_id` onto your own system's stages.
+
 ### `GET /api/v1/conversations`
 
 List conversations, newest first. Scope: `conversations:read`.

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_wacrm" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.inherit.wacrm</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="base_setup.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//form" position="inside">
+                <app string="wacrm Sync" name="wacrm_sync">
+                    <block title="API Configuration"
+                           name="wacrm_api_block"
+                           help="Connect Odoo to your wacrm instance.">
+                        <setting string="wacrm Base URL"
+                                 help="e.g. https://crm.example.com">
+                            <field name="wacrm_base_url"
+                                   placeholder="https://crm.example.com"/>
+                        </setting>
+                        <setting string="API Key"
+                                 help="A wacrm key with the contacts:read and deals:read scopes.">
+                            <field name="wacrm_api_key" password="True"/>
+                        </setting>
+                        <setting string="Test the connection">
+                            <button name="action_wacrm_test_connection"
+                                    type="object"
+                                    string="Test Connection"
+                                    class="btn-secondary"
+                                    icon="fa-plug"/>
+                        </setting>
+                    </block>
+
+                    <block title="What To Sync" name="wacrm_what_block">
+                        <setting help="Import wacrm contacts as Odoo contacts.">
+                            <field name="wacrm_sync_contacts"/>
+                        </setting>
+                        <setting help="Import wacrm deals as Odoo opportunities.">
+                            <field name="wacrm_sync_opportunities"/>
+                        </setting>
+                    </block>
+
+                    <block title="Sync Schedule" name="wacrm_schedule_block">
+                        <setting string="Polling Interval"
+                                 help="How often Odoo pulls updates from wacrm (minutes).">
+                            <field name="wacrm_poll_interval"/>
+                        </setting>
+                        <setting string="Run it now"
+                                 help="Save first, then pull immediately.">
+                            <button name="action_wacrm_sync_now"
+                                    type="object"
+                                    string="Sync Now"
+                                    class="btn-primary"
+                                    icon="fa-refresh"/>
+                        </setting>
+                    </block>
+
+                    <block title="Last Sync" name="wacrm_last_block"
+                           help="Read-only info about the last pull times.">
+                        <setting string="Contacts last synced">
+                            <field name="wacrm_last_sync_contacts"/>
+                        </setting>
+                        <setting string="Opportunities last synced">
+                            <field name="wacrm_last_sync_deals"/>
+                        </setting>
+                    </block>
+                </app>
+            </xpath>
+        </field>
+    </record>
+</odoo>
