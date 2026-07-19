@@ -261,7 +261,20 @@
       "deals": "Negocios",
       "noTags": "Sin etiquetas",
       "noDeals": "Sin negocios",
-      "addNotePlaceholder": "Agregar una nota..."
+      "addNotePlaceholder": "Agregar una nota...",
+      "addDeal": "Agregar",
+      "addDealTitle": "Nuevo negocio",
+      "dealTitleLabel": "Título",
+      "dealValueLabel": "Valor",
+      "dealPipelineLabel": "Embudo",
+      "dealStageLabel": "Etapa",
+      "dealNoPipelines": "Aún no hay embudos. Crea uno en Embudos primero.",
+      "dealCancel": "Cancelar",
+      "dealCreate": "Crear negocio",
+      "dealSaving": "Guardando...",
+      "dealMissing": "Agrega un título y elige embudo y etapa.",
+      "dealCreated": "Negocio creado",
+      "dealCreateFailed": "Error al crear el negocio"
     },
     "aiBanner": {
       "pausedTitle": "El asistente de IA está en pausa aquí",
@@ -1710,7 +1723,13 @@
       "saveSuccess": "Asistente de IA guardado.",
       "saveFailed": "Error al guardar.",
       "removeSuccess": "Configuración de IA eliminada.",
-      "removeFailed": "Error al eliminar."
+      "removeFailed": "Error al eliminar.",
+      "qualifyTitle": "Calificar clientes y crear oportunidades",
+      "qualifyDesc": "Mientras conversa, el asistente recopila los datos del cliente (nombre, correo, empresa, NIT/CC, dirección), actualiza el contacto y crea una oportunidad automáticamente cuando hay datos suficientes.",
+      "qualifyPipeline": "Embudo para nuevas oportunidades",
+      "qualifyStage": "Etapa",
+      "qualifyDefaultPipeline": "Primer embudo (predeterminado)",
+      "qualifyDefaultStage": "Primera etapa (predeterminada)"
     },
     "aiKnowledge": {
       "loadFailed": "Error al cargar la base de conocimiento",

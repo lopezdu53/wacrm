@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Loader2, Sparkles, CheckCircle2, Trash2, Eye, EyeOff } from 'lucide-react';
 import { useAuth } from '@/hooks/use-auth';
+import { createClient } from '@/lib/supabase/client';
 import { canEditSettings } from '@/lib/auth/roles';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,6 +51,7 @@ const KEY_PLACEHOLDER: Record<AiProvider, string> = {
 
 export function AiConfig() {
   const { accountId, accountRole, profileLoading } = useAuth();
+  const supabase = createClient();
   const canEdit = accountRole ? canEditSettings(accountRole) : false;
   const t = useTranslations('Settings.aiConfig');
 
@@ -75,6 +77,13 @@ export function AiConfig() {
   // Empty string = leave unassigned (shared queue).
   const [handoffAgentId, setHandoffAgentId] = useState('');
   const [members, setMembers] = useState<AccountMember[]>([]);
+  // Lead qualification (migration 038).
+  const [autoQualifyEnabled, setAutoQualifyEnabled] = useState(false);
+  const [qualifyPipelineId, setQualifyPipelineId] = useState('');
+  const [qualifyStageId, setQualifyStageId] = useState('');
+  const [qualifyPipelines, setQualifyPipelines] = useState<
+    { id: string; name: string; stages: { id: string; name: string; position: number }[] }[]
+  >([]);
 
   // Guard keyed on the account (not a bare boolean) so an in-place
   // account switch — ownership transfer, multi-account membership —
@@ -100,6 +109,9 @@ export function AiConfig() {
         setAutoReplyEnabled(data.auto_reply_enabled);
         setMaxPerConversation(data.auto_reply_max_per_conversation ?? 3);
         setHandoffAgentId(data.handoff_agent_id ?? '');
+        setAutoQualifyEnabled(Boolean(data.auto_qualify_enabled));
+        setQualifyPipelineId(data.qualify_pipeline_id ?? '');
+        setQualifyStageId(data.qualify_stage_id ?? '');
         setHasStoredKey(Boolean(data.has_key));
         setApiKey(data.has_key ? MASKED_KEY : '');
         setKeyEdited(false);
@@ -122,7 +134,25 @@ export function AiConfig() {
     // older deployment without the endpoint the picker just shows the
     // queue option.
     void fetchAccountMembers().then(setMembers);
-  }, [accountId, fetchConfig]);
+    // Pipelines populate the qualification target picker.
+    void (async () => {
+      const { data } = await supabase
+        .from('pipelines')
+        .select('id, name, pipeline_stages(id, name, position)')
+        .eq('account_id', accountId)
+        .order('created_at', { ascending: true });
+      const opts = (data ?? []).map((p: Record<string, unknown>) => ({
+        id: p.id as string,
+        name: p.name as string,
+        stages: (
+          (p.pipeline_stages as { id: string; name: string; position: number }[]) ?? []
+        )
+          .slice()
+          .sort((a, b) => a.position - b.position),
+      }));
+      setQualifyPipelines(opts);
+    })();
+  }, [accountId, fetchConfig, supabase]);
 
   // Swap the model default when the provider changes, unless the user
   // typed a custom model.
@@ -151,6 +181,9 @@ export function AiConfig() {
     auto_reply_enabled: autoReplyEnabled,
     auto_reply_max_per_conversation: maxPerConversation,
     handoff_agent_id: handoffAgentId || null,
+    auto_qualify_enabled: autoQualifyEnabled,
+    qualify_pipeline_id: qualifyPipelineId || null,
+    qualify_stage_id: qualifyStageId || null,
   });
 
   const handleTest = async () => {
@@ -482,6 +515,70 @@ export function AiConfig() {
                   ))}
                 </SelectContent>
               </Select>
+            </div>
+
+            {/* Lead qualification (migration 038) */}
+            <div className="rounded-lg border border-border p-4 space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="space-y-0.5">
+                  <Label htmlFor="ai-qualify">{t('qualifyTitle')}</Label>
+                  <p className="text-xs text-muted-foreground">
+                    {t('qualifyDesc')}
+                  </p>
+                </div>
+                <Switch
+                  id="ai-qualify"
+                  checked={autoQualifyEnabled}
+                  onCheckedChange={setAutoQualifyEnabled}
+                  disabled={disabled}
+                />
+              </div>
+
+              <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">
+                    {t('qualifyPipeline')}
+                  </Label>
+                  <select
+                    value={qualifyPipelineId}
+                    onChange={(e) => {
+                      const pid = e.target.value;
+                      setQualifyPipelineId(pid);
+                      const p = qualifyPipelines.find((x) => x.id === pid);
+                      setQualifyStageId(p?.stages[0]?.id ?? '');
+                    }}
+                    disabled={disabled || !autoQualifyEnabled}
+                    className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50 disabled:opacity-50"
+                  >
+                    <option value="">{t('qualifyDefaultPipeline')}</option>
+                    {qualifyPipelines.map((p) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-xs text-muted-foreground">
+                    {t('qualifyStage')}
+                  </Label>
+                  <select
+                    value={qualifyStageId}
+                    onChange={(e) => setQualifyStageId(e.target.value)}
+                    disabled={disabled || !autoQualifyEnabled || !qualifyPipelineId}
+                    className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-sm text-foreground outline-none focus:border-primary/50 disabled:opacity-50"
+                  >
+                    <option value="">{t('qualifyDefaultStage')}</option>
+                    {(qualifyPipelines.find((p) => p.id === qualifyPipelineId)?.stages ?? []).map(
+                      (s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name}
+                        </option>
+                      ),
+                    )}
+                  </select>
+                </div>
+              </div>
             </div>
           </CardContent>
         </Card>

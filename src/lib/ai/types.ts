@@ -29,6 +29,15 @@ export interface AiConfig {
    *  knowledge base is embedded and semantic retrieval turns on; when
    *  null, retrieval falls back to lexical full-text search. */
   embeddingsApiKey: string | null
+  /** When true, the assistant extracts the buyer's details from the
+   *  conversation, writes them onto the contact, and opens a deal once
+   *  the lead is minimally qualified. Optional so credential-validation
+   *  call sites can build a minimal config without these. */
+  autoQualifyEnabled?: boolean
+  /** Pipeline the auto-created deal lands in; null → first pipeline. */
+  qualifyPipelineId?: string | null
+  /** Stage within that pipeline; null → first stage. */
+  qualifyStageId?: string | null
 }
 
 /** A single conversation turn in the shape both providers accept. */

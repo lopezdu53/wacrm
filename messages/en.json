@@ -261,7 +261,20 @@
       "deals": "Deals",
       "noTags": "No tags",
       "noDeals": "No deals",
-      "addNotePlaceholder": "Add a note..."
+      "addNotePlaceholder": "Add a note...",
+      "addDeal": "Add",
+      "addDealTitle": "New deal",
+      "dealTitleLabel": "Title",
+      "dealValueLabel": "Value",
+      "dealPipelineLabel": "Pipeline",
+      "dealStageLabel": "Stage",
+      "dealNoPipelines": "No pipelines yet. Create one in Pipelines first.",
+      "dealCancel": "Cancel",
+      "dealCreate": "Create deal",
+      "dealSaving": "Saving...",
+      "dealMissing": "Add a title and pick a pipeline and stage.",
+      "dealCreated": "Deal created",
+      "dealCreateFailed": "Failed to create deal"
     },
     "aiBanner": {
       "pausedTitle": "AI assistant is paused here",
@@ -1710,7 +1723,13 @@
       "saveSuccess": "AI assistant saved.",
       "saveFailed": "Failed to save.",
       "removeSuccess": "AI configuration removed.",
-      "removeFailed": "Failed to remove."
+      "removeFailed": "Failed to remove.",
+      "qualifyTitle": "Qualify leads & create deals",
+      "qualifyDesc": "As it chats, the assistant collects the buyer's details (name, email, company, NIT/CC, address), updates the contact, and opens a deal automatically once there's enough to act on.",
+      "qualifyPipeline": "Pipeline for new deals",
+      "qualifyStage": "Stage",
+      "qualifyDefaultPipeline": "First pipeline (default)",
+      "qualifyDefaultStage": "First stage (default)"
     },
     "aiKnowledge": {
       "loadFailed": "Failed to load knowledge base",
