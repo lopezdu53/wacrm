@@ -5,29 +5,12 @@
         <field name="model">wacrm.stage.mapping</field>
         <field name="arch" type="xml">
             <list editable="bottom">
-                <field name="sequence" column_invisible="1"/>
-                <field name="stage_id" string="Odoo Stage" options="{'no_create': False}"/>
+                <field name="stage_id" string="Odoo Stage"/>
                 <field name="wacrm_pipeline_name" string="wacrm Pipeline" readonly="1"/>
                 <field name="wacrm_stage_name" string="wacrm Stage" readonly="1"/>
                 <field name="wacrm_pipeline_id" optional="hide" readonly="1"/>
                 <field name="wacrm_stage_id" optional="hide" readonly="1"/>
             </list>
-        </field>
-    </record>
-
-    <record id="wacrm_stage_mapping_view_search" model="ir.ui.view">
-        <field name="name">wacrm.stage.mapping.view.search</field>
-        <field name="model">wacrm.stage.mapping</field>
-        <field name="arch" type="xml">
-            <search>
-                <field name="wacrm_stage_name"/>
-                <field name="wacrm_pipeline_name"/>
-                <field name="stage_id"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_pipeline" string="wacrm Pipeline"
-                            context="{'group_by': 'wacrm_pipeline_name'}"/>
-                </group>
-            </search>
         </field>
     </record>
 
