@@ -252,12 +252,39 @@ export async function sendMessageToConversation(
     );
   }
 
-  // WhatsApp config, account-scoped.
-  const { data: config, error: configError } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', accountId)
-    .single();
+  // WhatsApp config. Prefer the channel the conversation belongs to
+  // (migration 039 — an account can now have several numbers), so the
+  // reply goes back out the SAME number that received it. Fall back to
+  // the account's first config for legacy conversations with no channel.
+  const conversationConfigId = conversation.whatsapp_config_id as
+    | string
+    | null
+    | undefined;
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let config: any = null;
+  let configError: { message: string } | null = null;
+  if (conversationConfigId) {
+    const res = await db
+      .from('whatsapp_config')
+      .select('*')
+      .eq('account_id', accountId)
+      .eq('id', conversationConfigId)
+      .maybeSingle();
+    config = res.data;
+    configError = res.error;
+  }
+  if (!config) {
+    const res = await db
+      .from('whatsapp_config')
+      .select('*')
+      .eq('account_id', accountId)
+      .order('created_at', { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    config = res.data;
+    configError = res.error;
+  }
 
   if (configError || !config) {
     throw new SendMessageError(

@@ -8,11 +8,11 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
-  RotateCcw,
   QrCode,
   RefreshCw,
+  Trash2,
+  Plus,
 } from 'lucide-react';
-import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { useTranslations } from 'next-intl';
 import { Button } from '@/components/ui/button';
@@ -25,93 +25,63 @@ import {
   CardTitle,
   CardDescription,
 } from '@/components/ui/card';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-
-const MASKED = '••••••••••••••••';
 
 type EvoState = 'open' | 'connecting' | 'close' | 'unknown';
 
+interface Instance {
+  id: string;
+  instance: string;
+  label: string;
+  base_url: string;
+  state: EvoState;
+  connected: boolean;
+}
+
 /**
- * Settings panel for the Evolution API transport (the QR-based WhatsApp
- * connection, see migration 037). Self-contained: it talks only to
- * `/api/whatsapp/evolution` (POST connect, GET poll, DELETE reset) plus a
- * direct read of the config row for the non-secret fields (base URL +
- * instance) so returning users see what's saved.
+ * Settings panel for the Evolution transport — now multi-instance
+ * (migration 039). Lists the account's connected numbers, lets you add a
+ * new one (scan its QR), reconnect, or disconnect each. Talks only to
+ * `/api/whatsapp/evolution`.
  */
 export function EvolutionConfig() {
   const t = useTranslations('Settings.whatsapp.evolution');
-  const supabase = createClient();
   const { accountId, loading: authLoading, profileLoading } = useAuth();
 
   const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-  const [resetting, setResetting] = useState(false);
-  const [showKey, setShowKey] = useState(false);
+  const [instances, setInstances] = useState<Instance[]>([]);
 
+  // Add / reconnect form.
   const [baseUrl, setBaseUrl] = useState('');
   const [apiKey, setApiKey] = useState('');
   const [instance, setInstance] = useState('');
-  const [keyEdited, setKeyEdited] = useState(false);
-  const [hasConfig, setHasConfig] = useState(false);
+  const [label, setLabel] = useState('');
+  const [showKey, setShowKey] = useState(false);
+  const [saving, setSaving] = useState(false);
 
-  const [state, setState] = useState<EvoState>('unknown');
+  // The instance currently showing a QR to scan.
+  const [qrInstance, setQrInstance] = useState<string | null>(null);
   const [qr, setQr] = useState<string | null>(null);
   const [pairingCode, setPairingCode] = useState<string | null>(null);
 
   const loadedRef = useRef<string | null>(null);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  const connected = state === 'open';
-
-  const refreshStatus = useCallback(async () => {
+  const loadInstances = useCallback(async () => {
     try {
       const res = await fetch('/api/whatsapp/evolution', { method: 'GET' });
       const data = await res.json();
-      if (data.reason === 'no_config') {
-        setState('unknown');
-        setQr(null);
-        return;
+      setInstances((data.instances as Instance[]) ?? []);
+      // Prefill the server URL from an existing instance for convenience.
+      if (data.instances?.[0]?.base_url && !baseUrl) {
+        setBaseUrl(data.instances[0].base_url);
       }
-      setState((data.state as EvoState) ?? (data.connected ? 'open' : 'unknown'));
-      setQr(data.qr ?? null);
-      setPairingCode(data.pairingCode ?? null);
     } catch (err) {
-      console.error('[evolution-config] refreshStatus failed:', err);
+      console.error('[evolution-config] load failed:', err);
+    } finally {
+      setLoading(false);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const loadRow = useCallback(
-    async (acct: string) => {
-      setLoading(true);
-      try {
-        const { data } = await supabase
-          .from('whatsapp_config')
-          .select('provider, evolution_base_url, evolution_instance')
-          .eq('account_id', acct)
-          .maybeSingle();
-
-        if (data && data.provider === 'evolution') {
-          setHasConfig(true);
-          setBaseUrl(data.evolution_base_url || '');
-          setInstance(data.evolution_instance || '');
-          setApiKey(MASKED);
-          setKeyEdited(false);
-          await refreshStatus();
-        } else {
-          setHasConfig(false);
-          setBaseUrl('');
-          setInstance('');
-          setApiKey('');
-          setKeyEdited(false);
-          setState('unknown');
-          setQr(null);
-        }
-      } finally {
-        setLoading(false);
-      }
-    },
-    [supabase, refreshStatus],
-  );
 
   useEffect(() => {
     if (authLoading || profileLoading) return;
@@ -121,44 +91,53 @@ export function EvolutionConfig() {
     }
     if (loadedRef.current === accountId) return;
     loadedRef.current = accountId;
-    loadRow(accountId);
-  }, [authLoading, profileLoading, accountId, loadRow]);
+    loadInstances();
+  }, [authLoading, profileLoading, accountId, loadInstances]);
 
-  // Poll while we have a QR up / are connecting, until the phone links.
+  // Poll the instance being connected until its phone links.
+  const pollQr = useCallback(async (inst: string) => {
+    try {
+      const res = await fetch(
+        `/api/whatsapp/evolution?instance=${encodeURIComponent(inst)}`,
+        { method: 'GET' },
+      );
+      const data = await res.json();
+      if (data.state === 'open' || data.connected) {
+        setQr(null);
+        setQrInstance(null);
+        toast.success(t('toastConnected'));
+        loadInstances();
+        return;
+      }
+      setQr(data.qr ?? null);
+      setPairingCode(data.pairingCode ?? null);
+    } catch (err) {
+      console.error('[evolution-config] pollQr failed:', err);
+    }
+  }, [t, loadInstances]);
+
   useEffect(() => {
     if (pollRef.current) {
       clearInterval(pollRef.current);
       pollRef.current = null;
     }
-    if (hasConfig && state !== 'open') {
-      pollRef.current = setInterval(refreshStatus, 3000);
+    if (qrInstance) {
+      pollRef.current = setInterval(() => pollQr(qrInstance), 3000);
     }
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-  }, [hasConfig, state, refreshStatus]);
+  }, [qrInstance, pollQr]);
 
-  // Toast once when the connection flips to open.
-  const prevStateRef = useRef<EvoState>('unknown');
-  useEffect(() => {
-    if (state === 'open' && prevStateRef.current !== 'open') {
-      setQr(null);
-      toast.success(t('toastConnected'));
-    }
-    prevStateRef.current = state;
-  }, [state, t]);
-
-  async function handleConnect() {
-    if (!baseUrl.trim() || !instance.trim()) {
+  async function handleConnect(reconnectInstance?: Instance) {
+    const inst = reconnectInstance?.instance ?? instance.trim();
+    const url = reconnectInstance?.base_url ?? baseUrl.trim();
+    if (!url || !inst) {
       toast.error(t('errorRequired'));
       return;
     }
-    if (!hasConfig && (!apiKey.trim() || !keyEdited)) {
+    if (!reconnectInstance && !apiKey.trim()) {
       toast.error(t('errorApiKeyRequired'));
-      return;
-    }
-    if (hasConfig && !keyEdited) {
-      toast.error(t('errorReenterKey'));
       return;
     }
 
@@ -168,9 +147,10 @@ export function EvolutionConfig() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          base_url: baseUrl.trim(),
-          api_key: apiKey.trim(),
-          instance: instance.trim(),
+          base_url: url,
+          api_key: reconnectInstance ? '' : apiKey.trim(),
+          instance: inst,
+          label: reconnectInstance?.label ?? (label.trim() || inst),
         }),
       });
       const data = await res.json();
@@ -178,19 +158,22 @@ export function EvolutionConfig() {
         toast.error(data.error || t('toastConnectFailed'));
         return;
       }
-      setHasConfig(true);
-      setApiKey(MASKED);
-      setKeyEdited(false);
-      setState((data.state as EvoState) ?? 'connecting');
+      setQrInstance(inst);
       setQr(data.qr ?? null);
       setPairingCode(data.pairingCode ?? null);
-      if (data.qr) {
-        toast.success(t('toastScanQr'));
-      } else if (data.state === 'open') {
+      if (data.state === 'open') {
         toast.success(t('toastConnected'));
-      } else {
-        toast.success(t('toastSaved'));
+        setQrInstance(null);
+      } else if (data.qr) {
+        toast.success(t('toastScanQr'));
       }
+      // Reset the add form after a new connection.
+      if (!reconnectInstance) {
+        setInstance('');
+        setLabel('');
+        setApiKey('');
+      }
+      loadInstances();
     } catch (err) {
       console.error('[evolution-config] connect failed:', err);
       toast.error(t('toastConnectFailed'));
@@ -199,30 +182,27 @@ export function EvolutionConfig() {
     }
   }
 
-  async function handleReset() {
+  async function handleDisconnect(inst: Instance) {
     if (!confirm(t('resetConfirm'))) return;
     try {
-      setResetting(true);
-      const res = await fetch('/api/whatsapp/evolution', { method: 'DELETE' });
+      const res = await fetch(
+        `/api/whatsapp/evolution?instance=${encodeURIComponent(inst.instance)}`,
+        { method: 'DELETE' },
+      );
       if (!res.ok) {
         const data = await res.json();
         toast.error(data.error || t('toastResetFailed'));
         return;
       }
-      setHasConfig(false);
-      setBaseUrl('');
-      setApiKey('');
-      setInstance('');
-      setKeyEdited(false);
-      setState('unknown');
-      setQr(null);
-      setPairingCode(null);
+      if (qrInstance === inst.instance) {
+        setQrInstance(null);
+        setQr(null);
+      }
       toast.success(t('toastReset'));
+      loadInstances();
     } catch (err) {
-      console.error('[evolution-config] reset failed:', err);
+      console.error('[evolution-config] disconnect failed:', err);
       toast.error(t('toastResetFailed'));
-    } finally {
-      setResetting(false);
     }
   }
 
@@ -236,37 +216,86 @@ export function EvolutionConfig() {
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
-      {/* Credentials + connect */}
       <div className="space-y-6">
-        {/* Connection status */}
-        <Alert className="bg-card border-border">
-          <div className="flex items-center gap-2">
-            {connected ? (
-              <CheckCircle2 className="size-4 text-primary" />
-            ) : (
-              <XCircle className="size-4 text-red-500" />
-            )}
-            <AlertTitle className="text-foreground mb-0">
-              {connected
-                ? t('statusConnected')
-                : state === 'connecting'
-                  ? t('statusConnecting')
-                  : t('statusDisconnected')}
-            </AlertTitle>
-          </div>
-          <AlertDescription className="text-muted-foreground">
-            {connected ? t('statusConnectedDesc') : t('statusDisconnectedDesc')}
-          </AlertDescription>
-        </Alert>
-
+        {/* Connected instances */}
         <Card>
           <CardHeader>
-            <CardTitle className="text-foreground">{t('credentialsTitle')}</CardTitle>
+            <CardTitle className="text-foreground">{t('instancesTitle')}</CardTitle>
+            <CardDescription className="text-muted-foreground">
+              {t('instancesDesc')}
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {instances.length === 0 ? (
+              <p className="text-sm text-muted-foreground">{t('noInstances')}</p>
+            ) : (
+              instances.map((inst) => (
+                <div
+                  key={inst.id}
+                  className="flex items-center justify-between gap-3 rounded-lg border border-border bg-muted/40 px-3 py-2.5"
+                >
+                  <div className="flex items-center gap-2.5 min-w-0">
+                    {inst.connected ? (
+                      <CheckCircle2 className="size-4 shrink-0 text-primary" />
+                    ) : (
+                      <XCircle className="size-4 shrink-0 text-red-500" />
+                    )}
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-medium text-foreground">
+                        {inst.label}
+                      </p>
+                      <p className="truncate text-xs text-muted-foreground">
+                        {inst.instance} ·{' '}
+                        {inst.connected ? t('statusConnected') : t('statusDisconnected')}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-1">
+                    {!inst.connected && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleConnect(inst)}
+                        disabled={saving}
+                        className="h-8 text-primary hover:bg-primary/10"
+                      >
+                        <QrCode className="size-4" />
+                        {t('reconnect')}
+                      </Button>
+                    )}
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => handleDisconnect(inst)}
+                      className="h-8 w-8 text-red-400 hover:bg-red-950/40 hover:text-red-300"
+                    >
+                      <Trash2 className="size-4" />
+                    </Button>
+                  </div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Add a new instance */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-foreground">{t('addInstanceTitle')}</CardTitle>
             <CardDescription className="text-muted-foreground">
               {t('credentialsDesc')}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-muted-foreground">{t('instanceLabel')}</Label>
+              <Input
+                placeholder={t('instanceLabelPlaceholder')}
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
+              />
+            </div>
             <div className="space-y-2">
               <Label className="text-muted-foreground">{t('baseUrl')}</Label>
               <Input
@@ -277,7 +306,6 @@ export function EvolutionConfig() {
               />
               <p className="text-xs text-muted-foreground">{t('baseUrlHint')}</p>
             </div>
-
             <div className="space-y-2">
               <Label className="text-muted-foreground">{t('apiKey')}</Label>
               <div className="relative">
@@ -285,16 +313,7 @@ export function EvolutionConfig() {
                   type={showKey ? 'text' : 'password'}
                   placeholder={t('apiKeyPlaceholder')}
                   value={apiKey}
-                  onChange={(e) => {
-                    setApiKey(e.target.value);
-                    setKeyEdited(true);
-                  }}
-                  onFocus={() => {
-                    if (apiKey === MASKED) {
-                      setApiKey('');
-                      setKeyEdited(true);
-                    }
-                  }}
+                  onChange={(e) => setApiKey(e.target.value)}
                   className="bg-muted border-border text-foreground placeholder:text-muted-foreground pr-10"
                 />
                 <button
@@ -305,56 +324,34 @@ export function EvolutionConfig() {
                   {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                 </button>
               </div>
-              {hasConfig && !keyEdited && (
-                <p className="text-xs text-muted-foreground">{t('apiKeyHidden')}</p>
-              )}
             </div>
-
             <div className="space-y-2">
               <Label className="text-muted-foreground">{t('instance')}</Label>
               <Input
-                placeholder="mi-empresa"
+                placeholder="mi-empresa-2"
                 value={instance}
                 onChange={(e) => setInstance(e.target.value)}
                 className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
               />
               <p className="text-xs text-muted-foreground">{t('instanceHint')}</p>
             </div>
-
-            <div className="flex flex-wrap gap-3 pt-1">
-              <Button
-                onClick={handleConnect}
-                disabled={saving}
-                className="bg-primary hover:bg-primary/90 text-primary-foreground"
-              >
-                {saving ? (
-                  <>
-                    <Loader2 className="size-4 animate-spin" />
-                    {t('connecting')}
-                  </>
-                ) : (
-                  <>
-                    <QrCode className="size-4" />
-                    {hasConfig ? t('reconnect') : t('connect')}
-                  </>
-                )}
-              </Button>
-              {hasConfig && (
-                <Button
-                  variant="outline"
-                  onClick={handleReset}
-                  disabled={resetting}
-                  className="border-red-900 text-red-400 hover:text-red-300 hover:bg-red-950/40"
-                >
-                  {resetting ? (
-                    <Loader2 className="size-4 animate-spin" />
-                  ) : (
-                    <RotateCcw className="size-4" />
-                  )}
-                  {t('reset')}
-                </Button>
+            <Button
+              onClick={() => handleConnect()}
+              disabled={saving}
+              className="bg-primary hover:bg-primary/90 text-primary-foreground"
+            >
+              {saving ? (
+                <>
+                  <Loader2 className="size-4 animate-spin" />
+                  {t('connecting')}
+                </>
+              ) : (
+                <>
+                  <Plus className="size-4" />
+                  {t('addInstance')}
+                </>
               )}
-            </div>
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -365,17 +362,11 @@ export function EvolutionConfig() {
           <CardHeader>
             <CardTitle className="text-foreground text-base">{t('qrTitle')}</CardTitle>
             <CardDescription className="text-muted-foreground">
-              {t('qrDesc')}
+              {qrInstance ? t('qrDescFor', { name: qrInstance }) : t('qrDesc')}
             </CardDescription>
           </CardHeader>
           <CardContent>
-            {connected ? (
-              <div className="flex flex-col items-center gap-3 py-6 text-center">
-                <CheckCircle2 className="size-12 text-primary" />
-                <p className="text-sm text-foreground font-medium">{t('linkedTitle')}</p>
-                <p className="text-xs text-muted-foreground">{t('linkedDesc')}</p>
-              </div>
-            ) : qr ? (
+            {qr ? (
               <div className="flex flex-col items-center gap-3">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -397,7 +388,7 @@ export function EvolutionConfig() {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={refreshStatus}
+                  onClick={() => qrInstance && pollQr(qrInstance)}
                   className="border-border text-muted-foreground hover:text-foreground"
                 >
                   <RefreshCw className="size-3.5" />

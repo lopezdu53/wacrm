@@ -168,7 +168,7 @@ export async function POST(request: Request) {
   // Resolve the owning account by instance name.
   const { data: config } = await supabaseAdmin()
     .from('whatsapp_config')
-    .select('account_id, user_id, evolution_instance, provider')
+    .select('id, account_id, user_id, evolution_instance, provider')
     .eq('evolution_instance', instance)
     .eq('provider', 'evolution')
     .maybeSingle();
@@ -238,6 +238,7 @@ export async function POST(request: Request) {
         contentType: parsed.contentType,
         messageId: item.key?.id ?? '',
         timestampMs: coerceTimestampMs(item.messageTimestamp),
+        whatsappConfigId: config.id as string,
         outbound,
       });
     } catch (err) {

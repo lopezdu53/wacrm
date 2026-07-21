@@ -192,17 +192,23 @@ export default function InboxPage() {
         return;
       }
 
-      const { data } = await supabase
+      // An account can now have multiple configs (migration 039), so
+      // fetch the list rather than assume one row.
+      const { data: rows } = await supabase
         .from("whatsapp_config")
         .select("status, provider")
-        .eq("account_id", accountId)
-        .maybeSingle();
+        .eq("account_id", accountId);
 
-      setWhatsappConnected(data?.status === "connected");
+      const configs = rows ?? [];
+      setWhatsappConnected(configs.some((c) => c.status === "connected"));
       // Evolution (WhatsApp Web) has no 24-hour customer-service window,
       // so the inbox must not show the "session expired / use a template"
-      // gating that only applies to the Meta Cloud API.
-      setIsEvolution(data?.provider === "evolution");
+      // gating that only applies to the Meta Cloud API. Treat the account
+      // as windowless when every connected channel is Evolution.
+      const providers = configs.map((c) => c.provider);
+      setIsEvolution(
+        providers.length > 0 && providers.every((p) => p === "evolution"),
+      );
     };
 
     checkConnection();

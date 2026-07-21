@@ -96,19 +96,32 @@ interface ConversationRow {
   [key: string]: unknown;
 }
 
-/** Find the account's oldest conversation for a contact, or create one. */
+/**
+ * Find the account's oldest conversation for a contact ON A GIVEN CHANNEL,
+ * or create one. When `whatsappConfigId` is set, the lookup + dedup are
+ * scoped to that channel so the same contact writing to two different
+ * numbers gets two conversations (migration 039). When null, behaviour is
+ * the legacy per-(account, contact) dedup.
+ */
 export async function findOrCreateConversation(
   accountId: string,
   configOwnerUserId: string,
   contactId: string,
+  whatsappConfigId: string | null = null,
 ): Promise<{ conversation: ConversationRow; created: boolean } | null> {
-  const { data: rows, error } = await supabaseAdmin()
-    .from('conversations')
-    .select('*')
-    .eq('account_id', accountId)
-    .eq('contact_id', contactId)
-    .order('created_at', { ascending: true })
-    .limit(1);
+  const findExisting = () => {
+    let q = supabaseAdmin()
+      .from('conversations')
+      .select('*')
+      .eq('account_id', accountId)
+      .eq('contact_id', contactId);
+    q = whatsappConfigId
+      ? q.eq('whatsapp_config_id', whatsappConfigId)
+      : q.is('whatsapp_config_id', null);
+    return q.order('created_at', { ascending: true }).limit(1);
+  };
+
+  const { data: rows, error } = await findExisting();
 
   if (error) {
     console.error('[inbound-core] error finding conversation:', error);
@@ -120,19 +133,18 @@ export async function findOrCreateConversation(
 
   const { data: newConv, error: createError } = await supabaseAdmin()
     .from('conversations')
-    .insert({ account_id: accountId, user_id: configOwnerUserId, contact_id: contactId })
+    .insert({
+      account_id: accountId,
+      user_id: configOwnerUserId,
+      contact_id: contactId,
+      whatsapp_config_id: whatsappConfigId,
+    })
     .select()
     .single();
 
   if (createError) {
     if (isUniqueViolation(createError)) {
-      const { data: raced } = await supabaseAdmin()
-        .from('conversations')
-        .select('*')
-        .eq('account_id', accountId)
-        .eq('contact_id', contactId)
-        .order('created_at', { ascending: true })
-        .limit(1);
+      const { data: raced } = await findExisting();
       if (raced && raced.length > 0) {
         return { conversation: raced[0] as ConversationRow, created: false };
       }
@@ -184,6 +196,13 @@ export interface RecordInboundArgs {
   /** Message time in ms since epoch. */
   timestampMs: number;
   /**
+   * The channel (whatsapp_config row) this message arrived on. New
+   * conversations are stamped with it so replies go back out the same
+   * number and dedup is per-channel (migration 039). Null = legacy
+   * single-channel behaviour.
+   */
+  whatsappConfigId?: string | null;
+  /**
    * True when the message was sent FROM the linked number (a
    * `fromMe` event — typed on the agent's phone / WhatsApp Web, or an
    * echo of a platform send). Recorded as an outgoing agent message so
@@ -211,6 +230,7 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
   } = args;
 
   const outbound = args.outbound === true;
+  const whatsappConfigId = args.whatsappConfigId ?? null;
   const senderPhone = normalizePhone(rawPhone);
   const contentType = ALLOWED_CONTENT_TYPES.has(args.contentType)
     ? args.contentType
@@ -240,6 +260,7 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
     accountId,
     configOwnerUserId,
     contactRecord.id,
+    whatsappConfigId,
   );
   if (!convResult) return;
   const conversation = convResult.conversation;

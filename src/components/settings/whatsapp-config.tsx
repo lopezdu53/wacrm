@@ -108,10 +108,16 @@ export function WhatsAppConfig() {
       // account sees the same saved configuration. UNIQUE(account_id)
       // on the table guarantees the .maybeSingle() return type
       // remains accurate.
+      // An account can hold several configs now (migration 039 —
+      // multiple Evolution numbers). This Meta form only needs one row to
+      // decide the provider + prefill; take the first. The Evolution
+      // panel manages the full list itself.
       const { data, error } = await supabase
         .from('whatsapp_config')
         .select('*')
         .eq('account_id', acctId)
+        .order('created_at', { ascending: true })
+        .limit(1)
         .maybeSingle();
 
       if (error) {
