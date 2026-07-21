@@ -166,6 +166,7 @@
       "sendTemplateHint": "Send a template to start the conversation",
       "selectConversation": "Select a conversation",
       "selectConversationHint": "Choose a conversation from the left to start messaging",
+      "internalNote": "Internal note",
       "today": "Today",
       "yesterday": "Yesterday"
     },
@@ -176,6 +177,9 @@
       "noCustomerMessages": "No customer messages"
     },
     "composer": {
+      "modeWhatsapp": "WhatsApp",
+      "modeInternal": "Internal comment",
+      "internalPlaceholder": "Write an internal note (only your team sees this)...",
       "draftHint": "Tap the ✨ to draft a reply with AI — you can edit it before sending",
       "sessionExpiredHint": "24-hour session expired. Use a template to re-engage.",
       "templates": "Templates",

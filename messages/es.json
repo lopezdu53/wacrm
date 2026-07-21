@@ -166,6 +166,7 @@
       "sendTemplateHint": "Envía una plantilla para iniciar la conversación",
       "selectConversation": "Selecciona una conversación",
       "selectConversationHint": "Elige una conversación de la izquierda para empezar a chatear",
+      "internalNote": "Nota interna",
       "today": "Hoy",
       "yesterday": "Ayer"
     },
@@ -176,6 +177,9 @@
       "noCustomerMessages": "Sin mensajes del cliente"
     },
     "composer": {
+      "modeWhatsapp": "WhatsApp",
+      "modeInternal": "Comentario interno",
+      "internalPlaceholder": "Escribe una nota interna (solo la ve tu equipo)...",
       "draftHint": "Toca el ✨ para redactar una respuesta con IA — puedes editarla antes de enviar",
       "sessionExpiredHint": "La sesión de 24 horas expiró. Usa una plantilla para reactivar la conversación.",
       "templates": "Plantillas",

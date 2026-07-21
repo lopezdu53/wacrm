@@ -113,6 +113,8 @@ interface MessageComposerProps {
   conversationId: string;
   sessionExpired: boolean;
   onSend: (text: string, replyToId?: string) => void;
+  /** Post an internal team comment (not sent to WhatsApp). */
+  onSendInternal?: (text: string) => void;
   onSendMedia: (payload: SendMediaPayload) => void;
   onSendInteractive: (payload: InteractiveMessagePayload, replyToId?: string) => void;
   onOpenTemplates: () => void;
@@ -135,6 +137,7 @@ export function MessageComposer({
   conversationId,
   sessionExpired,
   onSend,
+  onSendInternal,
   onSendMedia,
   onSendInteractive,
   onOpenTemplates,
@@ -144,6 +147,8 @@ export function MessageComposer({
   const t = useTranslations("Inbox.composer");
 
   const [text, setText] = useState("");
+  // Composer mode: reply to the customer, or leave an internal team note.
+  const [internalMode, setInternalMode] = useState(false);
   const [sending, setSending] = useState(false);
   const [drafting, setDrafting] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -190,7 +195,8 @@ export function MessageComposer({
   const canSend = useCan("send-messages");
   const readOnly = !canSend;
   // Media (like free-form text) is only allowed inside the 24h window.
-  const inputsDisabled = readOnly || sessionExpired;
+  // Internal comments ignore the session gate (they never hit WhatsApp).
+  const inputsDisabled = readOnly || (sessionExpired && !internalMode);
 
   const clearTimer = useCallback(() => {
     if (timerRef.current !== null) {
@@ -222,11 +228,18 @@ export function MessageComposer({
 
   const handleSend = useCallback(async () => {
     const trimmed = text.trim();
-    if (!trimmed || sending || sessionExpired) return;
+    // Internal comments are always allowed (no 24h window); WhatsApp
+    // replies obey the session gate.
+    if (!trimmed || sending) return;
+    if (!internalMode && sessionExpired) return;
 
     setSending(true);
     try {
-      onSend(trimmed, replyTo?.id);
+      if (internalMode) {
+        onSendInternal?.(trimmed);
+      } else {
+        onSend(trimmed, replyTo?.id);
+      }
       setText("");
       if (textareaRef.current) {
         textareaRef.current.style.height = "auto";
@@ -234,7 +247,15 @@ export function MessageComposer({
     } finally {
       setSending(false);
     }
-  }, [text, sending, sessionExpired, onSend, replyTo?.id]);
+  }, [
+    text,
+    sending,
+    sessionExpired,
+    internalMode,
+    onSend,
+    onSendInternal,
+    replyTo?.id,
+  ]);
 
   const handleKeyDown = useCallback(
     (e: KeyboardEvent<HTMLTextAreaElement>) => {
@@ -536,8 +557,42 @@ export function MessageComposer({
   // ---- Render --------------------------------------------------------
 
   return (
-    <div className="border-t border-border bg-card p-3">
-      {replyTo && (
+    <div
+      className={cn(
+        "border-t border-border bg-card p-3",
+        internalMode && "bg-amber-500/5",
+      )}
+    >
+      {/* Mode toggle: reply to the customer vs an internal team note. */}
+      {onSendInternal && (
+        <div className="mb-2 inline-flex rounded-lg border border-border bg-muted p-0.5 text-xs">
+          <button
+            type="button"
+            onClick={() => setInternalMode(false)}
+            className={cn(
+              "rounded-md px-3 py-1 font-medium transition-colors",
+              !internalMode
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t("modeWhatsapp")}
+          </button>
+          <button
+            type="button"
+            onClick={() => setInternalMode(true)}
+            className={cn(
+              "rounded-md px-3 py-1 font-medium transition-colors",
+              internalMode
+                ? "bg-amber-500 text-amber-950"
+                : "text-muted-foreground hover:text-foreground",
+            )}
+          >
+            {t("modeInternal")}
+          </button>
+        </div>
+      )}
+      {replyTo && !internalMode && (
         <div className="mb-2">
           <ReplyQuote
             authorLabel={replyTo.authorLabel}
@@ -546,7 +601,7 @@ export function MessageComposer({
           />
         </div>
       )}
-      {sessionExpired && (
+      {sessionExpired && !internalMode && (
         <div className="mb-2 flex items-center justify-between rounded-lg bg-amber-500/10 px-3 py-2">
           <p className="text-xs text-amber-400">
             {t("sessionExpiredHint")}
@@ -630,6 +685,9 @@ export function MessageComposer({
         </div>
       ) : (
         <div className="flex items-end gap-2">
+          {/* WhatsApp-only actions — hidden when writing an internal note. */}
+          {!internalMode && (
+          <>
           {/* Attach menu — photo / video / document / voice. */}
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -725,6 +783,8 @@ export function MessageComposer({
               <Sparkles className="h-4 w-4" />
             )}
           </GatedButton>
+          </>
+          )}
 
           <textarea
             ref={textareaRef}
@@ -734,11 +794,13 @@ export function MessageComposer({
             placeholder={
               readOnly
                 ? t("readOnlyPlaceholder")
-                : sessionExpired
-                  ? t("sessionExpiredPlaceholder")
-                  : t("typeMessagePlaceholder")
+                : internalMode
+                  ? t("internalPlaceholder")
+                  : sessionExpired
+                    ? t("sessionExpiredPlaceholder")
+                    : t("typeMessagePlaceholder")
             }
-            disabled={sessionExpired || readOnly}
+            disabled={inputsDisabled}
             rows={1}
             // Textarea keeps its own inline title — the GatedButton
             // wrapping pattern doesn't apply to non-button inputs.
@@ -746,7 +808,8 @@ export function MessageComposer({
             title={readOnly ? t("readOnlyTitle") : undefined}
             className={cn(
               "flex-1 resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50",
-              (sessionExpired || readOnly) && "cursor-not-allowed opacity-50"
+              inputsDisabled && "cursor-not-allowed opacity-50",
+              internalMode && "border-amber-500/40 bg-amber-500/10"
             )}
           />
 
@@ -754,9 +817,14 @@ export function MessageComposer({
             size="sm"
             canAct={!readOnly}
             gateReason="send messages"
-            disabled={!text.trim() || sessionExpired || sending}
+            disabled={!text.trim() || inputsDisabled || sending}
             onClick={handleSend}
-            className="h-9 w-9 shrink-0 bg-primary p-0 hover:bg-primary/90 disabled:opacity-40"
+            className={cn(
+              "h-9 w-9 shrink-0 p-0 disabled:opacity-40",
+              internalMode
+                ? "bg-amber-500 text-amber-950 hover:bg-amber-500/90"
+                : "bg-primary hover:bg-primary/90"
+            )}
           >
             <Send className="h-4 w-4" />
           </GatedButton>

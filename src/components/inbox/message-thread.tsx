@@ -27,6 +27,7 @@ import {
   RefreshCw,
   PanelRightOpen,
   PanelRightClose,
+  StickyNote,
 } from "lucide-react";
 import { format, isToday, isYesterday, differenceInHours } from "date-fns";
 import { useTranslations } from "next-intl";
@@ -505,6 +506,49 @@ export function MessageThread({
         console.error("Failed to send message:", err);
         const reason = err instanceof Error ? err.message : "network error";
         toast.error(`Failed to send: ${reason}`);
+        onUpdateMessage(tempId, { status: "failed" });
+      }
+    },
+    [conversation, onNewMessage, onUpdateMessage]
+  );
+
+  // Internal team comment — stored in the thread, never sent to WhatsApp.
+  const handleSendInternal = useCallback(
+    async (text: string) => {
+      if (!conversation) return;
+      const tempId = `temp-${Date.now()}`;
+      const optimisticMsg: Message = {
+        id: tempId,
+        conversation_id: conversation.id,
+        sender_type: "agent",
+        content_type: "text",
+        content_text: text,
+        status: "sending",
+        created_at: new Date().toISOString(),
+        is_internal: true,
+      };
+      onNewMessage(optimisticMsg);
+
+      try {
+        const res = await fetch("/api/inbox/internal-comment", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            conversation_id: conversation.id,
+            text,
+          }),
+        });
+        const payload = await res.json().catch(() => ({}));
+        if (!res.ok) {
+          const reason = payload?.error || `HTTP ${res.status}`;
+          toast.error(`Failed to add comment: ${reason}`);
+          onUpdateMessage(tempId, { status: "failed" });
+          return;
+        }
+        onUpdateMessage(tempId, { status: "sent" });
+      } catch (err) {
+        const reason = err instanceof Error ? err.message : "network error";
+        toast.error(`Failed to add comment: ${reason}`);
         onUpdateMessage(tempId, { status: "failed" });
       }
     },
@@ -1095,6 +1139,26 @@ export function MessageThread({
                 {/* Messages */}
                 <div className="space-y-2">
                   {group.messages.map((msg) => {
+                    // Internal team note — rendered as an amber card,
+                    // never as a chat bubble (no reply / react actions).
+                    if (msg.is_internal) {
+                      return (
+                        <div key={msg.id} className="flex justify-center px-2">
+                          <div className="max-w-[85%] rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2">
+                            <div className="mb-0.5 flex items-center gap-1.5 text-[10px] font-medium uppercase tracking-wide text-amber-500">
+                              <StickyNote className="h-3 w-3" />
+                              {t("internalNote")}
+                            </div>
+                            <p className="whitespace-pre-wrap text-sm text-foreground">
+                              {msg.content_text}
+                            </p>
+                            <p className="mt-0.5 text-right text-[10px] text-muted-foreground">
+                              {format(new Date(msg.created_at), "HH:mm")}
+                            </p>
+                          </div>
+                        </div>
+                      );
+                    }
                     const parent = msg.reply_to_message_id
                       ? messagesById.get(msg.reply_to_message_id)
                       : null;
@@ -1166,6 +1230,7 @@ export function MessageThread({
         conversationId={conversation.id}
         sessionExpired={sessionInfo.expired}
         onSend={handleSend}
+        onSendInternal={handleSendInternal}
         onSendMedia={handleSendMedia}
         onSendInteractive={handleSendInteractive}
         onOpenTemplates={handleOpenTemplates}
