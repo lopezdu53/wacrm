@@ -52,7 +52,9 @@ CREATE INDEX IF NOT EXISTS idx_conversations_whatsapp_config
 UPDATE conversations c
 SET whatsapp_config_id = w.id
 FROM (
-  SELECT account_id, MIN(id) AS id
+  -- One row per account, only for accounts with exactly one config.
+  -- array_agg avoids MIN(uuid) (Postgres has no aggregate for uuid).
+  SELECT account_id, (array_agg(id))[1] AS id
   FROM whatsapp_config
   GROUP BY account_id
   HAVING COUNT(*) = 1
