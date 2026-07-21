@@ -236,6 +236,10 @@ export default function InboxPage() {
           });
         }
 
+        // Internal team notes live only inside the thread — they must not
+        // change the conversation-list preview or bump the unread badge.
+        if (newMsg.is_internal) return;
+
         // Update conversation list preview. We need to know *synchronously*
         // whether the conv is already in state to decide between patching
         // the preview and triggering a hydrate — see the comment on

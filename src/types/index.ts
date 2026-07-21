@@ -254,6 +254,12 @@ export interface Message {
    * badge in the inbox. Migration 033.
    */
   ai_generated?: boolean;
+  /**
+   * True when this is an internal team comment (migration 040): shown
+   * inline in the thread as a note, never sent to WhatsApp. `sender_id`
+   * holds the author's user id so the note can show who wrote it.
+   */
+  is_internal?: boolean;
 }
 
 export type ReactionActor = 'customer' | 'agent';
