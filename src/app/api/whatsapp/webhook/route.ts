@@ -8,6 +8,7 @@ import { verifyMetaWebhookSignature } from '@/lib/whatsapp/webhook-signature'
 import { runAutomationsForTrigger } from '@/lib/automations/engine'
 import { dispatchInboundToFlows } from '@/lib/flows/engine'
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply'
+import { dispatchInboundToQualify } from '@/lib/ai/qualify'
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver'
 import {
   handleTemplateWebhookChange,
@@ -803,6 +804,17 @@ async function processMessage(
   // eligibility gates + try/catch and never throws.
   if (!flowConsumed && !interactiveReplyId && inboundText.trim()) {
     await dispatchInboundToAiReply({
+      accountId,
+      conversationId: conversation.id,
+      contactId: contactRecord.id,
+      configOwnerUserId,
+    })
+  }
+
+  // AI lead qualification — independent of auto-reply, so it runs even
+  // when replies are handled by a human or Meta's in-app AI.
+  if (inboundText.trim()) {
+    await dispatchInboundToQualify({
       accountId,
       conversationId: conversation.id,
       contactId: contactRecord.id,

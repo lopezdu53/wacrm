@@ -1,14 +1,18 @@
 import {
   sendInteractiveButtons,
   sendInteractiveList,
-  sendMediaMessage,
-  sendTextMessage,
   type InteractiveButton,
   type InteractiveListSection,
   type MediaKind,
 } from '@/lib/whatsapp/meta-api'
 import type { InteractiveMessagePayload } from '@/lib/whatsapp/interactive'
 import { decrypt } from '@/lib/whatsapp/encryption'
+import {
+  loadConversationChannelConfig,
+  transportSendText,
+  transportSendMedia,
+  isEvolutionConfig,
+} from '@/lib/whatsapp/engine-transport'
 import {
   sanitizePhoneForMeta,
   isValidE164,
@@ -82,28 +86,17 @@ export async function engineSendText(
     throw new Error(`contact phone invalid: ${contact.phone}`)
   }
 
-  const { data: config, error: configErr } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', args.accountId)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-  if (configErr || !config) {
+  const config = await loadConversationChannelConfig(
+    db,
+    args.accountId,
+    args.conversationId,
+  )
+  if (!config) {
     throw new Error('WhatsApp not configured for this account')
   }
 
-  const accessToken = decrypt(config.access_token)
-
-  const attempt = async (phone: string): Promise<string> => {
-    const r = await sendTextMessage({
-      phoneNumberId: config.phone_number_id,
-      accessToken,
-      to: phone,
-      text: args.text,
-    })
-    return r.messageId
-  }
+  const attempt = async (phone: string): Promise<string> =>
+    transportSendText({ config, to: phone, text: args.text })
 
   const variants = phoneVariants(sanitized)
   let workingPhone = sanitized
@@ -194,31 +187,24 @@ export async function engineSendMedia(
     throw new Error(`contact phone invalid: ${contact.phone}`)
   }
 
-  const { data: config, error: configErr } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', args.accountId)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-  if (configErr || !config) {
+  const config = await loadConversationChannelConfig(
+    db,
+    args.accountId,
+    args.conversationId,
+  )
+  if (!config) {
     throw new Error('WhatsApp not configured for this account')
   }
 
-  const accessToken = decrypt(config.access_token)
-
-  const attempt = async (phone: string): Promise<string> => {
-    const r = await sendMediaMessage({
-      phoneNumberId: config.phone_number_id,
-      accessToken,
+  const attempt = async (phone: string): Promise<string> =>
+    transportSendMedia({
+      config,
       to: phone,
       kind: args.kind,
       link: args.link,
       caption: args.caption,
       filename: args.filename,
     })
-    return r.messageId
-  }
 
   const variants = phoneVariants(sanitized)
   let workingPhone = sanitized
@@ -348,20 +334,31 @@ async function sendInteractiveViaMeta(
     throw new Error(`contact phone invalid: ${contact.phone}`)
   }
 
-  const { data: config, error: configErr } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', input.accountId)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-  if (configErr || !config) {
+  const config = await loadConversationChannelConfig(
+    db,
+    input.accountId,
+    input.conversationId,
+  )
+  if (!config) {
     throw new Error('WhatsApp not configured for this account')
   }
 
-  const accessToken = decrypt(config.access_token)
-
   const attempt = async (phone: string): Promise<string> => {
+    // Evolution can't render buttons/lists — flatten the options into a
+    // numbered text menu so the customer can still reply by number/name.
+    if (isEvolutionConfig(config)) {
+      const options =
+        input.kind === 'buttons'
+          ? input.buttons.map((b) => b.title)
+          : input.sections.flatMap((s) => (s.rows ?? []).map((r) => r.title))
+      const lines = [input.bodyText]
+      if (options.length > 0) {
+        lines.push('')
+        options.forEach((o, i) => lines.push(`${i + 1}. ${o}`))
+      }
+      return transportSendText({ config, to: phone, text: lines.join('\n') })
+    }
+    const accessToken = decrypt(config.access_token)
     if (input.kind === 'buttons') {
       const r = await sendInteractiveButtons({
         phoneNumberId: config.phone_number_id,

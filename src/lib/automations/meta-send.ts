@@ -1,10 +1,15 @@
-import { sendTextMessage, sendTemplateMessage } from '@/lib/whatsapp/meta-api'
+import { sendTemplateMessage } from '@/lib/whatsapp/meta-api'
 import type { InteractiveMessagePayload } from '@/lib/whatsapp/interactive'
 import {
   engineSendInteractiveButtons,
   engineSendInteractiveList,
 } from '@/lib/flows/meta-send'
 import { decrypt } from '@/lib/whatsapp/encryption'
+import {
+  loadConversationChannelConfig,
+  transportSendText,
+  isEvolutionConfig,
+} from '@/lib/whatsapp/engine-transport'
 import {
   sanitizePhoneForMeta,
   isValidE164,
@@ -131,22 +136,29 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
     throw new Error(`contact phone invalid: ${contact.phone}`)
   }
 
-  const { data: config, error: configErr } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', input.accountId)
-    .single()
-  if (configErr || !config) {
+  const config = await loadConversationChannelConfig(
+    db,
+    input.accountId,
+    input.conversationId,
+  )
+  if (!config) {
     throw new Error('WhatsApp not configured for this account')
   }
 
-  const accessToken = decrypt(config.access_token)
-
   const attempt = async (phone: string): Promise<string> => {
+    // Evolution has no template concept — degrade a template to plain
+    // text (its variable values, or the template name as a last resort).
+    if (isEvolutionConfig(config)) {
+      const text =
+        input.kind === 'template'
+          ? (input.params ?? []).join(' ').trim() || input.templateName
+          : input.text
+      return transportSendText({ config, to: phone, text })
+    }
     if (input.kind === 'template') {
       const r = await sendTemplateMessage({
         phoneNumberId: config.phone_number_id,
-        accessToken,
+        accessToken: decrypt(config.access_token),
         to: phone,
         templateName: input.templateName,
         language: input.language,
@@ -154,13 +166,7 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
       })
       return r.messageId
     }
-    const r = await sendTextMessage({
-      phoneNumberId: config.phone_number_id,
-      accessToken,
-      to: phone,
-      text: input.text,
-    })
-    return r.messageId
+    return transportSendText({ config, to: phone, text: input.text })
   }
 
   // Same phone-variant retry as /api/whatsapp/send — Meta sandbox and
