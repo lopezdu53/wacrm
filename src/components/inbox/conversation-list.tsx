@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/hooks/use-auth";
 import {
   CONVERSATION_SELECT,
   matchesContactFilters,
@@ -63,12 +64,25 @@ export function ConversationList({
     { label: t("filterClosed"), value: "closed" },
   ], [t]);
 
+  const { user } = useAuth();
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [loading, setLoading] = useState(true);
   // Per-number (channel) selector. `null` = all numbers.
   const [channels, setChannels] = useState<{ id: string; label: string }[]>([]);
   const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
+  // Assignment filter (the "My inbox" pattern): all / mine / unassigned.
+  const [assignFilter, setAssignFilter] = useState<"all" | "mine" | "unassigned">("all");
+
+  const ASSIGN_OPTIONS: { label: string; value: "all" | "mine" | "unassigned" }[] =
+    useMemo(
+      () => [
+        { label: t("assignAll"), value: "all" },
+        { label: t("assignMine"), value: "mine" },
+        { label: t("assignUnassigned"), value: "unassigned" },
+      ],
+      [t],
+    );
   // Contact-based filters (issue #272). Tags use OR logic (a conversation
   // matches if its contact carries any selected tag), consistent with
   // Broadcast audience filtering. Company is an exact match on the field.
@@ -196,6 +210,13 @@ export function ConversationList({
       result = result.filter((c) => c.whatsapp_config_id === selectedChannel);
     }
 
+    // Assignment filter (My inbox).
+    if (assignFilter === "mine" && user?.id) {
+      result = result.filter((c) => c.assigned_agent_id === user.id);
+    } else if (assignFilter === "unassigned") {
+      result = result.filter((c) => !c.assigned_agent_id);
+    }
+
     if (filter === "unread") {
       result = result.filter((c) => c.unread_count > 0);
     } else if (filter !== "all") {
@@ -223,7 +244,18 @@ export function ConversationList({
     }
 
     return result;
-  }, [conversations, filter, search, selectedTagIds, selectedCompany, selectedChannel]);
+  }, [
+    conversations,
+    filter,
+    search,
+    selectedTagIds,
+    selectedCompany,
+    selectedChannel,
+    assignFilter,
+    user?.id,
+  ]);
+
+  const activeAssign = ASSIGN_OPTIONS.find((o) => o.value === assignFilter);
 
   const toggleTag = useCallback((id: string) => {
     setSelectedTagIds((prev) =>
@@ -320,6 +352,37 @@ export function ConversationList({
         </div>
 
         <div className="flex flex-wrap items-center gap-1">
+          {/* Assignment filter — My inbox / Unassigned / All. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className={cn(
+                "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
+                assignFilter !== "all"
+                  ? "text-primary"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              {activeAssign?.label ?? t("assignAll")}
+              <ChevronDown className="h-3 w-3" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="border-border bg-popover">
+              {ASSIGN_OPTIONS.map((opt) => (
+                <DropdownMenuItem
+                  key={opt.value}
+                  onClick={() => setAssignFilter(opt.value)}
+                  className={cn(
+                    "text-sm",
+                    assignFilter === opt.value
+                      ? "text-primary"
+                      : "text-popover-foreground",
+                  )}
+                >
+                  {opt.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
           <DropdownMenu>
             <DropdownMenuTrigger className="inline-flex items-center justify-center h-7 gap-1 px-2 text-xs text-muted-foreground hover:text-foreground rounded-md hover:bg-muted">
                 {activeFilter?.label ?? t("filterAll")}
