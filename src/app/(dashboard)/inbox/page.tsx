@@ -40,6 +40,9 @@ export default function InboxPage() {
   const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(
     null
   );
+  // True when the account's WhatsApp transport is Evolution (QR / WhatsApp
+  // Web), which has no 24-hour session window.
+  const [isEvolution, setIsEvolution] = useState(false);
   /**
    * Bumped whenever we want children (ConversationList, MessageThread)
    * to refetch from the DB — used as a safety net against missed
@@ -191,11 +194,15 @@ export default function InboxPage() {
 
       const { data } = await supabase
         .from("whatsapp_config")
-        .select("status")
+        .select("status, provider")
         .eq("account_id", accountId)
         .maybeSingle();
 
       setWhatsappConnected(data?.status === "connected");
+      // Evolution (WhatsApp Web) has no 24-hour customer-service window,
+      // so the inbox must not show the "session expired / use a template"
+      // gating that only applies to the Meta Cloud API.
+      setIsEvolution(data?.provider === "evolution");
     };
 
     checkConnection();
@@ -612,6 +619,7 @@ export default function InboxPage() {
             onRefresh={handleManualRefresh}
             contactPanelOpen={contactPanelOpen}
             onToggleContactPanel={handleToggleContactPanel}
+            noSessionWindow={isEvolution}
           />
         </div>
 
