@@ -74,6 +74,13 @@ export interface AccountMember {
   email: string | null;
   avatar_url: string | null;
   role: AccountRole;
+  /**
+   * "Restrict data visibility to only assigned data" — when true this
+   * member (agent/viewer only) sees only conversations they're assigned
+   * to or follow, not the whole shared inbox. Enforced in RLS
+   * (migration 042); owners/admins are never restricted.
+   */
+  restrict_to_assigned: boolean;
   joined_at: string;
 }
 

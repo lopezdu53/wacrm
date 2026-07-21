@@ -25,6 +25,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import {
   AlertTriangle,
+  EyeOff,
   Loader2,
   Mail,
   MailX,
@@ -47,6 +48,7 @@ import {
 } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
+import { Switch } from '@/components/ui/switch';
 import {
   Dialog,
   DialogContent,
@@ -82,6 +84,7 @@ interface Member {
   email: string | null;
   avatar_url: string | null;
   role: AccountRole;
+  restrict_to_assigned: boolean;
   joined_at: string;
 }
 
@@ -222,6 +225,56 @@ export function MembersTab() {
         ),
       );
       console.error('[MembersTab] role change error:', err);
+      toast.error('Could not reach the server');
+    } finally {
+      setPendingMemberAction(null);
+    }
+  }
+
+  async function handleRestrictChange(member: Member, next: boolean) {
+    if (member.restrict_to_assigned === next) return;
+    // Optimistic flip, same pattern as the role dropdown: update the
+    // switch immediately, revert if the PATCH fails so the toggle never
+    // lies about the persisted state.
+    const previous = member.restrict_to_assigned;
+    setPendingMemberAction(member.user_id);
+    setMembers((prev) =>
+      prev.map((m) =>
+        m.user_id === member.user_id ? { ...m, restrict_to_assigned: next } : m,
+      ),
+    );
+    try {
+      const res = await fetch(`/api/account/members/${member.user_id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ restrict_to_assigned: next }),
+      });
+      if (!res.ok) {
+        setMembers((prev) =>
+          prev.map((m) =>
+            m.user_id === member.user_id
+              ? { ...m, restrict_to_assigned: previous }
+              : m,
+          ),
+        );
+        const payload = await res.json().catch(() => ({}));
+        toast.error(payload.error || 'Failed to update visibility');
+        return;
+      }
+      toast.success(
+        next
+          ? t('restrictOnToast', { name: member.full_name || t('unnamed') })
+          : t('restrictOffToast', { name: member.full_name || t('unnamed') }),
+      );
+    } catch (err) {
+      setMembers((prev) =>
+        prev.map((m) =>
+          m.user_id === member.user_id
+            ? { ...m, restrict_to_assigned: previous }
+            : m,
+        ),
+      );
+      console.error('[MembersTab] restrict change error:', err);
       toast.error('Could not reach the server');
     } finally {
       setPendingMemberAction(null);
@@ -410,6 +463,36 @@ export function MembersTab() {
                       inline. Items align to the start on mobile so the
                       role dropdown lines up under the avatar. */}
                   <div className="flex items-center gap-2 sm:gap-3">
+                    {/* "Restrict data visibility to only assigned data".
+                        Admin+ only; meaningful for agent/viewer members
+                        (owners/admins always see everything, so the
+                        toggle is hidden for them). Enforced in RLS —
+                        this is just the switch. */}
+                    {canManageMembers &&
+                      !isSelf &&
+                      (member.role === 'agent' || member.role === 'viewer') && (
+                        <Tooltip>
+                          <TooltipTrigger
+                            render={
+                              <label className="flex cursor-pointer items-center gap-1.5 text-muted-foreground">
+                                <EyeOff className="size-3.5" />
+                                <Switch
+                                  checked={member.restrict_to_assigned}
+                                  onCheckedChange={(v) =>
+                                    handleRestrictChange(member, v)
+                                  }
+                                  disabled={isBusy}
+                                  aria-label={t('restrictToggleAria')}
+                                />
+                              </label>
+                            }
+                          />
+                          <TooltipContent className="max-w-xs">
+                            {t('restrictTooltip')}
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
+
                     {/* Role display / editor. Inline Select is admin+
                         only AND not allowed on the owner row (owner
                         changes go through transfer, which lands later). */}
