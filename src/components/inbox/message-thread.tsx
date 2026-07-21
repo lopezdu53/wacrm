@@ -28,6 +28,7 @@ import {
   PanelRightOpen,
   PanelRightClose,
   StickyNote,
+  Users,
 } from "lucide-react";
 import { format, isToday, isYesterday, differenceInHours } from "date-fns";
 import { useTranslations } from "next-intl";
@@ -186,6 +187,8 @@ export function MessageThread({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
+  // Followers — teammates watching this thread (migration 041).
+  const [followerIds, setFollowerIds] = useState<string[]>([]);
   const [reactions, setReactions] = useState<MessageReaction[]>([]);
   // Purely visual spin state for the manual-refresh button. The actual
   // refetch is fire-and-forget through `onRefresh` (which bumps the
@@ -891,6 +894,60 @@ export function MessageThread({
     [conversation, onAssignChange],
   );
 
+  // Load this conversation's followers whenever it changes.
+  useEffect(() => {
+    if (!conversation) {
+      setFollowerIds([]);
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      const supabase = createClient();
+      const { data } = await supabase
+        .from("conversation_followers")
+        .select("user_id")
+        .eq("conversation_id", conversation.id);
+      if (!cancelled) {
+        setFollowerIds((data ?? []).map((r) => r.user_id as string));
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [conversation?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const toggleFollower = useCallback(
+    async (userId: string) => {
+      if (!conversation) return;
+      const supabase = createClient();
+      const isFollowing = followerIds.includes(userId);
+      // Optimistic update.
+      setFollowerIds((prev) =>
+        isFollowing ? prev.filter((id) => id !== userId) : [...prev, userId],
+      );
+      if (isFollowing) {
+        const { error } = await supabase
+          .from("conversation_followers")
+          .delete()
+          .eq("conversation_id", conversation.id)
+          .eq("user_id", userId);
+        if (error) {
+          toast.error("Failed to update followers");
+          setFollowerIds((prev) => [...prev, userId]); // revert
+        }
+      } else {
+        const { error } = await supabase
+          .from("conversation_followers")
+          .insert({ conversation_id: conversation.id, user_id: userId });
+        if (error) {
+          toast.error("Failed to update followers");
+          setFollowerIds((prev) => prev.filter((id) => id !== userId)); // revert
+        }
+      }
+    },
+    [conversation, followerIds],
+  );
+
   // Empty state — same WhatsApp-style doodle background as the active
   // thread below, so swapping between empty/selected doesn't change the
   // pattern under the user's eye.
@@ -1107,6 +1164,55 @@ export function MessageThread({
                     {t("unassign")}
                   </DropdownMenuItem>
                 </>
+              )}
+            </DropdownMenuContent>
+          </DropdownMenu>
+
+          {/* Followers dropdown — teammates watching this thread. */}
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              className={cn(
+                "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
+                followerIds.length > 0 ? "text-primary" : "text-muted-foreground",
+              )}
+            >
+              <Users className="h-3 w-3" />
+              <span className="hidden sm:inline">{t("followers")}</span>
+              {followerIds.length > 0 && (
+                <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+                  {followerIds.length}
+                </span>
+              )}
+              <ChevronDown className="h-3 w-3" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="border-border bg-popover">
+              {profiles.length === 0 ? (
+                <DropdownMenuItem disabled className="text-sm text-muted-foreground">
+                  {t("noTeammates")}
+                </DropdownMenuItem>
+              ) : (
+                profiles.map((p) => {
+                  const isFollowing = followerIds.includes(p.user_id);
+                  return (
+                    <DropdownMenuItem
+                      key={p.id}
+                      onSelect={(e) => {
+                        e.preventDefault();
+                        void toggleFollower(p.user_id);
+                      }}
+                      className={cn(
+                        "text-sm",
+                        isFollowing ? "text-primary" : "text-popover-foreground",
+                      )}
+                    >
+                      <span className="flex-1">
+                        {p.full_name}
+                        {p.user_id === user?.id ? t("me") : ""}
+                      </span>
+                      {isFollowing && <Check className="ml-2 h-3 w-3" />}
+                    </DropdownMenuItem>
+                  );
+                })
               )}
             </DropdownMenuContent>
           </DropdownMenu>

@@ -131,6 +131,9 @@
     },
     "conversationList": {
       "allNumbers": "All numbers",
+      "assignAll": "All chats",
+      "assignMine": "Assigned to me",
+      "assignUnassigned": "Unassigned",
       "searchPlaceholder": "Search conversations...",
       "filterAll": "All",
       "filterUnread": "Unread",
@@ -160,6 +163,7 @@
       "assign": "Assign",
       "assigned": "Assigned",
       "unassign": "Unassign",
+      "followers": "Followers",
       "noTeammates": "No teammates available",
       "me": " (me)",
       "noMessagesYet": "No messages yet",

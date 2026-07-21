@@ -131,6 +131,9 @@
     },
     "conversationList": {
       "allNumbers": "Todos los números",
+      "assignAll": "Todos los chats",
+      "assignMine": "Asignados a mí",
+      "assignUnassigned": "Sin asignar",
       "searchPlaceholder": "Buscar conversaciones...",
       "filterAll": "Todas",
       "filterUnread": "Sin leer",
@@ -160,6 +163,7 @@
       "assign": "Asignar",
       "assigned": "Asignada",
       "unassign": "Desasignar",
+      "followers": "Seguidores",
       "noTeammates": "No hay compañeros disponibles",
       "me": " (yo)",
       "noMessagesYet": "Aún no hay mensajes",
