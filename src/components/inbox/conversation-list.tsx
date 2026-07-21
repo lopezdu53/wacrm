@@ -9,7 +9,7 @@ import {
 } from "@/lib/inbox/conversations";
 import { cn } from "@/lib/utils";
 import type { Conversation, ConversationStatus, Tag } from "@/types";
-import { Search, ChevronDown, X } from "lucide-react";
+import { Search, ChevronDown, X, MessageSquare } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
@@ -66,6 +66,9 @@ export function ConversationList({
   const [search, setSearch] = useState("");
   const [filter, setFilter] = useState<InboxFilter>("all");
   const [loading, setLoading] = useState(true);
+  // Per-number (channel) selector. `null` = all numbers.
+  const [channels, setChannels] = useState<{ id: string; label: string }[]>([]);
+  const [selectedChannel, setSelectedChannel] = useState<string | null>(null);
   // Contact-based filters (issue #272). Tags use OR logic (a conversation
   // matches if its contact carries any selected tag), consistent with
   // Broadcast audience filtering. Company is an exact match on the field.
@@ -140,6 +143,33 @@ export function ConversationList({
     };
   }, []);
 
+  // WhatsApp channels (numbers) for the per-number selector (migration 039).
+  // Only surfaces when the account has more than one connected number.
+  useEffect(() => {
+    const supabase = createClient();
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from("whatsapp_config")
+        .select("id, label, evolution_instance, phone_number_id")
+        .order("created_at", { ascending: true });
+      if (cancelled || !data) return;
+      setChannels(
+        data.map((c: Record<string, unknown>) => ({
+          id: c.id as string,
+          label:
+            (c.label as string) ||
+            (c.evolution_instance as string) ||
+            (c.phone_number_id as string) ||
+            "WhatsApp",
+        })),
+      );
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [resyncToken]);
+
   // Company options are derived from the loaded conversations — there's no
   // separate companies table, and only companies with a live conversation
   // are worth offering as an inbox filter.
@@ -160,6 +190,11 @@ export function ConversationList({
 
   const filtered = useMemo(() => {
     let result = conversations;
+
+    // Per-number filter — only threads on the selected channel.
+    if (selectedChannel) {
+      result = result.filter((c) => c.whatsapp_config_id === selectedChannel);
+    }
 
     if (filter === "unread") {
       result = result.filter((c) => c.unread_count > 0);
@@ -188,7 +223,7 @@ export function ConversationList({
     }
 
     return result;
-  }, [conversations, filter, search, selectedTagIds, selectedCompany]);
+  }, [conversations, filter, search, selectedTagIds, selectedCompany, selectedChannel]);
 
   const toggleTag = useCallback((id: string) => {
     setSelectedTagIds((prev) =>
@@ -226,6 +261,54 @@ export function ConversationList({
     <div className="flex h-full w-full flex-col border-r border-border bg-card lg:w-80">
       {/* Search + Filter */}
       <div className="space-y-2 border-b border-border p-3">
+        {/* Per-number selector — only when the account has >1 channel. */}
+        {channels.length > 1 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger className="flex w-full items-center justify-between gap-2 rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground hover:bg-muted/70">
+              <span className="flex items-center gap-2 truncate">
+                <MessageSquare className="h-4 w-4 shrink-0 text-primary" />
+                <span className="truncate">
+                  {selectedChannel
+                    ? channels.find((c) => c.id === selectedChannel)?.label ??
+                      t("allNumbers")
+                    : t("allNumbers")}
+                </span>
+              </span>
+              <ChevronDown className="h-4 w-4 shrink-0 text-muted-foreground" />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent
+              align="start"
+              className="w-[var(--radix-dropdown-menu-trigger-width)] border-border bg-popover"
+            >
+              <DropdownMenuItem
+                onClick={() => setSelectedChannel(null)}
+                className={cn(
+                  "text-sm",
+                  selectedChannel === null
+                    ? "text-primary"
+                    : "text-popover-foreground",
+                )}
+              >
+                {t("allNumbers")}
+              </DropdownMenuItem>
+              {channels.map((ch) => (
+                <DropdownMenuItem
+                  key={ch.id}
+                  onClick={() => setSelectedChannel(ch.id)}
+                  className={cn(
+                    "text-sm",
+                    selectedChannel === ch.id
+                      ? "text-primary"
+                      : "text-popover-foreground",
+                  )}
+                >
+                  {ch.label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
+
         <div className="relative">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
