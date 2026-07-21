@@ -21,6 +21,7 @@ import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe';
 import { runAutomationsForTrigger } from '@/lib/automations/engine';
 import { dispatchInboundToFlows } from '@/lib/flows/engine';
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply';
+import { dispatchInboundToQualify } from '@/lib/ai/qualify';
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver';
 
 /** Content types the `messages.content_type` CHECK constraint allows. */
@@ -354,6 +355,18 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
   // AI auto-reply for plain text a flow didn't consume.
   if (!flowConsumed && inboundText.trim()) {
     await dispatchInboundToAiReply({
+      accountId,
+      conversationId: conversation.id,
+      contactId: contactRecord.id,
+      configOwnerUserId,
+    });
+  }
+
+  // AI lead qualification — runs independently of auto-reply, so wacrm can
+  // read the chat, update the contact, and open a deal even when replies
+  // are handled elsewhere (a human, or Meta's in-app AI). Inbound only.
+  if (!outbound && inboundText.trim()) {
+    await dispatchInboundToQualify({
       accountId,
       conversationId: conversation.id,
       contactId: contactRecord.id,

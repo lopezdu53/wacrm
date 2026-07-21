@@ -1,6 +1,9 @@
 import type { SupabaseClient } from '@supabase/supabase-js'
 import type { AiConfig, ChatMessage } from './types'
 import { generateReply } from './generate'
+import { supabaseAdmin } from './admin-client'
+import { loadAiConfig } from './config'
+import { buildConversationContext } from './context'
 
 /**
  * AI lead qualification (migration 038).
@@ -285,5 +288,43 @@ export async function qualifyLead(args: QualifyArgs): Promise<void> {
     })
   } catch (err) {
     console.error('[ai qualify] failed:', err)
+  }
+}
+
+/**
+ * Run lead qualification for a fresh inbound message, INDEPENDENT of the
+ * auto-reply bot. This is what lets an account whose replies are handled
+ * elsewhere (a human, or Meta's in-app AI) still have wacrm read the chat,
+ * update the contact, and open a deal — without wacrm sending anything.
+ *
+ * Gated only by `auto_qualify_enabled` (+ a valid, active AI config).
+ * Best-effort: owns its try/catch, never throws.
+ */
+export async function dispatchInboundToQualify(args: {
+  accountId: string
+  conversationId: string
+  contactId: string
+  configOwnerUserId: string
+}): Promise<void> {
+  const { accountId, conversationId, contactId, configOwnerUserId } = args
+  try {
+    const db = supabaseAdmin()
+    const config = await loadAiConfig(db, accountId)
+    if (!config || !config.autoQualifyEnabled) return
+
+    const messages = await buildConversationContext(db, conversationId)
+    if (messages.length === 0) return
+
+    await qualifyLead({
+      db,
+      accountId,
+      contactId,
+      conversationId,
+      configOwnerUserId,
+      config,
+      messages,
+    })
+  } catch (err) {
+    console.error('[ai qualify] dispatch failed:', err)
   }
 }
