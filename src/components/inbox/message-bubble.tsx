@@ -18,7 +18,9 @@ import {
 import { format } from "date-fns";
 import { ReplyQuote } from "./reply-quote";
 import { MessageReactions } from "./message-reactions";
+import { LinkPreview } from "./link-preview";
 import { InteractivePreview } from "@/components/interactive/interactive-preview";
+import { extractFirstUrl, looksLikePdf } from "@/lib/inbox/link-preview";
 import { useTranslations } from "next-intl";
 
 interface MessageBubbleProps {
@@ -121,12 +123,17 @@ function MediaImage({ url, alt }: { url: string; alt: string }) {
 
 function MessageContent({ message, t }: { message: Message, t: ReturnType<typeof useTranslations> }) {
   switch (message.content_type) {
-    case "text":
+    case "text": {
+      const url = extractFirstUrl(message.content_text);
       return (
-        <p className="whitespace-pre-wrap break-words text-sm">
-          {message.content_text}
-        </p>
+        <div>
+          <p className="whitespace-pre-wrap break-words text-sm">
+            {message.content_text}
+          </p>
+          {url && <LinkPreview url={url} />}
+        </div>
       );
+    }
 
     case "image":
       return (
@@ -175,23 +182,46 @@ function MessageContent({ message, t }: { message: Message, t: ReturnType<typeof
         </div>
       );
 
-    case "document":
+    case "document": {
       if (!message.media_url) {
         return <MediaUnavailable label={message.content_text || t("document")} t={t} />;
       }
+      const name = message.content_text || t("document");
+      const isPdf = looksLikePdf(message.content_text, message.media_url);
       return (
-        <a
-          href={message.media_url}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center gap-2 rounded-lg bg-muted/50 px-3 py-2 text-sm hover:bg-muted"
-        >
-          <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
-          <span className="truncate">
-            {message.content_text || t("document")}
-          </span>
-        </a>
+        <div className="w-60 max-w-full overflow-hidden rounded-lg bg-background/60 text-foreground">
+          {isPdf && (
+            // Inline first-page preview. The iframe is click-through
+            // (pointer-events-none) so the whole card opens the full
+            // PDF in a new tab; keeps the thumbnail from swallowing
+            // scroll/interaction inside the thread.
+            <a
+              href={message.media_url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block bg-white"
+              title={name}
+            >
+              <iframe
+                src={`${message.media_url}#toolbar=0&navpanes=0&scrollbar=0&view=FitH`}
+                title={name}
+                loading="lazy"
+                className="pointer-events-none h-44 w-full border-0"
+              />
+            </a>
+          )}
+          <a
+            href={message.media_url}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center gap-2 px-3 py-2 text-sm hover:bg-muted"
+          >
+            <FileText className="h-5 w-5 shrink-0 text-muted-foreground" />
+            <span className="truncate">{name}</span>
+          </a>
+        </div>
       );
+    }
 
     case "template":
       return (
