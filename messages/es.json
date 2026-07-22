@@ -225,7 +225,8 @@
       "interactiveReply": "[Respuesta interactiva]",
       "unsupported": "[Tipo de mensaje no compatible]",
       "aiBadge": "IA",
-      "aiBadgeTitle": "Enviado automáticamente por el asistente de IA"
+      "aiBadgeTitle": "Enviado automáticamente por el asistente de IA",
+      "youtube": "YouTube"
     },
     "actions": {
       "reply": "Responder",

@@ -233,7 +233,12 @@ export async function POST(request: Request) {
         // don't let it overwrite the contact. Inbound uses the sender's
         // pushName as before.
         contactName: outbound ? '' : (item.pushName ?? phone),
-        contentText: parsed.text,
+        // Documents rarely carry a caption; fall back to the file name
+        // so the thread shows "Factura-FV-2-2203.pdf" instead of a bare
+        // "Document" label (and the bubble can preview PDFs by name).
+        contentText:
+          parsed.text ??
+          (parsed.contentType === 'document' ? (parsed.fileName ?? null) : null),
         mediaUrl,
         contentType: parsed.contentType,
         messageId: item.key?.id ?? '',
