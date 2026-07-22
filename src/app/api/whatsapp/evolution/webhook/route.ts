@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { recordInboundMessage } from '@/lib/whatsapp/inbound-core';
+import { vcardsToText } from '@/lib/whatsapp/vcard';
 
 /**
  * Evolution API inbound webhook. Evolution POSTs a Baileys-shaped event
@@ -86,6 +87,21 @@ function parseBaileys(msg: BaileysMessage | undefined): {
   const ext = msg.extendedTextMessage as { text?: string } | undefined;
   if (ext?.text) {
     return { contentType: 'text', text: ext.text, mediaKey: null, mimetype: undefined, fileName: undefined };
+  }
+
+  // Shared contact card(s) — flatten to a labelled text line so the
+  // thread and lead qualification can read the name/company/phone/NIT.
+  const contactMsg = msg.contactMessage as
+    | { displayName?: string; vcard?: string }
+    | undefined;
+  if (contactMsg?.vcard || contactMsg?.displayName) {
+    return { contentType: 'text', text: vcardsToText([contactMsg]), mediaKey: null, mimetype: undefined, fileName: undefined };
+  }
+  const contactsArr = msg.contactsArrayMessage as
+    | { contacts?: { displayName?: string; vcard?: string }[] }
+    | undefined;
+  if (contactsArr?.contacts?.length) {
+    return { contentType: 'text', text: vcardsToText(contactsArr.contacts), mediaKey: null, mimetype: undefined, fileName: undefined };
   }
 
   // Documents can arrive wrapped in documentWithCaptionMessage.
