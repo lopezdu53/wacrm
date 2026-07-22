@@ -108,6 +108,17 @@ const bottomNavItems = [
   { href: "/settings", labelKey: "settings", icon: Settings },
 ];
 
+// Main-nav entries an agent/viewer may see. They get the day-to-day
+// surfaces only — inbox, internal chat, notifications — not the
+// account-wide tools (contacts, pipelines, broadcasts, …). Owners and
+// admins see everything. Settings stays visible for all (its own rail
+// restricts which sections a limited role can open).
+const RESTRICTED_NAV_HREFS = new Set([
+  "/inbox",
+  "/internal-chat",
+  "/notifications",
+]);
+
 interface SidebarProps {
   /** Controlled on mobile by the Header's hamburger button. Ignored on lg+. */
   open?: boolean;
@@ -123,6 +134,14 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const totalUnread = useTotalUnread();
   const unreadNotifications = useUnreadNotifications();
   const internalUnread = useInternalUnread();
+
+  // Agents and viewers see a trimmed main menu. Owners/admins (and while
+  // the role is still resolving) see the full set.
+  const restrictedNav =
+    accountRole === "agent" || accountRole === "viewer";
+  const visibleNavItems = restrictedNav
+    ? navItems.filter((item) => RESTRICTED_NAV_HREFS.has(item.href))
+    : navItems;
   // Only surface the account-name strip when it actually carries
   // information. A solo user's personal account is named after them
   // (the 017 signup trigger seeds it from `full_name`), so showing it
@@ -212,7 +231,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
         {/* Main navigation */}
         <nav className="flex-1 overflow-y-auto px-3 py-4">
           <ul className="flex flex-col gap-1">
-            {navItems.map((item) => {
+            {visibleNavItems.map((item) => {
               const isActive =
                 pathname === item.href ||
                 (item.href !== "/dashboard" && pathname.startsWith(item.href));

@@ -13,6 +13,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 
+import type { AccountRole } from '@/lib/auth/roles';
+
 /**
  * Settings information architecture for the redesigned page.
  *
@@ -66,6 +68,25 @@ export const RAIL_GROUPS: { label: string | null; group: SectionMeta['group'] }[
   { label: 'Account', group: 'account' },
   { label: 'Workspace', group: 'workspace' },
 ];
+
+/**
+ * Sections an agent/viewer may see. They get only their own account
+ * settings — profile, login & security, appearance — never the
+ * Overview landing or any workspace-level section (WhatsApp, members,
+ * API keys, …). Owners/admins see everything.
+ */
+const RESTRICTED_SECTIONS: readonly SettingsSection[] = [
+  'profile',
+  'security',
+  'appearance',
+];
+
+export function sectionsForRole(
+  role: AccountRole | null,
+): readonly SettingsSection[] {
+  if (role === 'agent' || role === 'viewer') return RESTRICTED_SECTIONS;
+  return SETTINGS_SECTIONS;
+}
 
 function isSection(value: string | null): value is SettingsSection {
   return !!value && (SETTINGS_SECTIONS as readonly string[]).includes(value);
