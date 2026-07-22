@@ -20,21 +20,29 @@ import { MembersTab } from '@/components/settings/members-tab';
 import { ApiKeysSettings } from '@/components/settings/api-keys-settings';
 import {
   resolveSection,
+  sectionsForRole,
   type SettingsSection,
 } from '@/components/settings/settings-sections';
 
 export default function SettingsPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { defaultCurrency } = useAuth();
+  const { defaultCurrency, accountRole } = useAuth();
   const { mode } = useTheme();
   const t = useTranslations('Settings');
+
+  // Sections this role is allowed to see. Agents/viewers get only their
+  // own account settings; owners/admins get everything.
+  const allowed = useMemo(() => sectionsForRole(accountRole), [accountRole]);
 
   // The URL (`?tab=`) is the single source of truth for the active
   // section — deep-linkable, and it keeps the existing links in the
   // app sidebar/header working. Legacy tab values (tags, custom-fields)
   // resolve onto their new home; unknown/empty → the Overview landing.
-  const section = resolveSection(searchParams.get('tab'));
+  // If the resolved section isn't allowed for this role (e.g. an agent
+  // deep-linking `?tab=members`), fall back to the first allowed one.
+  const requested = resolveSection(searchParams.get('tab'));
+  const section = allowed.includes(requested) ? requested : allowed[0];
 
   const go = (next: SettingsSection) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -79,7 +87,12 @@ export default function SettingsPage() {
       </div>
 
       <div className="mt-6 grid gap-6 lg:grid-cols-[236px_minmax(0,1fr)] lg:items-start">
-        <SettingsRail active={section} onSelect={go} hints={hints} />
+        <SettingsRail
+          active={section}
+          onSelect={go}
+          hints={hints}
+          allowed={allowed}
+        />
         <div className="min-w-0">{panel[section]}</div>
       </div>
     </div>
