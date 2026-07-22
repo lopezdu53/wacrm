@@ -222,7 +222,19 @@ export async function qualifyLead(args: QualifyArgs): Promise<void> {
     const nameVal = clean(data.name)
     const emailVal = clean(data.email)
     const companyVal = clean(data.company)
-    if (nameVal && (!contact.name || contact.name === contact.phone)) {
+    // Save the customer's real personal name when the current name is a
+    // placeholder — empty, still the phone number, or the same as the
+    // company (a common artifact when a contact was seeded from a
+    // business card / vCard). We still never overwrite a distinct,
+    // human-looking name a person deliberately set.
+    const currentName = (contact.name as string | null) ?? null
+    const currentCompany = (contact.company as string | null) ?? null
+    const namePlaceholder =
+      !currentName ||
+      currentName === contact.phone ||
+      (!!currentCompany &&
+        currentName.trim().toLowerCase() === currentCompany.trim().toLowerCase())
+    if (nameVal && namePlaceholder && nameVal.toLowerCase() !== (currentCompany ?? '').toLowerCase()) {
       updates.name = nameVal
     }
     if (emailVal && !contact.email) updates.email = emailVal

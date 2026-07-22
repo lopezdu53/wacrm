@@ -47,11 +47,25 @@ class WacrmSync(models.AbstractModel):
             if domain:
                 partner = Partner.search(domain, limit=1)
 
+        # Custom fields travel as a { field_name: value } map. Map the
+        # ones wacrm's AI qualification fills onto native res.partner
+        # columns so a synced contact is complete in Odoo:
+        #   "NIT / CC"  -> vat    (tax id / Número de Identificación)
+        #   "Dirección" -> street (billing / delivery address)
+        #   "Ciudad"    -> city
+        cf = contact.get("custom_fields") or {}
+        vat = (cf.get("NIT / CC") or "").strip()
+        street = (cf.get("Dirección") or "").strip()
+        city = (cf.get("Ciudad") or "").strip()
+
         values = {
             "name": (contact.get("name") or contact.get("phone") or "wacrm contact"),
             "phone": contact.get("phone") or False,
             "email": contact.get("email") or False,
             "company_name": contact.get("company") or False,
+            "vat": vat or False,
+            "street": street or False,
+            "city": city or False,
             "wacrm_id": wacrm_id or False,
         }
         if partner:
@@ -63,6 +77,12 @@ class WacrmSync(models.AbstractModel):
                 update["phone"] = values["phone"]
             if not partner.company_name and values["company_name"]:
                 update["company_name"] = values["company_name"]
+            if not partner.vat and values["vat"]:
+                update["vat"] = values["vat"]
+            if not partner.street and values["street"]:
+                update["street"] = values["street"]
+            if not partner.city and values["city"]:
+                update["city"] = values["city"]
             partner.write(update)
             return partner
         return Partner.create(values)

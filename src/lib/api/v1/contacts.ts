@@ -13,8 +13,14 @@ import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe';
 import { resolveImportTagIds } from '@/lib/contacts/resolve-import-tags';
 import { sanitizePhoneForMeta, isValidE164 } from '@/lib/whatsapp/phone-utils';
 
-/** Row select that embeds the contact's tags for serialization. */
-export const CONTACT_SELECT = '*, contact_tags(tags(*))';
+/**
+ * Row select that embeds the contact's tags AND its custom-field values
+ * (NIT / CC, Dirección, Ciudad, …) for serialization. Integrations like
+ * the Odoo sync need the custom fields to map onto native partner
+ * columns (vat, street, city), so they travel with every contact.
+ */
+export const CONTACT_SELECT =
+  '*, contact_tags(tags(*)), contact_custom_values(value, custom_fields(field_name))';
 
 export interface ApiContact {
   id: string;
@@ -24,8 +30,31 @@ export interface ApiContact {
   company: string | null;
   avatar_url: string | null;
   tags: { id: string; name: string; color: string }[];
+  /**
+   * Custom-field values keyed by field name, e.g.
+   * `{ "NIT / CC": "1016943422", "Dirección": "Cll 89#95-54" }`.
+   * Only non-empty values are included.
+   */
+  custom_fields: Record<string, string>;
   created_at: string;
   updated_at: string;
+}
+
+type RawCustomValueJoin = {
+  value: string | null;
+  custom_fields: { field_name: string } | null;
+};
+
+/** Flatten a `contact_custom_values` embed into a { fieldName: value } map. */
+export function flattenCustomFields(row: Record<string, unknown>): Record<string, string> {
+  const joins = (row.contact_custom_values as RawCustomValueJoin[] | undefined) ?? [];
+  const out: Record<string, string> = {};
+  for (const j of joins) {
+    const name = j.custom_fields?.field_name;
+    const value = j.value?.trim();
+    if (name && value) out[name] = value;
+  }
+  return out;
 }
 
 /** Thrown by the helpers below; routes map `.status`/`.message`. */
@@ -54,6 +83,7 @@ export function serializeContact(row: Record<string, unknown>): ApiContact {
       .map((j) => j.tags)
       .filter((t): t is NonNullable<RawTagJoin['tags']> => t != null)
       .map((t) => ({ id: t.id, name: t.name, color: t.color })),
+    custom_fields: flattenCustomFields(row),
     created_at: row.created_at as string,
     updated_at: row.updated_at as string,
   };

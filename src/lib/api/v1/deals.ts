@@ -6,9 +6,11 @@
 // summary so a puller can map foreign keys without extra round-trips.
 // ============================================================
 
+import { flattenCustomFields } from './contacts'
+
 /** Columns + joins fetched for a deal in the public API. */
 export const DEAL_SELECT =
-  '*, pipeline:pipelines(id,name), stage:pipeline_stages(id,name,color,position), contact:contacts(id,name,phone,email,company)'
+  '*, pipeline:pipelines(id,name), stage:pipeline_stages(id,name,color,position), contact:contacts(id,name,phone,email,company,contact_custom_values(value,custom_fields(field_name)))'
 
 export interface ApiDeal {
   id: string
@@ -30,6 +32,7 @@ export interface ApiDeal {
     phone: string | null
     email: string | null
     company: string | null
+    custom_fields: Record<string, string>
   } | null
   created_at: string
   updated_at: string
@@ -40,7 +43,17 @@ export function serializeDeal(row: Record<string, unknown>): ApiDeal {
   const stage = row.stage as
     | { id: string; name: string; color: string | null; position: number }
     | null
-  const contact = row.contact as ApiDeal['contact']
+  const rawContact = row.contact as Record<string, unknown> | null
+  const contact: ApiDeal['contact'] = rawContact
+    ? {
+        id: rawContact.id as string,
+        name: (rawContact.name as string | null) ?? null,
+        phone: (rawContact.phone as string | null) ?? null,
+        email: (rawContact.email as string | null) ?? null,
+        company: (rawContact.company as string | null) ?? null,
+        custom_fields: flattenCustomFields(rawContact),
+      }
+    : null
   return {
     id: row.id as string,
     title: (row.title as string) ?? '',

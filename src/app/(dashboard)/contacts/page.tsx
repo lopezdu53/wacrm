@@ -62,7 +62,13 @@ const PAGE_SIZE = 25;
 
 interface ContactWithTags extends Contact {
   tags?: Tag[];
+  /** Custom-field values keyed by field name (NIT / CC, Dirección, …). */
+  customFields?: Record<string, string>;
 }
+
+// Custom fields surfaced as their own columns in the contacts table.
+const NIT_FIELD = 'NIT / CC';
+const ADDRESS_FIELD = 'Dirección';
 
 export default function ContactsPage() {
   const t = useTranslations('Contacts.page');
@@ -198,11 +204,34 @@ export default function ContactsPage() {
       tagsByContact[ct.contact_id].push(ct.tag_id);
     });
 
+    // Custom-field values for these contacts (NIT / CC, Dirección, …),
+    // so the table can show them as columns like the detail view does.
+    const { data: customValues } = await supabase
+      .from('contact_custom_values')
+      .select('contact_id, value, custom_fields(field_name)')
+      .in('contact_id', contactIds);
+    if (seq !== fetchSeq.current) return; // superseded by a newer fetch
+
+    const customByContact: Record<string, Record<string, string>> = {};
+    (customValues ?? []).forEach((cv) => {
+      const row = cv as unknown as {
+        contact_id: string;
+        value: string | null;
+        custom_fields: { field_name: string } | null;
+      };
+      const fieldName = row.custom_fields?.field_name;
+      const value = row.value?.trim();
+      if (!fieldName || !value) return;
+      if (!customByContact[row.contact_id]) customByContact[row.contact_id] = {};
+      customByContact[row.contact_id][fieldName] = value;
+    });
+
     const enriched: ContactWithTags[] = contactRows.map((c) => ({
       ...c,
       tags: (tagsByContact[c.id] ?? [])
         .map((tid) => tagsMap[tid])
         .filter(Boolean),
+      customFields: customByContact[c.id] ?? {},
     }));
 
     setContacts(enriched);
@@ -545,6 +574,8 @@ export default function ContactsPage() {
               <TableHead className="text-muted-foreground">{t('tableColumns.phone')}</TableHead>
               <TableHead className="text-muted-foreground hidden md:table-cell">{t('tableColumns.email')}</TableHead>
               <TableHead className="text-muted-foreground hidden lg:table-cell">{t('tableColumns.company')}</TableHead>
+              <TableHead className="text-muted-foreground hidden xl:table-cell">{t('tableColumns.nitcc')}</TableHead>
+              <TableHead className="text-muted-foreground hidden xl:table-cell">{t('tableColumns.address')}</TableHead>
               <TableHead className="text-muted-foreground hidden md:table-cell">{t('tableColumns.tags')}</TableHead>
               <TableHead className="text-muted-foreground hidden lg:table-cell">{t('tableColumns.createdAt')}</TableHead>
               <TableHead className="text-muted-foreground w-12" />
@@ -553,7 +584,7 @@ export default function ContactsPage() {
           <TableBody>
             {loading ? (
               <TableRow className="border-border">
-                <TableCell colSpan={8} className="text-center py-12">
+                <TableCell colSpan={10} className="text-center py-12">
                   <div className="flex flex-col items-center gap-2">
                     <Loader2 className="size-6 animate-spin text-primary" />
                     <p className="text-sm text-muted-foreground">{t('loading')}</p>
@@ -562,7 +593,7 @@ export default function ContactsPage() {
               </TableRow>
             ) : contacts.length === 0 ? (
               <TableRow className="border-border">
-                <TableCell colSpan={8} className="text-center py-12">
+                <TableCell colSpan={10} className="text-center py-12">
                   <div className="flex flex-col items-center gap-2">
                     <Users className="size-8 text-muted-foreground" />
                     <p className="text-sm text-muted-foreground">
@@ -611,6 +642,12 @@ export default function ContactsPage() {
                   </TableCell>
                   <TableCell className="text-muted-foreground hidden lg:table-cell text-sm">
                     {contact.company || <span className="text-muted-foreground">-</span>}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground hidden xl:table-cell text-sm font-mono text-xs">
+                    {contact.customFields?.[NIT_FIELD] || <span className="text-muted-foreground">-</span>}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground hidden xl:table-cell text-sm max-w-[16rem] truncate">
+                    {contact.customFields?.[ADDRESS_FIELD] || <span className="text-muted-foreground">-</span>}
                   </TableCell>
                   <TableCell className="hidden md:table-cell">
                     <div className="flex flex-wrap gap-1">
