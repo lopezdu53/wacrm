@@ -317,6 +317,8 @@
         "phone": "Teléfono",
         "email": "Correo",
         "company": "Empresa",
+        "nitcc": "NIT / CC",
+        "address": "Dirección",
         "tags": "Etiquetas",
         "createdAt": "Creado"
       },

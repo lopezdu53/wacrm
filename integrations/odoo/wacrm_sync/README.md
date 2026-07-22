@@ -51,6 +51,9 @@ wacrm stage lands in:
 | wacrm | Odoo |
 |---|---|
 | Contact name / phone / email / company | `res.partner` name / phone / email / company_name |
+| Contact custom field **NIT / CC** | `res.partner` `vat` |
+| Contact custom field **Dirección** | `res.partner` `street` |
+| Contact custom field **Ciudad** | `res.partner` `city` |
 | Deal title | `crm.lead` name |
 | Deal value | `crm.lead` expected_revenue |
 | Deal stage | Pipeline Mapping row → `crm.stage` (fallback: by name) |
@@ -64,7 +67,8 @@ only blanks are filled.
 ## Notes / limits
 
 - One-way only: changes made in Odoo are **not** pushed back to wacrm.
-- wacrm custom fields (e.g. NIT/CC, address) aren't exposed by the public
-  contacts endpoint yet, so they aren't synced — base fields only.
+- Custom fields travel in the contact's `custom_fields` map; **NIT / CC**,
+  **Dirección** and **Ciudad** are mapped to native partner columns (see
+  the table above). Other custom fields aren't mapped.
 - The cron interval is driven by the **Polling Interval** setting; change
   it there rather than editing the scheduled action directly.
