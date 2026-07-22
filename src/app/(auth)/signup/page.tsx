@@ -68,7 +68,7 @@ function SignupPageInner() {
       ? `${window.location.origin}/join/${encodeURIComponent(inviteToken)}`
       : undefined;
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -82,6 +82,18 @@ function SignupPageInner() {
     if (error) {
       setError(error.message);
       setLoading(false);
+      return;
+    }
+
+    // When "Confirm email" is DISABLED in Supabase, signUp returns a live
+    // session — the user is already logged in, so there's no email to
+    // check. Send them straight on: to the invite-redeem page if they
+    // came from one, otherwise into the app. Only when confirmation is
+    // required (no session) do we show the "check your email" screen.
+    if (data.session) {
+      window.location.href = inviteToken
+        ? `/join/${encodeURIComponent(inviteToken)}`
+        : "/dashboard";
       return;
     }
 
