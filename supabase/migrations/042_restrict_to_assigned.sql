@@ -61,7 +61,33 @@ $$;
 ALTER FUNCTION caller_restricted(UUID) OWNER TO postgres;
 GRANT EXECUTE ON FUNCTION caller_restricted(UUID) TO authenticated, service_role;
 
--- 3. Narrow the conversation SELECT policy.
+-- 3. Does the current auth user follow this conversation?
+--    This MUST be a SECURITY DEFINER function rather than an inline
+--    `EXISTS (SELECT FROM conversation_followers …)` in the policy.
+--    An inline subquery makes the conversations SELECT policy read
+--    conversation_followers, whose own RLS reads conversations back —
+--    an infinite-recursion cycle that Postgres aborts with SQLSTATE
+--    42P17, breaking the whole inbox. Running as the table owner here
+--    bypasses conversation_followers' RLS and cuts the cycle.
+CREATE OR REPLACE FUNCTION caller_follows(target_conversation_id UUID)
+RETURNS BOOLEAN
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $$
+  SELECT EXISTS (
+    SELECT 1
+    FROM conversation_followers f
+    WHERE f.conversation_id = target_conversation_id
+      AND f.user_id = auth.uid()
+  );
+$$;
+
+ALTER FUNCTION caller_follows(UUID) OWNER TO postgres;
+GRANT EXECUTE ON FUNCTION caller_follows(UUID) TO authenticated, service_role;
+
+-- 4. Narrow the conversation SELECT policy.
 --    Membership is still required; on top of it, a restricted caller
 --    only passes for conversations they own or follow.
 DROP POLICY IF EXISTS conversations_select ON conversations;
@@ -70,15 +96,11 @@ CREATE POLICY conversations_select ON conversations FOR SELECT USING (
   AND (
     NOT caller_restricted(account_id)
     OR assigned_agent_id = auth.uid()
-    OR EXISTS (
-      SELECT 1 FROM conversation_followers f
-      WHERE f.conversation_id = conversations.id
-        AND f.user_id = auth.uid()
-    )
+    OR caller_follows(conversations.id)
   )
 );
 
--- 4. Narrow the message SELECT policy the same way — a message is
+-- 5. Narrow the message SELECT policy the same way — a message is
 --    visible iff its parent conversation is visible to the caller.
 DROP POLICY IF EXISTS messages_select ON messages;
 CREATE POLICY messages_select ON messages FOR SELECT USING (
@@ -89,11 +111,7 @@ CREATE POLICY messages_select ON messages FOR SELECT USING (
       AND (
         NOT caller_restricted(c.account_id)
         OR c.assigned_agent_id = auth.uid()
-        OR EXISTS (
-          SELECT 1 FROM conversation_followers f
-          WHERE f.conversation_id = c.id
-            AND f.user_id = auth.uid()
-        )
+        OR caller_follows(c.id)
       )
   )
 );
