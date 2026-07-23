@@ -47,6 +47,33 @@ function authHeaders(apiKey: string): Record<string, string> {
   };
 }
 
+// Cap how long we wait on the Evolution server. Without this a slow or
+// unreachable Evolution makes the send hang until the hosting gateway
+// (Easypanel/Traefik) kills the request with an opaque HTTP 502. With
+// it, we fail fast and surface a clear, actionable message instead.
+const EVOLUTION_TIMEOUT_MS = 20000;
+
+async function evolutionFetch(
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: AbortSignal.timeout(EVOLUTION_TIMEOUT_MS),
+    });
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      throw new Error(
+        'Evolution no respondió a tiempo. Revisa que el servidor de Evolution esté activo y el número conectado.',
+      );
+    }
+    throw new Error(
+      'No se pudo conectar con el servidor de Evolution. Revisa la URL del servidor y que esté en línea.',
+    );
+  }
+}
+
 async function throwEvolutionError(
   response: Response,
   fallback: string,
@@ -273,7 +300,7 @@ export async function sendEvolutionText({
   text,
 }: EvolutionAuth & { to: string; text: string }): Promise<EvolutionSendResult> {
   const url = `${normalizeBaseUrl(baseUrl)}/message/sendText/${encodeURIComponent(instance)}`;
-  const response = await fetch(url, {
+  const response = await evolutionFetch(url, {
     method: 'POST',
     headers: authHeaders(apiKey),
     body: JSON.stringify({ number: toEvolutionNumber(to), text }),
@@ -310,7 +337,7 @@ export async function sendEvolutionMedia({
   // Voice notes go through the narrowcast/whatsapp-audio endpoint; other
   // media use sendMedia.
   if (mediaType === 'audio') {
-    const response = await fetch(
+    const response = await evolutionFetch(
       `${base}/message/sendWhatsAppAudio/${encodeURIComponent(instance)}`,
       {
         method: 'POST',
@@ -324,7 +351,7 @@ export async function sendEvolutionMedia({
     return { messageId: extractMessageId(await response.json()) };
   }
 
-  const response = await fetch(
+  const response = await evolutionFetch(
     `${base}/message/sendMedia/${encodeURIComponent(instance)}`,
     {
       method: 'POST',
