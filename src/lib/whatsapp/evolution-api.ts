@@ -343,3 +343,86 @@ export async function sendEvolutionMedia({
   }
   return { messageId: extractMessageId(await response.json()) };
 }
+
+// ============================================================
+// History backfill (used by the on-demand "sync" that recovers
+// messages the live webhook may have missed).
+// ============================================================
+
+/** A message record as returned by Evolution's findMessages. */
+export interface EvolutionHistoryItem {
+  key?: { remoteJid?: string; fromMe?: boolean; id?: string };
+  pushName?: string;
+  message?: Record<string, unknown>;
+  messageType?: string;
+  messageTimestamp?: number | string;
+}
+
+/**
+ * Fetch recent messages for one chat (remoteJid) from Evolution.
+ * Different Evolution builds shape the response differently — an array,
+ * `{ messages: [...] }`, or `{ messages: { records: [...] } }` — so we
+ * normalise all three to a flat list. Best-effort: returns [] on any
+ * failure rather than throwing, so the sync degrades gracefully.
+ */
+export async function fetchEvolutionMessages({
+  baseUrl,
+  apiKey,
+  instance,
+  remoteJid,
+  limit = 50,
+}: EvolutionAuth & { remoteJid: string; limit?: number }): Promise<
+  EvolutionHistoryItem[]
+> {
+  const url = `${normalizeBaseUrl(baseUrl)}/chat/findMessages/${encodeURIComponent(instance)}`;
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: authHeaders(apiKey),
+      body: JSON.stringify({ where: { key: { remoteJid } }, limit, page: 1 }),
+    });
+    if (!response.ok) return [];
+    const json: unknown = await response.json();
+
+    const asItems = (v: unknown): EvolutionHistoryItem[] =>
+      Array.isArray(v) ? (v as EvolutionHistoryItem[]) : [];
+
+    if (Array.isArray(json)) return json as EvolutionHistoryItem[];
+    const messages = (json as { messages?: unknown })?.messages;
+    if (Array.isArray(messages)) return asItems(messages);
+    const records = (messages as { records?: unknown })?.records;
+    if (Array.isArray(records)) return asItems(records);
+    return [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * Fetch the base64 payload for one media message. Media isn't included
+ * in findMessages, so the sync pulls it per message to make audios /
+ * images / PDFs playable. Returns null on any failure.
+ */
+export async function fetchEvolutionMediaBase64({
+  baseUrl,
+  apiKey,
+  instance,
+  item,
+}: EvolutionAuth & { item: EvolutionHistoryItem }): Promise<string | null> {
+  const url = `${normalizeBaseUrl(baseUrl)}/chat/getBase64FromMediaMessage/${encodeURIComponent(instance)}`;
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: authHeaders(apiKey),
+      body: JSON.stringify({
+        message: { key: item.key, message: item.message },
+        convertToMp4: false,
+      }),
+    });
+    if (!response.ok) return null;
+    const json = (await response.json()) as { base64?: string } | null;
+    return json?.base64 ?? null;
+  } catch {
+    return null;
+  }
+}

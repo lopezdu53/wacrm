@@ -25,6 +25,7 @@ import {
   Clock,
   ArrowLeft,
   RefreshCw,
+  DownloadCloud,
   PanelRightOpen,
   PanelRightClose,
   StickyNote,
@@ -212,6 +213,36 @@ export function MessageThread({
       refreshTimerRef.current = null;
     }, 700);
   }, [isRefreshing, onRefresh]);
+
+  // Backfill from Evolution: recover messages the live webhook may have
+  // missed for this thread. Only shown on Evolution (QR) channels
+  // (`noSessionWindow` is that signal). On success we refetch so the
+  // recovered messages appear immediately.
+  const [isSyncing, setIsSyncing] = useState(false);
+  const handleSyncClick = useCallback(async () => {
+    if (isSyncing || !conversation?.id) return;
+    setIsSyncing(true);
+    try {
+      const res = await fetch("/api/whatsapp/evolution/sync", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId: conversation.id }),
+      });
+      const json = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(json.error || t("syncFailed"));
+      } else if (json.recorded > 0) {
+        toast.success(t("syncRecovered", { count: json.recorded }));
+        onRefresh?.();
+      } else {
+        toast.success(t("syncUpToDate"));
+      }
+    } catch {
+      toast.error(t("syncFailed"));
+    } finally {
+      setIsSyncing(false);
+    }
+  }, [isSyncing, conversation?.id, onRefresh, t]);
   const [replyTo, setReplyTo] = useState<ReplyDraft | null>(null);
 
   // Profiles are bounded by RLS to rows the current user is allowed to
@@ -1074,6 +1105,25 @@ export function MessageThread({
             >
               <RefreshCw
                 className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")}
+              />
+            </button>
+          )}
+
+          {/* Evolution-only: pull recent history from Evolution and
+              backfill any messages the webhook missed. */}
+          {noSessionWindow && (
+            <button
+              type="button"
+              onClick={handleSyncClick}
+              disabled={isSyncing}
+              aria-label={t("syncWhatsApp")}
+              title={t("syncWhatsApp")}
+              className={cn(
+                "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60",
+              )}
+            >
+              <DownloadCloud
+                className={cn("h-3.5 w-3.5", isSyncing && "animate-pulse")}
               />
             </button>
           )}
