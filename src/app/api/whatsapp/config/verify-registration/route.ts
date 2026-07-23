@@ -55,10 +55,13 @@ export async function GET() {
     })
   }
 
+  // Scope to the Meta config — an account may also hold Evolution rows,
+  // and an unscoped `.maybeSingle()` errors on multiple rows.
   const { data: config } = await supabase
     .from('whatsapp_config')
     .select('*')
     .eq('account_id', accountId)
+    .eq('provider', 'meta')
     .maybeSingle()
 
   if (!config) {
