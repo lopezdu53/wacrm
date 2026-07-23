@@ -229,23 +229,21 @@ export function WhatsAppConfig() {
       const payload: Record<string, unknown> = {
         phone_number_id: phoneNumberId.trim(),
         waba_id: wabaId.trim() || null,
-        verify_token: verifyToken.trim() || null,
         // Optional — only sent when the user filled it in. The server
         // requires it on first save or when changing numbers; for a
         // simple token rotation, leaving it blank skips re-register.
         pin: pin.trim() || null,
       };
 
+      // Only send the tokens the user actually (re)typed. When left
+      // blank/masked, the server reuses the stored values — so you can
+      // e.g. enter just the PIN to retry registration without re-typing
+      // the access token, and the verify token is never wiped.
       if (tokenEdited && accessToken !== MASKED_TOKEN && accessToken.trim()) {
         payload.access_token = accessToken.trim();
-      } else if (config) {
-        // Existing config — reuse stored encrypted token by decrypting on the
-        // server. But our POST handler requires an access_token to verify
-        // with Meta. If the user didn't change the token, we need to signal
-        // that. Simplest: require token re-entry if they're updating.
-        toast.error('Please re-enter the Access Token to save changes');
-        setSaving(false);
-        return;
+      }
+      if (verifyToken.trim()) {
+        payload.verify_token = verifyToken.trim();
       }
 
       const res = await fetch('/api/whatsapp/config', {
@@ -687,7 +685,11 @@ export function WhatsAppConfig() {
             <div className="space-y-2">
               <Label className="text-muted-foreground">{t('webhookVerifyToken')}</Label>
               <Input
-                placeholder={t('webhookVerifyTokenPlaceholder')}
+                placeholder={
+                  config?.verify_token
+                    ? t('webhookVerifyTokenSaved')
+                    : t('webhookVerifyTokenPlaceholder')
+                }
                 value={verifyToken}
                 onChange={(e) => setVerifyToken(e.target.value)}
                 className="bg-muted border-border text-foreground placeholder:text-muted-foreground"

@@ -1516,6 +1516,7 @@
       "tokenHidden": "Token is hidden for security. Re-enter it to update configuration.",
       "webhookVerifyToken": "Webhook Verify Token",
       "webhookVerifyTokenPlaceholder": "Create a custom verify token",
+      "webhookVerifyTokenSaved": "Saved — re-enter only to change it",
       "webhookVerifyTokenHint": "A custom string you create. Must match the token you set in Meta webhook settings.",
       "twoStepPin": "Two-step verification PIN",
       "optional": "(optional)",
