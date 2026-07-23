@@ -108,26 +108,39 @@ export function WhatsAppConfig() {
       // account sees the same saved configuration. UNIQUE(account_id)
       // on the table guarantees the .maybeSingle() return type
       // remains accurate.
-      // An account can hold several configs now (migration 039 —
-      // multiple Evolution numbers). This Meta form only needs one row to
-      // decide the provider + prefill; take the first. The Evolution
-      // panel manages the full list itself.
+      // An account can hold several configs (migration 039 — multiple
+      // Evolution numbers alongside a Meta one). The Meta form must
+      // prefill from the account's META row specifically — NOT the
+      // oldest row, which (when Evolution was set up first) is an
+      // Evolution row with no phone_number_id and would wipe the Meta
+      // form on every reload.
       const { data, error } = await supabase
         .from('whatsapp_config')
         .select('*')
         .eq('account_id', acctId)
-        .order('created_at', { ascending: true })
-        .limit(1)
+        .eq('provider', 'meta')
         .maybeSingle();
 
       if (error) {
         console.error('Failed to load config row:', error);
       }
 
+      // Which tab to open by default: Meta when it's configured
+      // (the user is working on it), otherwise the account's oldest
+      // channel (an Evolution-only account lands on Evolution).
+      const { data: firstRow } = await supabase
+        .from('whatsapp_config')
+        .select('provider')
+        .eq('account_id', acctId)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      setProvider(
+        data ? 'meta' : firstRow?.provider === 'evolution' ? 'evolution' : 'meta',
+      );
+
       if (data) {
         setConfig(data);
-        // Route the panel to the transport this account is on.
-        setProvider(data.provider === 'evolution' ? 'evolution' : 'meta');
         setPhoneNumberId(data.phone_number_id || '');
         setWabaId(data.waba_id || '');
         setAccessToken(MASKED_TOKEN);
@@ -147,9 +160,8 @@ export function WhatsAppConfig() {
       setRegistrationProbe(null);
 
       // Then verify health via the API (decrypts token + pings Meta).
-      // Skip for Evolution rows — that health check is Meta-specific;
-      // the Evolution panel polls its own status endpoint.
-      if (data && data.provider !== 'evolution') {
+      // Only when a Meta config exists.
+      if (data) {
         try {
           const res = await fetch('/api/whatsapp/config', { method: 'GET' });
           const payload = await res.json();
