@@ -85,10 +85,16 @@ export async function GET() {
       )
     }
 
+    // Scope to the Meta config. An account can now hold several
+    // whatsapp_config rows (multiple Evolution instances, migration 039),
+    // so an unscoped `.maybeSingle()` errors on multiple rows — which is
+    // exactly what surfaced as "Failed to fetch configuration" once an
+    // Evolution number was added alongside Meta.
     const { data: config, error: configError } = await supabase
       .from('whatsapp_config')
       .select('phone_number_id, access_token, status')
       .eq('account_id', accountId)
+      .eq('provider', 'meta')
       .maybeSingle()
 
     if (configError) {
@@ -276,6 +282,7 @@ export async function POST(request: Request) {
       .from('whatsapp_config')
       .select('id, registered_at, phone_number_id')
       .eq('account_id', accountId)
+      .eq('provider', 'meta')
       .maybeSingle()
 
     const sameNumber =
@@ -370,7 +377,10 @@ export async function POST(request: Request) {
       const { error: updateError } = await supabase
         .from('whatsapp_config')
         .update(baseRow)
+        // Only the Meta row — never clobber the account's Evolution
+        // channels with Meta fields.
         .eq('account_id', accountId)
+        .eq('provider', 'meta')
 
       if (updateError) {
         console.error('Error updating whatsapp_config:', updateError)
@@ -389,6 +399,7 @@ export async function POST(request: Request) {
         .insert({
           account_id: accountId,
           user_id: user.id,
+          provider: 'meta',
           ...baseRow,
         })
 
@@ -462,7 +473,10 @@ export async function DELETE() {
     const { error: deleteError } = await supabase
       .from('whatsapp_config')
       .delete()
+      // Only the Meta row — the Evolution channels have their own
+      // management UI and must not be wiped by "Reset" here.
       .eq('account_id', accountId)
+      .eq('provider', 'meta')
 
     if (deleteError) {
       console.error('Error deleting whatsapp_config:', deleteError)
