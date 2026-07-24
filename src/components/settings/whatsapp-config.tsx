@@ -58,6 +58,10 @@ export function WhatsAppConfig() {
   // default; Evolution is the QR-based alternative added in migration 037.
   const [provider, setProvider] = useState<Provider>('meta');
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>('unknown');
+  // True when the server reports META_APP_SECRET is not configured — the
+  // inbound webhook then rejects every message with 401, so nothing
+  // reaches the inbox despite healthy credentials.
+  const [webhookSecretMissing, setWebhookSecretMissing] = useState(false);
   const [resetReason, setResetReason] = useState<ResetReason>(null);
   const [statusMessage, setStatusMessage] = useState<string>('');
   // Guards against re-hydrating the form when the load effect below
@@ -180,6 +184,7 @@ export function WhatsAppConfig() {
             setResetReason(payload.needs_reset ? 'token_corrupted' : payload.reason === 'meta_api_error' ? 'meta_api_error' : null);
             setStatusMessage(payload.message || '');
           }
+          setWebhookSecretMissing(payload.webhook_secret_configured === false);
         } catch (err) {
           console.error('Health check failed:', err);
           setConnectionStatus('disconnected');
@@ -314,6 +319,7 @@ export function WhatsAppConfig() {
       const res = await fetch('/api/whatsapp/config', { method: 'GET' });
       const payload = await res.json();
 
+      setWebhookSecretMissing(payload.webhook_secret_configured === false);
       if (payload.connected) {
         setConnectionStatus('connected');
         setResetReason(null);
@@ -521,6 +527,23 @@ export function WhatsAppConfig() {
                 t('notConnectedDesc')}
           </AlertDescription>
         </Alert>
+
+        {/* Missing webhook secret — the silent killer: credentials look
+            healthy but the inbound webhook rejects every message with a
+            401 because META_APP_SECRET isn't set. Surface it loudly. */}
+        {webhookSecretMissing && (
+          <Alert className="border-red-500/40 bg-red-500/10">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="size-4 text-red-400" />
+              <AlertTitle className="mb-0 text-red-300">
+                {t('webhookSecretMissingTitle')}
+              </AlertTitle>
+            </div>
+            <AlertDescription className="text-red-200/90">
+              {t('webhookSecretMissingDesc')}
+            </AlertDescription>
+          </Alert>
+        )}
 
         {/* Registration Status — the "is it actually live?" check.
             Credentials being valid is necessary but not sufficient;

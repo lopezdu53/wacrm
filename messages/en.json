@@ -1496,6 +1496,8 @@
       "notConnected": "Not Connected",
       "connectedDesc": "Your access token authenticates with Meta. See Registration status below for whether webhooks are actually wired.",
       "notConnectedDesc": "Configure your Meta API credentials below to connect your WhatsApp Business account.",
+      "webhookSecretMissingTitle": "Missing META_APP_SECRET — inbound messages are being rejected",
+      "webhookSecretMissingDesc": "The webhook can't verify Meta's signature without it, so every incoming message is rejected (HTTP 401) and never reaches the inbox. Copy your App Secret (Meta → App Settings → Basic → App Secret → Show) into the META_APP_SECRET environment variable in your hosting (Easypanel) and redeploy.",
       "registered": "Registered — Meta will deliver events to wacrm",
       "notRegistered": "Not registered — Meta will not deliver events",
       "verifyWithMeta": "Verify with Meta",
