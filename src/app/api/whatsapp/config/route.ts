@@ -191,7 +191,7 @@ export async function POST(request: Request) {
     }
 
     const body = await request.json()
-    const { phone_number_id, waba_id, access_token, verify_token, pin } = body
+    const { phone_number_id, waba_id, access_token, verify_token, pin, label } = body
 
     if (!phone_number_id) {
       return NextResponse.json(
@@ -208,7 +208,7 @@ export async function POST(request: Request) {
     // the saved verify token.
     const { data: existing } = await supabase
       .from('whatsapp_config')
-      .select('id, registered_at, phone_number_id, access_token, verify_token')
+      .select('id, registered_at, phone_number_id, access_token, verify_token, label')
       .eq('account_id', accountId)
       .eq('provider', 'meta')
       .maybeSingle()
@@ -395,11 +395,21 @@ export async function POST(request: Request) {
     // Persist everything in one shot. If /register failed we still
     // store the credentials and the error so the UI can guide the
     // user through a retry.
+    // Friendly label shown in the inbox channel selector instead of the
+    // raw phone_number_id: the user's value if given, else what's stored,
+    // else the real display phone number Meta just returned.
+    const displayLabel =
+      (typeof label === 'string' && label.trim()) ||
+      (existing?.label as string | null) ||
+      phoneInfo?.display_phone_number ||
+      null
+
     const baseRow = {
       phone_number_id,
       waba_id: waba_id || null,
       access_token: encryptedAccessToken,
       verify_token: encryptedVerifyToken,
+      label: displayLabel,
       status: registrationError ? 'disconnected' : 'connected',
       connected_at: registrationError ? null : new Date().toISOString(),
       registered_at: registrationError ? null : registeredAt,

@@ -70,6 +70,9 @@ export function WhatsAppConfig() {
 
   const [phoneNumberId, setPhoneNumberId] = useState('');
   const [wabaId, setWabaId] = useState('');
+  // Friendly phone number shown in the inbox instead of the numeric
+  // phone_number_id. Prefilled from Meta's display_phone_number.
+  const [label, setLabel] = useState('');
   const [accessToken, setAccessToken] = useState('');
   const [verifyToken, setVerifyToken] = useState('');
   const [pin, setPin] = useState('');
@@ -143,6 +146,7 @@ export function WhatsAppConfig() {
         setConfig(data);
         setPhoneNumberId(data.phone_number_id || '');
         setWabaId(data.waba_id || '');
+        setLabel(data.label || '');
         setAccessToken(MASKED_TOKEN);
         setVerifyToken('');
         setPin('');
@@ -151,6 +155,7 @@ export function WhatsAppConfig() {
         setConfig(null);
         setPhoneNumberId('');
         setWabaId('');
+        setLabel('');
         setAccessToken('');
         setVerifyToken('');
         setPin('');
@@ -229,6 +234,7 @@ export function WhatsAppConfig() {
       const payload: Record<string, unknown> = {
         phone_number_id: phoneNumberId.trim(),
         waba_id: wabaId.trim() || null,
+        label: label.trim() || null,
         // Optional — only sent when the user filled it in. The server
         // requires it on first save or when changing numbers; for a
         // simple token rotation, leaving it blank skips re-register.
@@ -646,6 +652,17 @@ export function WhatsAppConfig() {
                 onChange={(e) => setWabaId(e.target.value)}
                 className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label className="text-muted-foreground">{t('displayPhone')}</Label>
+              <Input
+                placeholder={t('displayPhonePlaceholder')}
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                className="bg-muted border-border text-foreground placeholder:text-muted-foreground"
+              />
+              <p className="text-xs text-muted-foreground">{t('displayPhoneHint')}</p>
             </div>
 
             <div className="space-y-2">

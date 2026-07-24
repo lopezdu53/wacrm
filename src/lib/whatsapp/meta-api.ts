@@ -56,9 +56,20 @@ export async function verifyPhoneNumber(
 ): Promise<MetaPhoneInfo> {
   const { phoneNumberId, accessToken } = args
   const url = `${META_API_BASE}/${phoneNumberId}?fields=id,display_phone_number,verified_name,quality_rating`
-  const response = await fetch(url, {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  })
+  let response: Response
+  try {
+    response = await fetch(url, {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      // Bound the wait so a slow Graph API can't hang the settings
+      // panel (which pings this on every load) indefinitely.
+      signal: AbortSignal.timeout(15000),
+    })
+  } catch (err) {
+    if (err instanceof DOMException && err.name === 'TimeoutError') {
+      throw new Error('Meta API timed out. Please try again.')
+    }
+    throw err
+  }
   if (!response.ok) {
     await throwMetaError(response, `Meta API error: ${response.status}`)
   }
