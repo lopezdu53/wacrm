@@ -1513,6 +1513,8 @@
       "apiCredentialsDesc": "Enter your Meta WhatsApp Business API credentials.",
       "phoneNumberId": "Phone Number ID",
       "wabaId": "WhatsApp Business Account ID",
+      "metaNumbers": "Numbers",
+      "addNumber": "Add number",
       "displayPhone": "Display phone number",
       "displayPhonePlaceholder": "e.g. +57 322 4579798",
       "displayPhoneHint": "Shown in the inbox instead of the numeric phone ID. Auto-filled from Meta if left blank.",

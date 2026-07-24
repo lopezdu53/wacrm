@@ -28,7 +28,7 @@ import {
  * rather than a generic error toast. The combined `live` flag is
  * what the UI badges on.
  */
-export async function GET() {
+export async function GET(request: Request) {
   const supabase = await createClient()
   const {
     data: { user },
@@ -55,14 +55,19 @@ export async function GET() {
     })
   }
 
-  // Scope to the Meta config — an account may also hold Evolution rows,
-  // and an unscoped `.maybeSingle()` errors on multiple rows.
-  const { data: config } = await supabase
+  // Scope to the Meta config; target a specific number when
+  // `?phone_number_id=` is given (an account may hold several Meta
+  // numbers plus Evolution rows).
+  const targetPhoneId = new URL(request.url).searchParams.get('phone_number_id')
+  let cfgQuery = supabase
     .from('whatsapp_config')
     .select('*')
     .eq('account_id', accountId)
     .eq('provider', 'meta')
-    .maybeSingle()
+  cfgQuery = targetPhoneId
+    ? cfgQuery.eq('phone_number_id', targetPhoneId)
+    : cfgQuery.order('created_at', { ascending: true })
+  const { data: config } = await cfgQuery.limit(1).maybeSingle()
 
   if (!config) {
     return NextResponse.json({
