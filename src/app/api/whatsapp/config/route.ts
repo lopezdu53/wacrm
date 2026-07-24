@@ -60,7 +60,7 @@ function supabaseAdmin() {
  *   { connected: false, reason: 'token_corrupted',  message: '...', needs_reset: true }
  *   { connected: false, reason: 'meta_api_error',   message: '...' }
  */
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const supabase = await createClient()
 
@@ -85,16 +85,20 @@ export async function GET() {
       )
     }
 
-    // Scope to the Meta config. An account can now hold several
-    // whatsapp_config rows (multiple Evolution instances, migration 039),
-    // so an unscoped `.maybeSingle()` errors on multiple rows — which is
-    // exactly what surfaced as "Failed to fetch configuration" once an
-    // Evolution number was added alongside Meta.
-    const { data: config, error: configError } = await supabase
+    // Health-check a SPECIFIC Meta number when `?phone_number_id=` is
+    // given (an account can now hold several Meta numbers); otherwise
+    // fall back to the account's first Meta config.
+    const targetPhoneId = new URL(request.url).searchParams.get('phone_number_id')
+    let configQuery = supabase
       .from('whatsapp_config')
       .select('phone_number_id, access_token, status')
       .eq('account_id', accountId)
       .eq('provider', 'meta')
+    configQuery = targetPhoneId
+      ? configQuery.eq('phone_number_id', targetPhoneId)
+      : configQuery.order('created_at', { ascending: true })
+    const { data: config, error: configError } = await configQuery
+      .limit(1)
       .maybeSingle()
 
     if (configError) {
@@ -208,17 +212,17 @@ export async function POST(request: Request) {
       )
     }
 
-    // Load the account's existing Meta row up-front so a save can REUSE
-    // the stored access + verify tokens when the user didn't re-type them
-    // (both are masked/blank in the form for security). Without this a
-    // routine save — e.g. entering just the 2-step PIN to retry the
-    // registration — would demand the full access token again and wipe
-    // the saved verify token.
+    // Load the existing Meta row FOR THIS phone_number_id up-front so a
+    // save can REUSE the stored access + verify tokens when the user
+    // didn't re-type them (both are masked/blank in the form for
+    // security). Keying by phone_number_id (not "the account's one Meta
+    // row") is what lets an account hold several Meta numbers.
     const { data: existing } = await supabase
       .from('whatsapp_config')
       .select('id, registered_at, phone_number_id, access_token, verify_token, label')
       .eq('account_id', accountId)
       .eq('provider', 'meta')
+      .eq('phone_number_id', phone_number_id)
       .maybeSingle()
 
     // Effective access token: the freshly entered one, else the stored
@@ -430,10 +434,9 @@ export async function POST(request: Request) {
       const { error: updateError } = await supabase
         .from('whatsapp_config')
         .update(baseRow)
-        // Only the Meta row — never clobber the account's Evolution
-        // channels with Meta fields.
-        .eq('account_id', accountId)
-        .eq('provider', 'meta')
+        // Only this exact Meta number — never touch the account's other
+        // Meta numbers or its Evolution channels.
+        .eq('id', existing.id)
 
       if (updateError) {
         console.error('Error updating whatsapp_config:', updateError)
@@ -502,7 +505,7 @@ export async function POST(request: Request) {
  * Used by the "Reset Configuration" button to recover from a corrupted
  * encrypted token (mismatched ENCRYPTION_KEY across environments).
  */
-export async function DELETE() {
+export async function DELETE(request: Request) {
   try {
     const supabase = await createClient()
 
@@ -523,13 +526,18 @@ export async function DELETE() {
       )
     }
 
-    const { error: deleteError } = await supabase
+    // Delete ONE specific Meta number when `?id=` is given (an account
+    // can hold several); otherwise fall back to removing the account's
+    // Meta config (legacy single-number reset). Never touches Evolution.
+    const targetId = new URL(request.url).searchParams.get('id')
+    let deleteQuery = supabase
       .from('whatsapp_config')
       .delete()
-      // Only the Meta row — the Evolution channels have their own
-      // management UI and must not be wiped by "Reset" here.
       .eq('account_id', accountId)
       .eq('provider', 'meta')
+    if (targetId) deleteQuery = deleteQuery.eq('id', targetId)
+
+    const { error: deleteError } = await deleteQuery
 
     if (deleteError) {
       console.error('Error deleting whatsapp_config:', deleteError)

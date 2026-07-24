@@ -49,6 +49,34 @@ describe("verifyMetaWebhookSignature", () => {
     expect(verifyMetaWebhookSignature("{}", "sha256=tooshort")).toBe(false);
   });
 
+  describe("multiple comma-separated secrets", () => {
+    const original = process.env.META_APP_SECRET;
+    afterEach(() => {
+      process.env.META_APP_SECRET = original;
+    });
+
+    it("accepts a signature matching ANY of the configured secrets", () => {
+      process.env.META_APP_SECRET = `${original}, secondAppSecret`;
+      const body = '{"entry":[]}';
+      // Signed with the second app's secret — still valid.
+      expect(
+        verifyMetaWebhookSignature(body, signedHeader(body, "secondAppSecret")),
+      ).toBe(true);
+      // And the first still works too.
+      expect(
+        verifyMetaWebhookSignature(body, signedHeader(body, original!)),
+      ).toBe(true);
+    });
+
+    it("still rejects a secret that isn't in the list", () => {
+      process.env.META_APP_SECRET = `${original}, secondAppSecret`;
+      const body = "{}";
+      expect(
+        verifyMetaWebhookSignature(body, signedHeader(body, "notConfigured")),
+      ).toBe(false);
+    });
+  });
+
   describe("fail-closed when secret is missing", () => {
     const originalSecret = process.env.META_APP_SECRET;
     beforeEach(() => {

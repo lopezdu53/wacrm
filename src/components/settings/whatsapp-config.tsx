@@ -13,7 +13,9 @@ import {
   Zap,
   AlertTriangle,
   RotateCcw,
+  Plus,
 } from 'lucide-react';
+import { cn } from '@/lib/utils';
 import { createClient } from '@/lib/supabase/client';
 import { useAuth } from '@/hooks/use-auth';
 import { useTranslations } from 'next-intl';
@@ -54,6 +56,13 @@ export function WhatsAppConfig() {
   const [resetting, setResetting] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [config, setConfig] = useState<WhatsAppConfigType | null>(null);
+  // All Meta numbers on this account (an account can hold several).
+  const [metaConfigs, setMetaConfigs] = useState<WhatsAppConfigType[]>([]);
+  // The Meta number currently loaded in the form; null = adding a new
+  // one. State drives the selector highlight; the ref lets the memoized
+  // fetchConfig read the selection without re-subscribing.
+  const [selectedPhoneId, setSelectedPhoneId] = useState<string | null>(null);
+  const selectedPhoneIdRef = useRef<string | null>(null);
   // Which transport this account uses. Meta (official Cloud API) is the
   // default; Evolution is the QR-based alternative added in migration 037.
   const [provider, setProvider] = useState<Provider>('meta');
@@ -106,35 +115,77 @@ export function WhatsAppConfig() {
       ? `${window.location.origin}/api/whatsapp/webhook`
       : '';
 
+  // Load one Meta number's row into the form (or clear it for a new
+  // number). Setters are stable, so this needs no deps.
+  const applyConfigToForm = useCallback((row: WhatsAppConfigType | null) => {
+    if (row) {
+      setConfig(row);
+      setPhoneNumberId(row.phone_number_id || '');
+      setWabaId(row.waba_id || '');
+      setLabel(row.label || '');
+      setAccessToken(MASKED_TOKEN);
+      setVerifyToken('');
+      setPin('');
+      setTokenEdited(false);
+    } else {
+      setConfig(null);
+      setPhoneNumberId('');
+      setWabaId('');
+      setLabel('');
+      setAccessToken('');
+      setVerifyToken('');
+      setPin('');
+      setTokenEdited(false);
+    }
+    setRegistrationProbe(null);
+  }, []);
+
+  // Ping Meta (decrypt token + verify) for one number to badge health.
+  const runHealthCheck = useCallback(async (row: WhatsAppConfigType | null) => {
+    if (!row) {
+      setConnectionStatus('disconnected');
+      setResetReason(null);
+      setStatusMessage('');
+      return;
+    }
+    try {
+      const res = await fetch(
+        `/api/whatsapp/config?phone_number_id=${encodeURIComponent(row.phone_number_id)}`,
+      );
+      const payload = await res.json();
+      setWebhookSecretMissing(payload.webhook_secret_configured === false);
+      if (payload.connected) {
+        setConnectionStatus('connected');
+        setResetReason(null);
+        setStatusMessage('');
+      } else {
+        setConnectionStatus('disconnected');
+        setResetReason(payload.needs_reset ? 'token_corrupted' : payload.reason === 'meta_api_error' ? 'meta_api_error' : null);
+        setStatusMessage(payload.message || '');
+      }
+    } catch (err) {
+      console.error('Health check failed:', err);
+      setConnectionStatus('disconnected');
+    }
+  }, []);
+
   const fetchConfig = useCallback(async (acctId: string) => {
     setLoading(true);
     try {
-      // Load form values from Supabase (shows what's in DB).
-      // Switched from `user_id` (which would only match the row's
-      // original author) to `account_id` so every member of the
-      // account sees the same saved configuration. UNIQUE(account_id)
-      // on the table guarantees the .maybeSingle() return type
-      // remains accurate.
-      // An account can hold several configs (migration 039 — multiple
-      // Evolution numbers alongside a Meta one). The Meta form must
-      // prefill from the account's META row specifically — NOT the
-      // oldest row, which (when Evolution was set up first) is an
-      // Evolution row with no phone_number_id and would wipe the Meta
-      // form on every reload.
-      const { data, error } = await supabase
+      // All Meta numbers on the account (an account can hold several,
+      // plus Evolution rows — migration 039).
+      const { data: metas, error } = await supabase
         .from('whatsapp_config')
         .select('*')
         .eq('account_id', acctId)
         .eq('provider', 'meta')
-        .maybeSingle();
+        .order('created_at', { ascending: true });
+      if (error) console.error('Failed to load Meta configs:', error);
+      const list = (metas ?? []) as WhatsAppConfigType[];
+      setMetaConfigs(list);
 
-      if (error) {
-        console.error('Failed to load config row:', error);
-      }
-
-      // Which tab to open by default: Meta when it's configured
-      // (the user is working on it), otherwise the account's oldest
-      // channel (an Evolution-only account lands on Evolution).
+      // Which tab to open by default: Meta when any is configured,
+      // otherwise the account's oldest channel.
       const { data: firstRow } = await supabase
         .from('whatsapp_config')
         .select('provider')
@@ -143,64 +194,35 @@ export function WhatsAppConfig() {
         .limit(1)
         .maybeSingle();
       setProvider(
-        data ? 'meta' : firstRow?.provider === 'evolution' ? 'evolution' : 'meta',
+        list.length ? 'meta' : firstRow?.provider === 'evolution' ? 'evolution' : 'meta',
       );
 
-      if (data) {
-        setConfig(data);
-        setPhoneNumberId(data.phone_number_id || '');
-        setWabaId(data.waba_id || '');
-        setLabel(data.label || '');
-        setAccessToken(MASKED_TOKEN);
-        setVerifyToken('');
-        setPin('');
-        setTokenEdited(false);
-      } else {
-        setConfig(null);
-        setPhoneNumberId('');
-        setWabaId('');
-        setLabel('');
-        setAccessToken('');
-        setVerifyToken('');
-        setPin('');
-        setTokenEdited(false);
-      }
-      // Clear any stale probe result when reloading the row.
-      setRegistrationProbe(null);
-
-      // Then verify health via the API (decrypts token + pings Meta).
-      // Only when a Meta config exists.
-      if (data) {
-        try {
-          const res = await fetch('/api/whatsapp/config', { method: 'GET' });
-          const payload = await res.json();
-
-          if (payload.connected) {
-            setConnectionStatus('connected');
-            setResetReason(null);
-            setStatusMessage('');
-          } else {
-            setConnectionStatus('disconnected');
-            setResetReason(payload.needs_reset ? 'token_corrupted' : payload.reason === 'meta_api_error' ? 'meta_api_error' : null);
-            setStatusMessage(payload.message || '');
-          }
-          setWebhookSecretMissing(payload.webhook_secret_configured === false);
-        } catch (err) {
-          console.error('Health check failed:', err);
-          setConnectionStatus('disconnected');
-        }
-      } else {
-        setConnectionStatus('disconnected');
-        setResetReason(null);
-        setStatusMessage('');
-      }
+      // Preserve the current selection across refreshes; else first; else new.
+      const want = selectedPhoneIdRef.current;
+      const selected =
+        list.find((c) => c.phone_number_id === want) ?? list[0] ?? null;
+      selectedPhoneIdRef.current = selected?.phone_number_id ?? null;
+      setSelectedPhoneId(selected?.phone_number_id ?? null);
+      applyConfigToForm(selected);
+      await runHealthCheck(selected);
     } catch (err) {
       console.error('fetchConfig error:', err);
       toast.error('Failed to load WhatsApp configuration');
     } finally {
       setLoading(false);
     }
-  }, [supabase]);
+  }, [supabase, applyConfigToForm, runHealthCheck]);
+
+  // Switch which Meta number the form is editing (null = add a new one).
+  const selectConfig = useCallback(
+    (row: WhatsAppConfigType | null) => {
+      selectedPhoneIdRef.current = row?.phone_number_id ?? null;
+      setSelectedPhoneId(row?.phone_number_id ?? null);
+      applyConfigToForm(row);
+      void runHealthCheck(row);
+    },
+    [applyConfigToForm, runHealthCheck],
+  );
 
   useEffect(() => {
     // Need both the auth session (`!authLoading`) AND the profile
@@ -304,6 +326,8 @@ export function WhatsAppConfig() {
         setPin('');
       }
 
+      // Keep the number we just saved selected after the list refresh.
+      selectedPhoneIdRef.current = phoneNumberId.trim();
       if (accountId) await fetchConfig(accountId);
     } catch (err) {
       console.error('Save error:', err);
@@ -316,7 +340,9 @@ export function WhatsAppConfig() {
   async function handleTestConnection() {
     try {
       setTesting(true);
-      const res = await fetch('/api/whatsapp/config', { method: 'GET' });
+      const res = await fetch(
+        `/api/whatsapp/config?phone_number_id=${encodeURIComponent(phoneNumberId.trim())}`,
+      );
       const payload = await res.json();
 
       setWebhookSecretMissing(payload.webhook_secret_configured === false);
@@ -348,9 +374,10 @@ export function WhatsAppConfig() {
     setVerifyingRegistration(true);
     setRegistrationProbe(null);
     try {
-      const res = await fetch('/api/whatsapp/config/verify-registration', {
-        method: 'GET',
-      });
+      const res = await fetch(
+        `/api/whatsapp/config/verify-registration?phone_number_id=${encodeURIComponent(phoneNumberId.trim())}`,
+        { method: 'GET' },
+      );
       const data = (await res.json()) as RegistrationProbe;
       setRegistrationProbe(data);
       if (data.live) {
@@ -375,9 +402,20 @@ export function WhatsAppConfig() {
       return;
     }
 
+    // Nothing saved yet (the "add number" tab) — just clear the form so
+    // Reset can never wipe the account's other saved numbers.
+    if (!config?.id) {
+      selectConfig(null);
+      return;
+    }
+
     try {
       setResetting(true);
-      const res = await fetch('/api/whatsapp/config', { method: 'DELETE' });
+      // Delete only the selected Meta number (by its row id).
+      const res = await fetch(
+        `/api/whatsapp/config?id=${encodeURIComponent(config.id)}`,
+        { method: 'DELETE' },
+      );
       const data = await res.json();
 
       if (!res.ok) {
@@ -386,6 +424,9 @@ export function WhatsAppConfig() {
       }
 
       toast.success('Configuration cleared. You can now re-enter your credentials.');
+      // Reset selection to "new" and refresh the list.
+      selectedPhoneIdRef.current = null;
+      setSelectedPhoneId(null);
       setConfig(null);
       setPhoneNumberId('');
       setWabaId('');
@@ -395,6 +436,7 @@ export function WhatsAppConfig() {
       setConnectionStatus('disconnected');
       setResetReason(null);
       setStatusMessage('');
+      if (accountId) await fetchConfig(accountId);
     } catch (err) {
       console.error('Reset error:', err);
       toast.error('Failed to reset configuration');
@@ -470,6 +512,48 @@ export function WhatsAppConfig() {
       {provider === 'evolution' ? (
         <EvolutionConfig />
       ) : (
+      <>
+      {/* Meta numbers selector — an account can connect several. Each
+          chip loads its number into the form below; "Add number" clears
+          it for a new one. */}
+      {(metaConfigs.length > 0 || selectedPhoneId === null) && (
+        <div className="mb-6 flex flex-wrap items-center gap-2">
+          <span className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+            {t('metaNumbers')}
+          </span>
+          {metaConfigs.map((c) => {
+            const active = c.phone_number_id === selectedPhoneId;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => selectConfig(c)}
+                className={cn(
+                  'rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors',
+                  active
+                    ? 'border-primary bg-primary/10 text-primary'
+                    : 'border-border text-muted-foreground hover:bg-muted',
+                )}
+              >
+                {c.label || c.phone_number_id}
+              </button>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => selectConfig(null)}
+            className={cn(
+              'inline-flex items-center gap-1 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors',
+              selectedPhoneId === null
+                ? 'border-primary bg-primary/10 text-primary'
+                : 'border-dashed border-border text-muted-foreground hover:bg-muted',
+            )}
+          >
+            <Plus className="size-3.5" />
+            {t('addNumber')}
+          </button>
+        </div>
+      )}
       <div className="grid gap-6 lg:grid-cols-[1fr_380px]">
       {/* Main config form */}
       <div className="space-y-6">
@@ -944,6 +1028,7 @@ export function WhatsAppConfig() {
         </Card>
       </div>
     </div>
+      </>
       )}
     </section>
   );

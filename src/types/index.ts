@@ -294,6 +294,8 @@ export interface WhatsAppConfig {
   waba_id?: string;
   access_token: string;
   verify_token?: string;
+  /** Friendly channel name shown in the inbox (e.g. the phone number). */
+  label?: string | null;
   /** Evolution API server base URL (provider = 'evolution'). */
   evolution_base_url?: string | null;
   /** Evolution API key, AES-256-GCM encrypted at rest. */
