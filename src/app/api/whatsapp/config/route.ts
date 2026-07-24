@@ -141,7 +141,15 @@ export async function GET() {
         phoneNumberId: config.phone_number_id,
         accessToken,
       })
-      return NextResponse.json({ connected: true, phone_info: phoneInfo })
+      // Surface whether the webhook secret is configured. Without
+      // META_APP_SECRET the inbound webhook fails signature verification
+      // and rejects EVERY message with 401 — so the credentials look
+      // healthy but nothing ever reaches the inbox. The UI warns on this.
+      return NextResponse.json({
+        connected: true,
+        phone_info: phoneInfo,
+        webhook_secret_configured: Boolean(process.env.META_APP_SECRET),
+      })
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown Meta API error'
       console.error('[whatsapp/config GET] Meta API verification failed:', message)
