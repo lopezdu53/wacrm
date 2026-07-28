@@ -66,6 +66,11 @@ only blanks are filled.
 
 ## Notes / limits
 
+- Imported opportunities are assigned to the user running the sync
+  (their salesperson), so they show in Odoo's default **My Pipeline**
+  view (which filters by salesperson). This is fill-blank: new imports
+  and pre-existing imports with no salesperson get assigned on the next
+  run, but a manual reassignment in Odoo is never overwritten.
 - One-way only: changes made in Odoo are **not** pushed back to wacrm.
 - Custom fields travel in the contact's `custom_fields` map; **NIT / CC**,
   **Dirección** and **Ciudad** are mapped to native partner columns (see

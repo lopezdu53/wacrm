@@ -166,9 +166,17 @@ class WacrmSync(models.AbstractModel):
         if (deal.get("status") or "").lower() == "lost":
             values["active"] = False
 
+        # Assign the salesperson (the user running the sync) so the
+        # opportunity shows in Odoo's default CRM pipeline, which filters
+        # by "My Pipeline" (salesperson). Fill-blank only: set it on
+        # create and on existing imports that have no salesperson yet,
+        # but never overwrite a manual reassignment made in Odoo.
         if lead:
+            if not lead.user_id:
+                values["user_id"] = self.env.user.id
             lead.write(values)
             return lead
+        values["user_id"] = self.env.user.id
         return Lead.create(values)
 
     @api.model
