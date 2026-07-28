@@ -169,6 +169,12 @@ class WacrmSync(models.AbstractModel):
         if lead:
             lead.write(values)
             return lead
+        # Assign the salesperson (the user running the sync) on NEW
+        # opportunities. Odoo's default CRM pipeline ("My Pipeline")
+        # filters by salesperson, so an imported opportunity with none
+        # is invisible there — this makes them show up out of the box.
+        # Only on create, so a manual reassignment in Odoo is preserved.
+        values["user_id"] = self.env.user.id
         return Lead.create(values)
 
     @api.model
