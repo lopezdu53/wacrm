@@ -567,6 +567,8 @@
       "contact": "Contact",
       "selectContact": "Select a contact",
       "linkToConversation": "Link to Conversation",
+      "openConversation": "Open conversation",
+      "aiSummary": "What they're looking for (AI)",
       "value": "Value",
       "currency": "Currency",
       "expectedCloseDate": "Expected Close Date",

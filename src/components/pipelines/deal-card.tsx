@@ -80,6 +80,13 @@ export function DealCard({ deal, stage, onEdit, isOverlay }: DealCardProps) {
         <span className="truncate text-xs text-muted-foreground">{contactLabel}</span>
       </div>
 
+      {/* AI summary — what the customer is looking for. */}
+      {deal.ai_summary && (
+        <p className="mt-2 line-clamp-2 text-xs leading-snug text-muted-foreground">
+          {deal.ai_summary}
+        </p>
+      )}
+
       <div className="mt-2 flex items-center justify-between">
         <span className="text-sm font-bold text-primary">
           {formatCurrency(deal.value, deal.currency)}
