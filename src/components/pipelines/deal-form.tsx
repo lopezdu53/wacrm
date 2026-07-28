@@ -30,6 +30,7 @@ import {
   MessageSquare,
   DollarSign,
   Loader2,
+  Sparkles,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useTranslations } from "next-intl";
@@ -286,11 +287,11 @@ export function DealForm({
 
               {linkedConversation && (
                 <Link
-                  href="/inbox"
+                  href={`/inbox?c=${linkedConversation.id}`}
                   className="mt-1 inline-flex items-center gap-1.5 self-start rounded-md bg-primary/10 px-2 py-1 text-xs text-primary hover:bg-primary/20"
                 >
                   <MessageSquare className="h-3 w-3" />
-                  {t("linkToConversation")}
+                  {t("openConversation")}
                 </Link>
               )}
             </div>
@@ -365,6 +366,20 @@ export function DealForm({
                 ))}
               </select>
             </div>
+
+            {/* AI-written summary of what the customer is looking for.
+                Read-only — the AI owns it; humans use Notes below. */}
+            {deal?.ai_summary && (
+              <div className="grid gap-2">
+                <Label className="flex items-center gap-1.5 text-muted-foreground">
+                  <Sparkles className="h-3.5 w-3.5 text-primary" />
+                  {t("aiSummary")}
+                </Label>
+                <p className="rounded-lg border border-border bg-muted/50 p-3 text-sm text-foreground">
+                  {deal.ai_summary}
+                </p>
+              </div>
+            )}
 
             <div className="grid gap-2">
               <Label className="text-muted-foreground">{t("notes")}</Label>

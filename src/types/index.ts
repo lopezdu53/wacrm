@@ -398,6 +398,8 @@ export interface Deal {
   value: number;
   currency?: string;
   notes?: string;
+  /** AI-written summary of what the customer is looking for (migration 044). */
+  ai_summary?: string | null;
   expected_close_date?: string;
   status?: DealStatus;
   created_at: string;
