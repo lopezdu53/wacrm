@@ -66,6 +66,13 @@ only blanks are filled.
 
 ## Notes / limits
 
+- **v19.0.1.5.0 fixes a pagination bug**: `iter_records` was reading
+  `next_cursor` from the top level of the response instead of from
+  `meta.next_cursor` (where the wacrm API actually puts it), so every
+  sync silently stopped after the first page (up to 100 records) no
+  matter how many contacts/deals the account had. If you have more
+  than 100 contacts or deals, update to this version and re-run
+  **Sync Now** to pull the rest.
 - Imported opportunities are assigned to the user running the sync
   (their salesperson), so they show in Odoo's default **My Pipeline**
   view (which filters by salesperson). This is fill-blank: new imports

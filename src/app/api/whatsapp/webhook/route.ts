@@ -301,7 +301,13 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
           // inserts that need it for NOT NULL FK compliance. Always
           // the admin who saved the WhatsApp config.
           config.user_id,
-          decryptedAccessToken
+          decryptedAccessToken,
+          // The specific Meta number this message arrived on. An
+          // account can now hold several (multi-Meta-number support) —
+          // this MUST be threaded down to the conversation lookup so
+          // each number gets its own thread and replies go back out
+          // the same number. See findOrCreateConversation below.
+          config.id
         )
       }
     }
@@ -569,7 +575,14 @@ async function processMessage(
   // (contacts, conversations). Always the admin who saved the
   // WhatsApp config; the choice is arbitrary post-017 but stable.
   configOwnerUserId: string,
-  accessToken: string
+  accessToken: string,
+  // The whatsapp_config row this message arrived on. Threaded into
+  // findOrCreateConversation so the conversation is scoped to THIS
+  // number (migration 039) — without it, every Meta number on the
+  // account collapses onto one shared thread per contact, and reply
+  // sends fall back to "the account's oldest config", which can be a
+  // totally different number (Evolution or another Meta number).
+  whatsappConfigId: string
 ) {
   const senderPhone = normalizePhone(message.from)
   const contactName = contact.profile.name
@@ -584,11 +597,12 @@ async function processMessage(
   if (!contactOutcome) return
   const contactRecord = contactOutcome.contact
 
-  // Find or create conversation
+  // Find or create conversation — scoped to this specific number.
   const convResult = await findOrCreateConversation(
     accountId,
     configOwnerUserId,
-    contactRecord.id
+    contactRecord.id,
+    whatsappConfigId
   )
   if (!convResult) return
   const conversation = convResult.conversation
@@ -1057,8 +1071,15 @@ async function findOrCreateConversation(
   accountId: string,
   configOwnerUserId: string,
   contactId: string,
+  // The whatsapp_config row this message arrived on (migration 039).
+  // MUST be part of the lookup + insert — without it, a contact who
+  // writes to two different Meta numbers (or a Meta number and an
+  // Evolution number) collapses onto ONE shared conversation, mixing
+  // both threads, and the reply-send fallback picks an arbitrary
+  // config that may be the WRONG number entirely.
+  whatsappConfigId: string,
 ) {
-  // Look for an existing conversation in this account, oldest-first.
+  // Look for an existing conversation on THIS channel, oldest-first.
   //
   // We deliberately do NOT use `.single()` here. `.single()` errors on
   // *both* 0 rows and ≥2 rows, and the old code treated any error as
@@ -1076,6 +1097,7 @@ async function findOrCreateConversation(
     .select('*')
     .eq('account_id', accountId)
     .eq('contact_id', contactId)
+    .eq('whatsapp_config_id', whatsappConfigId)
     .order('created_at', { ascending: true })
     .limit(1)
 
@@ -1096,6 +1118,7 @@ async function findOrCreateConversation(
       account_id: accountId,
       user_id: configOwnerUserId,
       contact_id: contactId,
+      whatsapp_config_id: whatsappConfigId,
     })
     .select()
     .single()
@@ -1103,14 +1126,16 @@ async function findOrCreateConversation(
   if (createError) {
     // Lost a race: a concurrent inbound delivery created the
     // conversation between our lookup and insert, and the unique index
-    // (migration 036) rejected the duplicate. Re-resolve the winning
-    // row instead of dropping the message — mirrors findOrCreateContact.
+    // (migration 036/039) rejected the duplicate. Re-resolve the
+    // winning row instead of dropping the message — mirrors
+    // findOrCreateContact.
     if (isUniqueViolation(createError)) {
       const { data: raced } = await supabaseAdmin()
         .from('conversations')
         .select('*')
         .eq('account_id', accountId)
         .eq('contact_id', contactId)
+        .eq('whatsapp_config_id', whatsappConfigId)
         .order('created_at', { ascending: true })
         .limit(1)
       if (raced && raced.length > 0) {

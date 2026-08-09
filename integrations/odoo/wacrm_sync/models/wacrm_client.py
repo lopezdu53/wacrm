@@ -96,7 +96,7 @@ class WacrmClient(models.AbstractModel):
     def iter_records(self, path, params=None, page_size=100):
         """Yield every record across all pages of a list endpoint.
 
-        The API envelope is `{ "data": [...], "next_cursor": "..." | null }`.
+        The API envelope is `{ "data": [...], "meta": { "next_cursor": "..." | null } }`.
         """
         params = dict(params or {})
         params.setdefault("limit", page_size)
@@ -109,7 +109,12 @@ class WacrmClient(models.AbstractModel):
             data = payload.get("data") or []
             for row in data:
                 yield row
-            cursor = payload.get("next_cursor")
+            # next_cursor lives under "meta", not top-level — reading it
+            # at the top level (the old code) silently returned None
+            # every time, so pagination never advanced past page 1 and
+            # any account with more than `page_size` contacts/deals had
+            # the rest go unsynced without any error.
+            cursor = (payload.get("meta") or {}).get("next_cursor")
             pages += 1
             if not cursor or pages >= MAX_PAGES:
                 break
