@@ -275,15 +275,35 @@ export async function sendMessageToConversation(
     configError = res.error;
   }
   if (!config) {
-    const res = await db
+    // Fallback for a conversation with no stamped channel (a legacy
+    // thread predating migration 039, or one created by a path that
+    // hasn't been updated to stamp it). Prefer a Meta config — null-
+    // channel conversations predate multi-channel and were always
+    // Meta — over "whichever config happens to be oldest", which can
+    // be an unrelated Evolution number and would send the reply out
+    // the wrong number entirely.
+    const metaRes = await db
       .from('whatsapp_config')
       .select('*')
       .eq('account_id', accountId)
+      .eq('provider', 'meta')
       .order('created_at', { ascending: true })
       .limit(1)
       .maybeSingle();
-    config = res.data;
-    configError = res.error;
+    if (metaRes.data) {
+      config = metaRes.data;
+      configError = metaRes.error;
+    } else {
+      const res = await db
+        .from('whatsapp_config')
+        .select('*')
+        .eq('account_id', accountId)
+        .order('created_at', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+      config = res.data;
+      configError = res.error;
+    }
   }
 
   if (configError || !config) {

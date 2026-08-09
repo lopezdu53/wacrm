@@ -49,6 +49,20 @@ export async function loadConversationChannelConfig(
       .maybeSingle()
     if (data) return data
   }
+  // Fallback for a conversation with no stamped channel. Prefer a Meta
+  // config over "whichever is oldest" — null-channel conversations
+  // predate multi-channel support and were always Meta, so guessing
+  // Meta first avoids routing the reply out an unrelated Evolution
+  // number (see the same fix in send-message.ts).
+  const { data: metaConfig } = await db
+    .from('whatsapp_config')
+    .select('*')
+    .eq('account_id', accountId)
+    .eq('provider', 'meta')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle()
+  if (metaConfig) return metaConfig
   const { data } = await db
     .from('whatsapp_config')
     .select('*')
