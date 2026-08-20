@@ -59,10 +59,21 @@ wacrm stage lands in:
 | Deal stage | Pipeline Mapping row → `crm.stage` (fallback: by name) |
 | Deal contact | `crm.lead` partner (found or created) |
 | Deal status `lost` | opportunity archived |
+| AI summary, wacrm notes, tax id/address, conversation link | `crm.lead` **Notes** tab (auto-managed block) |
 
 Existing Odoo contacts are adopted by matching phone (then email) before a
 new one is created, and existing field values are never overwritten —
 only blanks are filled.
+
+### Notes tab
+
+Every synced opportunity's **Notes** tab (`description`) gets a block with:
+what the customer is looking for (wacrm's AI summary), any manual notes
+recorded on the deal in wacrm, their NIT/CC and address, and a link back
+to the WhatsApp conversation in wacrm. It's wrapped in an HTML comment
+marker (`<!-- wacrm:note:start -->` … `<!-- wacrm:note:end -->`) so each
+sync refreshes **only that block** — anything a teammate writes elsewhere
+in the Notes tab (before or after it) is left alone, never erased.
 
 ## Notes / limits
 
