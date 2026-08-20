@@ -67,10 +67,19 @@ class WacrmSync(models.AbstractModel):
             "street": street or False,
             "city": city or False,
             "wacrm_id": wacrm_id or False,
+            # No single company: wacrm has no concept of "company", so a
+            # synced contact must be usable from ANY company on a multi-
+            # company Odoo instance. Odoo's standard multi-company record
+            # rule treats a blank company_id as visible everywhere,
+            # instead of us having to duplicate the row once per company.
+            "company_id": False,
         }
         if partner:
             # Only fill blanks — never clobber data an Odoo user curated.
-            update = {"wacrm_id": wacrm_id or partner.wacrm_id}
+            # company_id is the one deliberate exception: always reset to
+            # shared, since a wacrm-managed contact scoped to a single
+            # company is exactly the bug this fixes.
+            update = {"wacrm_id": wacrm_id or partner.wacrm_id, "company_id": False}
             if not partner.email and values["email"]:
                 update["email"] = values["email"]
             if not partner.phone and values["phone"]:
@@ -153,6 +162,13 @@ class WacrmSync(models.AbstractModel):
             "type": "opportunity",
             "expected_revenue": deal.get("value") or 0.0,
             "wacrm_id": wacrm_id or False,
+            # No single company — see the same field on _upsert_partner.
+            # Without this, a synced opportunity is only visible from
+            # whichever company happened to be active when it was
+            # created/updated, invisible from every other company on a
+            # multi-company instance (e.g. a holding with one company
+            # per business line).
+            "company_id": False,
         }
         if partner:
             values["partner_id"] = partner.id

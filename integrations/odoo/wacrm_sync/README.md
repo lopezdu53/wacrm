@@ -66,6 +66,15 @@ only blanks are filled.
 
 ## Notes / limits
 
+- **v19.0.1.6.0 — multi-company**: synced contacts and opportunities are
+  created/updated with **no company assigned** (`company_id = False`),
+  which Odoo treats as shared/visible across **every** company on the
+  instance — instead of being locked to whichever company happened to
+  be active when the sync ran (and invisible everywhere else). If you
+  run separate Odoo companies (e.g. one per business line), this is
+  what makes the same wacrm data show up under all of them. Existing
+  wacrm-synced records get their company cleared on their next sync
+  pass too.
 - **v19.0.1.5.0 fixes a pagination bug**: `iter_records` was reading
   `next_cursor` from the top level of the response instead of from
   `meta.next_cursor` (where the wacrm API actually puts it), so every
