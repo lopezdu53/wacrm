@@ -19,6 +19,8 @@ export interface ApiDeal {
   currency: string | null
   status: string | null
   notes: string | null
+  /** AI-written summary of what the customer is looking for (migration 044). */
+  ai_summary: string | null
   expected_close_date: string | null
   contact_id: string | null
   conversation_id: string | null
@@ -62,6 +64,7 @@ export function serializeDeal(row: Record<string, unknown>): ApiDeal {
     currency: (row.currency as string | null) ?? null,
     status: (row.status as string | null) ?? null,
     notes: (row.notes as string | null) ?? null,
+    ai_summary: (row.ai_summary as string | null) ?? null,
     expected_close_date: (row.expected_close_date as string | null) ?? null,
     contact_id: (row.contact_id as string | null) ?? null,
     conversation_id: (row.conversation_id as string | null) ?? null,

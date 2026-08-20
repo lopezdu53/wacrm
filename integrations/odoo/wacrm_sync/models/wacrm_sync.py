@@ -1,5 +1,7 @@
 # -*- coding: utf-8 -*-
 import logging
+import re
+from html import escape as html_escape
 
 from odoo import api, fields, models
 
@@ -9,6 +11,13 @@ PARAM_SYNC_CONTACTS = "wacrm_sync.sync_contacts"
 PARAM_SYNC_DEALS = "wacrm_sync.sync_opportunities"
 PARAM_LAST_CONTACTS = "wacrm_sync.last_sync_contacts"
 PARAM_LAST_DEALS = "wacrm_sync.last_sync_deals"
+
+# Delimiters around the auto-managed block we splice into an
+# opportunity's Notes (description). Letting us find-and-replace just
+# our own block on every sync, so a teammate's own notes elsewhere in
+# the field are never touched.
+WACRM_NOTE_START = "<!-- wacrm:note:start -->"
+WACRM_NOTE_END = "<!-- wacrm:note:end -->"
 
 
 class WacrmSync(models.AbstractModel):
@@ -149,6 +158,75 @@ class WacrmSync(models.AbstractModel):
         return created.id
 
     @api.model
+    def _wacrm_note_html(self, deal, contact):
+        """Build the auto-managed HTML block summarizing wacrm's view of
+        this lead: what the customer is looking for (the AI summary),
+        their tax id / address, any manual notes recorded in wacrm, and a
+        link back to the WhatsApp conversation. Returns None when there's
+        nothing worth writing."""
+        cf = (contact or {}).get("custom_fields") or {}
+        lines = []
+
+        summary = (deal.get("ai_summary") or "").strip()
+        if summary:
+            lines.append(
+                "<p><strong>Qué buscan (IA wacrm):</strong> %s</p>"
+                % html_escape(summary)
+            )
+
+        notes = (deal.get("notes") or "").strip()
+        if notes:
+            lines.append(
+                "<p><strong>Notas en wacrm:</strong> %s</p>" % html_escape(notes)
+            )
+
+        vat = (cf.get("NIT / CC") or "").strip()
+        if vat:
+            lines.append("<p><strong>NIT / CC:</strong> %s</p>" % html_escape(vat))
+
+        address_parts = [
+            p
+            for p in [(cf.get("Dirección") or "").strip(), (cf.get("Ciudad") or "").strip()]
+            if p
+        ]
+        if address_parts:
+            lines.append(
+                "<p><strong>Dirección:</strong> %s</p>"
+                % html_escape(", ".join(address_parts))
+            )
+
+        conversation_id = deal.get("conversation_id")
+        if conversation_id:
+            base_url, _api_key = self.env["wacrm.client"]._get_credentials()
+            if base_url:
+                url = "%s/inbox?c=%s" % (base_url.rstrip("/"), conversation_id)
+                lines.append(
+                    '<p><a href="%s" target="_blank">Ver conversación en wacrm</a></p>'
+                    % html_escape(url)
+                )
+
+        if not lines:
+            return None
+        return WACRM_NOTE_START + "".join(lines) + WACRM_NOTE_END
+
+    @api.model
+    def _merge_wacrm_note(self, existing_description, note_html):
+        """Splice `note_html` into `existing_description` without
+        touching anything a human wrote elsewhere in the field. If our
+        marked block is already present (from a previous sync), replace
+        just that block in place; otherwise append it."""
+        existing = existing_description or ""
+        pattern = re.compile(
+            re.escape(WACRM_NOTE_START) + r".*?" + re.escape(WACRM_NOTE_END),
+            re.DOTALL,
+        )
+        if pattern.search(existing):
+            return pattern.sub(lambda _m: note_html, existing, count=1)
+        if existing.strip():
+            return existing + note_html
+        return note_html
+
+    @api.model
     def _upsert_deal(self, deal):
         Lead = self.env["crm.lead"].sudo()
         wacrm_id = deal.get("id")
@@ -181,6 +259,17 @@ class WacrmSync(models.AbstractModel):
         # A lost deal is archived; anything else stays active.
         if (deal.get("status") or "").lower() == "lost":
             values["active"] = False
+
+        # wacrm info (AI summary, manual notes, tax id / address, a link
+        # back to the WhatsApp conversation) into the opportunity's own
+        # Notes — merged non-destructively so it stays in sync as the
+        # lead evolves without ever erasing what a human wrote there.
+        note_html = self._wacrm_note_html(deal, deal.get("contact"))
+        if note_html:
+            current_description = lead.description if lead else False
+            values["description"] = self._merge_wacrm_note(
+                current_description, note_html
+            )
 
         # Assign the salesperson (the user running the sync) so the
         # opportunity shows in Odoo's default CRM pipeline, which filters
