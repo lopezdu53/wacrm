@@ -59,7 +59,7 @@ wacrm stage lands in:
 | Deal stage | Pipeline Mapping row → `crm.stage` (fallback: by name) |
 | Deal contact | `crm.lead` partner (found or created) |
 | Deal status `lost` | opportunity archived |
-| AI summary, wacrm notes, tax id/address, conversation link | `crm.lead` **Notes** tab (auto-managed block) |
+| AI summary (what they're looking for) | `crm.lead` **Notes** tab, first line |
 
 Existing Odoo contacts are adopted by matching phone (then email) before a
 new one is created, and existing field values are never overwritten —
@@ -67,16 +67,24 @@ only blanks are filled.
 
 ### Notes tab
 
-Every synced opportunity's **Notes** tab (`description`) gets a block with:
-what the customer is looking for (wacrm's AI summary), any manual notes
-recorded on the deal in wacrm, their NIT/CC and address, and a link back
-to the WhatsApp conversation in wacrm. It's wrapped in an HTML comment
-marker (`<!-- wacrm:note:start -->` … `<!-- wacrm:note:end -->`) so each
-sync refreshes **only that block** — anything a teammate writes elsewhere
-in the Notes tab (before or after it) is left alone, never erased.
+Every synced opportunity's **Notes** tab (`description`) gets ONE line at
+the top — `Qué buscan (wacrm IA): <summary>` — wacrm's AI summary of what
+the customer is looking for. `crm.lead.description` is a plain **Text**
+field, not Html, so this is unformatted text (no markup, no links —
+those rendered as literal tags before v19.0.1.8.0). Each sync replaces
+**only that first line** (matched by its exact prefix); anything a
+teammate types below it in the Notes tab is left alone, never erased.
 
 ## Notes / limits
 
+- **v19.0.1.8.0 — plain-text Notes**: `crm.lead.description` turned out
+  to be a plain Text field, not Html — the previous version's HTML
+  block (bold labels, a clickable link) showed up as literal
+  `<p><strong>…` tags instead of rendering. Replaced with a single
+  plain-text line carrying just the AI summary; NIT/CC, address, and the
+  conversation link were dropped from Notes (NIT/CC and address are
+  still mapped onto the contact's own `vat`/`street`/`city` fields, per
+  the table above).
 - **v19.0.1.6.0 — multi-company**: synced contacts and opportunities are
   created/updated with **no company assigned** (`company_id = False`),
   which Odoo treats as shared/visible across **every** company on the

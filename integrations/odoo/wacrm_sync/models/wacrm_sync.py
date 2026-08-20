@@ -1,7 +1,5 @@
 # -*- coding: utf-8 -*-
 import logging
-import re
-from html import escape as html_escape
 
 from odoo import api, fields, models
 
@@ -12,12 +10,12 @@ PARAM_SYNC_DEALS = "wacrm_sync.sync_opportunities"
 PARAM_LAST_CONTACTS = "wacrm_sync.last_sync_contacts"
 PARAM_LAST_DEALS = "wacrm_sync.last_sync_deals"
 
-# Delimiters around the auto-managed block we splice into an
-# opportunity's Notes (description). Letting us find-and-replace just
-# our own block on every sync, so a teammate's own notes elsewhere in
-# the field are never touched.
-WACRM_NOTE_START = "<!-- wacrm:note:start -->"
-WACRM_NOTE_END = "<!-- wacrm:note:end -->"
+# crm.lead.description is a plain Text field, not Html — markup written
+# into it shows up as literal tags, not rendered formatting. This is the
+# exact, fixed prefix of the one line we own at the top of that field;
+# it doubles as the "is this line ours" marker for the merge below, so
+# keep it in sync with _merge_wacrm_note.
+WACRM_SUMMARY_PREFIX = "Qué buscan (wacrm IA): "
 
 
 class WacrmSync(models.AbstractModel):
@@ -158,73 +156,34 @@ class WacrmSync(models.AbstractModel):
         return created.id
 
     @api.model
-    def _wacrm_note_html(self, deal, contact):
-        """Build the auto-managed HTML block summarizing wacrm's view of
-        this lead: what the customer is looking for (the AI summary),
-        their tax id / address, any manual notes recorded in wacrm, and a
-        link back to the WhatsApp conversation. Returns None when there's
-        nothing worth writing."""
-        cf = (contact or {}).get("custom_fields") or {}
-        lines = []
-
+    def _wacrm_note_line(self, deal):
+        """Build the one auto-managed line for the opportunity's Notes:
+        wacrm's AI summary of what the customer is looking for, as plain
+        text (crm.lead.description is a Text field, not Html — markup
+        shows up as literal tags, not rendered formatting). Returns None
+        when there's no summary yet."""
         summary = (deal.get("ai_summary") or "").strip()
-        if summary:
-            lines.append(
-                "<p><strong>Qué buscan (IA wacrm):</strong> %s</p>"
-                % html_escape(summary)
-            )
-
-        notes = (deal.get("notes") or "").strip()
-        if notes:
-            lines.append(
-                "<p><strong>Notas en wacrm:</strong> %s</p>" % html_escape(notes)
-            )
-
-        vat = (cf.get("NIT / CC") or "").strip()
-        if vat:
-            lines.append("<p><strong>NIT / CC:</strong> %s</p>" % html_escape(vat))
-
-        address_parts = [
-            p
-            for p in [(cf.get("Dirección") or "").strip(), (cf.get("Ciudad") or "").strip()]
-            if p
-        ]
-        if address_parts:
-            lines.append(
-                "<p><strong>Dirección:</strong> %s</p>"
-                % html_escape(", ".join(address_parts))
-            )
-
-        conversation_id = deal.get("conversation_id")
-        if conversation_id:
-            base_url, _api_key = self.env["wacrm.client"]._get_credentials()
-            if base_url:
-                url = "%s/inbox?c=%s" % (base_url.rstrip("/"), conversation_id)
-                lines.append(
-                    '<p><a href="%s" target="_blank">Ver conversación en wacrm</a></p>'
-                    % html_escape(url)
-                )
-
-        if not lines:
+        if not summary:
             return None
-        return WACRM_NOTE_START + "".join(lines) + WACRM_NOTE_END
+        # Collapse to one line — a stray newline in the summary would
+        # break the "first line is ours" merge convention below.
+        summary = " ".join(summary.split())
+        return WACRM_SUMMARY_PREFIX + summary
 
     @api.model
-    def _merge_wacrm_note(self, existing_description, note_html):
-        """Splice `note_html` into `existing_description` without
-        touching anything a human wrote elsewhere in the field. If our
-        marked block is already present (from a previous sync), replace
-        just that block in place; otherwise append it."""
+    def _merge_wacrm_note(self, existing_description, note_line):
+        """Set/replace wacrm's summary as the FIRST line of the
+        description, without touching anything a human wrote after it.
+        If the existing first line is already one of ours (from a
+        previous sync), replace just that line in place; otherwise
+        prepend ours above whatever is already there."""
         existing = existing_description or ""
-        pattern = re.compile(
-            re.escape(WACRM_NOTE_START) + r".*?" + re.escape(WACRM_NOTE_END),
-            re.DOTALL,
-        )
-        if pattern.search(existing):
-            return pattern.sub(lambda _m: note_html, existing, count=1)
+        first, sep, rest = existing.partition("\n")
+        if first.startswith(WACRM_SUMMARY_PREFIX):
+            return note_line + sep + rest
         if existing.strip():
-            return existing + note_html
-        return note_html
+            return note_line + "\n\n" + existing
+        return note_line
 
     @api.model
     def _upsert_deal(self, deal):
@@ -260,15 +219,15 @@ class WacrmSync(models.AbstractModel):
         if (deal.get("status") or "").lower() == "lost":
             values["active"] = False
 
-        # wacrm info (AI summary, manual notes, tax id / address, a link
-        # back to the WhatsApp conversation) into the opportunity's own
-        # Notes — merged non-destructively so it stays in sync as the
-        # lead evolves without ever erasing what a human wrote there.
-        note_html = self._wacrm_note_html(deal, deal.get("contact"))
-        if note_html:
+        # wacrm's AI summary of what the customer is looking for, as the
+        # first line of the opportunity's Notes — merged non-destructively
+        # so it stays in sync as the lead evolves without ever erasing
+        # what a human wrote there.
+        note_line = self._wacrm_note_line(deal)
+        if note_line:
             current_description = lead.description if lead else False
             values["description"] = self._merge_wacrm_note(
-                current_description, note_html
+                current_description, note_line
             )
 
         # Assign the salesperson (the user running the sync) so the
