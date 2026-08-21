@@ -11,17 +11,16 @@ PARAM_SYNC_DEALS = "wacrm_sync.sync_opportunities"
 PARAM_LAST_CONTACTS = "wacrm_sync.last_sync_contacts"
 PARAM_LAST_DEALS = "wacrm_sync.last_sync_deals"
 
-# crm.lead.description is a plain Text field, not Html — markup written
-# into it shows up as literal tags, not rendered formatting. This is the
-# exact, fixed prefix of the one line we own at the top of that field;
-# it doubles as the "is this line ours" marker for the merge below, so
-# keep it in sync with _merge_wacrm_note.
+# Prefix v19.0.1.7.0 - v19.0.1.9.0 wrote at the top of crm.lead.description
+# for the AI summary line. No longer written (see wacrm_ai_summary on
+# crm.lead) — kept only so _strip_legacy_wacrm_notes can recognize and
+# remove leftover copies from those versions.
 WACRM_SUMMARY_PREFIX = "Qué buscan (wacrm IA): "
 
-# Delimiters of the old (pre-19.0.1.8.0) HTML block format. description
-# is plain Text, so that block never rendered — it sat there as literal
-# "<!-- wacrm:note:start --><p>..." tags. _merge_wacrm_note strips any
-# leftover copy on sight so upgrading cleans it up automatically.
+# Delimiters of the even older (pre-19.0.1.8.0) HTML block format.
+# description is plain Text, so that block never rendered — it sat there
+# as literal "<!-- wacrm:note:start --><p>..." tags.
+# _strip_legacy_wacrm_notes removes any leftover copy on sight.
 _OLD_HTML_BLOCK_RE = re.compile(
     re.escape("<!-- wacrm:note:start -->") + r".*?" + re.escape("<!-- wacrm:note:end -->"),
     re.DOTALL,
@@ -166,42 +165,31 @@ class WacrmSync(models.AbstractModel):
         return created.id
 
     @api.model
-    def _wacrm_note_line(self, deal):
-        """Build the one auto-managed line for the opportunity's Notes:
-        wacrm's AI summary of what the customer is looking for, as plain
-        text (crm.lead.description is a Text field, not Html — markup
-        shows up as literal tags, not rendered formatting). Returns None
-        when there's no summary yet."""
+    def _wacrm_summary_text(self, deal):
+        """wacrm's AI summary of what the customer is looking for, as a
+        single collapsed line. Returns None when there's no summary yet."""
         summary = (deal.get("ai_summary") or "").strip()
         if not summary:
             return None
-        # Collapse to one line — a stray newline in the summary would
-        # break the "first line is ours" merge convention below.
-        summary = " ".join(summary.split())
-        return WACRM_SUMMARY_PREFIX + summary
+        return " ".join(summary.split())
 
     @api.model
-    def _merge_wacrm_note(self, existing_description, note_line):
-        """Set wacrm's summary as the FIRST line of the description,
-        without touching anything a human wrote.
-
-        Self-healing by construction: rather than trying to detect and
-        replace-in-place a single previous line (which turned out to
-        silently fail to match in some environments, piling up one
-        duplicate per sync), this strips out EVERY line that carries our
-        prefix — however many accumulated — plus any leftover copy of
-        the old pre-19.0.1.8.0 HTML block, and rebuilds from scratch with
-        exactly one fresh line on top. Whatever is left after that
-        cleanup is untouched human content."""
-        existing = existing_description or ""
-        existing = _OLD_HTML_BLOCK_RE.sub("", existing)
+    def _strip_legacy_wacrm_notes(self, existing_description):
+        """One-time best-effort cleanup for opportunities synced by
+        v19.0.1.7.0 - v19.0.1.9.0, which wrote the AI summary straight
+        into the free-text Notes tab (first an HTML block, then a
+        prefixed plain-text line) instead of the dedicated
+        wacrm_ai_summary field added in v19.0.1.11.0. Strips any of that
+        legacy content out of `description`, leaving only what a human
+        actually typed there. Safe to call on a description that never
+        had any wacrm content — returns it unchanged."""
+        if not existing_description:
+            return existing_description
+        cleaned = _OLD_HTML_BLOCK_RE.sub("", existing_description)
         kept_lines = [
-            line for line in existing.split("\n") if not line.startswith(WACRM_SUMMARY_PREFIX)
+            line for line in cleaned.split("\n") if not line.startswith(WACRM_SUMMARY_PREFIX)
         ]
-        rest = "\n".join(kept_lines).strip("\n").strip()
-        if rest:
-            return note_line + "\n\n" + rest
-        return note_line
+        return "\n".join(kept_lines).strip("\n").strip()
 
     @api.model
     def _upsert_deal(self, deal):
@@ -237,16 +225,23 @@ class WacrmSync(models.AbstractModel):
         if (deal.get("status") or "").lower() == "lost":
             values["active"] = False
 
-        # wacrm's AI summary of what the customer is looking for, as the
-        # first line of the opportunity's Notes — merged non-destructively
-        # so it stays in sync as the lead evolves without ever erasing
-        # what a human wrote there.
-        note_line = self._wacrm_note_line(deal)
-        if note_line:
-            current_description = lead.description if lead else False
-            values["description"] = self._merge_wacrm_note(
-                current_description, note_line
-            )
+        # wacrm's AI summary of what the customer is looking for lives in
+        # its own field, fully owned by the sync — every pass just
+        # overwrites it outright, so there's no text to parse or merge
+        # and therefore nothing that can ever accumulate duplicates.
+        summary = self._wacrm_summary_text(deal)
+        if summary:
+            values["wacrm_ai_summary"] = summary
+
+        # Best-effort cleanup of legacy content earlier versions wrote
+        # directly into the free-text Notes tab (see
+        # _strip_legacy_wacrm_notes). Only touches `description` when
+        # there's actually legacy wacrm content to remove from it, so a
+        # human's own notes are never rewritten for no reason.
+        if lead and lead.description:
+            scrubbed = self._strip_legacy_wacrm_notes(lead.description)
+            if scrubbed != lead.description:
+                values["description"] = scrubbed
 
         # Assign the salesperson (the user running the sync) so the
         # opportunity shows in Odoo's default CRM pipeline, which filters

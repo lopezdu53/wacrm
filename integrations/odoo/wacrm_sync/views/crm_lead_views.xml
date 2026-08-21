@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- wacrm's AI summary as its own read-only field on the opportunity
+         form, right under the contact details. Deliberately NOT inside
+         the free-text Notes tab: three separate attempts to merge it as
+         a managed line inside that field (v19.0.1.7.0 - v19.0.1.9.0) all
+         failed to stay non-duplicating in production, so it now lives in
+         a field wacrm fully owns and overwrites on every sync — nothing
+         to parse, nothing that can accumulate. -->
+    <record id="crm_lead_view_form_wacrm_summary" model="ir.ui.view">
+        <field name="name">crm.lead.view.form.inherit.wacrm.summary</field>
+        <field name="model">crm.lead</field>
+        <field name="inherit_id" ref="crm.crm_lead_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='email_from']" position="after">
+                <field name="wacrm_ai_summary"
+                       readonly="1"
+                       invisible="not wacrm_ai_summary"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

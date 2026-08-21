@@ -70,25 +70,45 @@ wacrm stage lands in:
 | Deal stage | Pipeline Mapping row → `crm.stage` (fallback: by name) |
 | Deal contact | `crm.lead` partner (found or created) |
 | Deal status `lost` | opportunity archived |
-| AI summary (what they're looking for) | `crm.lead` **Notes** tab, first line |
+| AI summary (what they're looking for) | `crm.lead` **Qué buscan (wacrm IA)** field |
 
 Existing Odoo contacts are adopted by matching phone (then email) before a
 new one is created, and existing field values are never overwritten —
 only blanks are filled.
 
-### Notes tab
+### AI summary field
 
-Every synced opportunity's **Notes** tab (`description`) gets ONE line at
-the top — `Qué buscan (wacrm IA): <summary>` — wacrm's AI summary of what
-the customer is looking for. `crm.lead.description` is a plain **Text**
-field, not Html, so this is unformatted text (no markup, no links —
-those rendered as literal tags before v19.0.1.8.0). Each sync strips out
-every wacrm-generated line (however many) plus any leftover copy of the
-old pre-19.0.1.8.0 HTML block, then writes back exactly one fresh line;
-anything a teammate types in the Notes tab is left alone, never erased.
+wacrm's AI summary of what the customer is looking for shows up as its
+own read-only field — **Qué buscan (wacrm IA)** — right under the
+contact details on the opportunity form. Every sync simply **overwrites**
+that field outright; it's not parsed or merged from anything, so there's
+nothing that can accumulate duplicates. The free-text **Notes** tab
+(`description`) is never written to by the sync and stays 100% yours.
+
+Earlier versions (v19.0.1.7.0 - v19.0.1.9.0) wrote the summary straight
+into the Notes tab instead — first as an HTML block, then as a
+prefixed plain-text line, "self-healing" on each sync. Both approaches
+turned out to duplicate that line on every sync in some environments
+despite testing correctly in isolation. If your instance still has that
+legacy junk sitting in a Notes tab, each opportunity's next sync
+automatically strips it back out (matched by the old HTML delimiters /
+prefix, best-effort) — everything else you or a teammate typed there is
+left untouched. If a particular opportunity doesn't get a fresh sync
+(e.g. it's closed/archived) and still shows the old duplicated lines,
+just clear them by hand once; nothing will write there again.
 
 ## Notes / limits
 
+- **v19.0.1.11.0 — AI summary moved out of the Notes tab**: three
+  separate attempts (v19.0.1.7.0 - v19.0.1.9.0) to keep the AI summary
+  merged non-destructively into the free-text `description` field all
+  turned out to duplicate that line on every sync in some environments,
+  even after testing each fix's merge logic correctly in isolation. The
+  summary now lives in its own field (`wacrm_ai_summary`, shown as
+  **Qué buscan (wacrm IA)** on the form) that every sync just overwrites
+  — no parsing, so nothing to duplicate. Each opportunity's next sync
+  also strips any legacy wacrm-written lines/HTML block still sitting in
+  its Notes tab.
 - **v19.0.1.9.0 — self-healing Notes merge**: v19.0.1.8.0's "replace the
   existing first line in place" logic failed to detect its own
   previous line in some environments, so every sync appended a fresh
