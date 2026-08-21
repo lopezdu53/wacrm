@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import re
 
 from odoo import api, fields, models
 
@@ -16,6 +17,15 @@ PARAM_LAST_DEALS = "wacrm_sync.last_sync_deals"
 # it doubles as the "is this line ours" marker for the merge below, so
 # keep it in sync with _merge_wacrm_note.
 WACRM_SUMMARY_PREFIX = "Qué buscan (wacrm IA): "
+
+# Delimiters of the old (pre-19.0.1.8.0) HTML block format. description
+# is plain Text, so that block never rendered — it sat there as literal
+# "<!-- wacrm:note:start --><p>..." tags. _merge_wacrm_note strips any
+# leftover copy on sight so upgrading cleans it up automatically.
+_OLD_HTML_BLOCK_RE = re.compile(
+    re.escape("<!-- wacrm:note:start -->") + r".*?" + re.escape("<!-- wacrm:note:end -->"),
+    re.DOTALL,
+)
 
 
 class WacrmSync(models.AbstractModel):
@@ -172,17 +182,25 @@ class WacrmSync(models.AbstractModel):
 
     @api.model
     def _merge_wacrm_note(self, existing_description, note_line):
-        """Set/replace wacrm's summary as the FIRST line of the
-        description, without touching anything a human wrote after it.
-        If the existing first line is already one of ours (from a
-        previous sync), replace just that line in place; otherwise
-        prepend ours above whatever is already there."""
+        """Set wacrm's summary as the FIRST line of the description,
+        without touching anything a human wrote.
+
+        Self-healing by construction: rather than trying to detect and
+        replace-in-place a single previous line (which turned out to
+        silently fail to match in some environments, piling up one
+        duplicate per sync), this strips out EVERY line that carries our
+        prefix — however many accumulated — plus any leftover copy of
+        the old pre-19.0.1.8.0 HTML block, and rebuilds from scratch with
+        exactly one fresh line on top. Whatever is left after that
+        cleanup is untouched human content."""
         existing = existing_description or ""
-        first, sep, rest = existing.partition("\n")
-        if first.startswith(WACRM_SUMMARY_PREFIX):
-            return note_line + sep + rest
-        if existing.strip():
-            return note_line + "\n\n" + existing
+        existing = _OLD_HTML_BLOCK_RE.sub("", existing)
+        kept_lines = [
+            line for line in existing.split("\n") if not line.startswith(WACRM_SUMMARY_PREFIX)
+        ]
+        rest = "\n".join(kept_lines).strip("\n").strip()
+        if rest:
+            return note_line + "\n\n" + rest
         return note_line
 
     @api.model

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "wacrm Sync",
-    "version": "19.0.1.8.0",
+    "version": "19.0.1.9.0",
     "summary": "Sync contacts and opportunities from wacrm into Odoo",
     "description": """
 wacrm Sync
