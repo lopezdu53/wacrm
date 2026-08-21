@@ -71,12 +71,27 @@ Every synced opportunity's **Notes** tab (`description`) gets ONE line at
 the top — `Qué buscan (wacrm IA): <summary>` — wacrm's AI summary of what
 the customer is looking for. `crm.lead.description` is a plain **Text**
 field, not Html, so this is unformatted text (no markup, no links —
-those rendered as literal tags before v19.0.1.8.0). Each sync replaces
-**only that first line** (matched by its exact prefix); anything a
-teammate types below it in the Notes tab is left alone, never erased.
+those rendered as literal tags before v19.0.1.8.0). Each sync strips out
+every wacrm-generated line (however many) plus any leftover copy of the
+old pre-19.0.1.8.0 HTML block, then writes back exactly one fresh line;
+anything a teammate types in the Notes tab is left alone, never erased.
 
 ## Notes / limits
 
+- **v19.0.1.9.0 — self-healing Notes merge**: v19.0.1.8.0's "replace the
+  existing first line in place" logic failed to detect its own
+  previous line in some environments, so every sync appended a fresh
+  duplicate instead of replacing one — and a leftover copy of the even
+  older HTML block (pre-19.0.1.8.0) kept sitting at the bottom
+  untouched. The merge is now unconditional: on every sync it strips
+  **every** line carrying the wacrm prefix, however many piled up,
+  plus any remaining HTML block, and writes back exactly one clean
+  line. This self-corrects automatically on the next sync — no manual
+  cleanup needed — regardless of why the previous detection failed. If
+  your instance was affected, just run **Sync Now** once after
+  updating; if Notes still shows duplicates after that, do a full
+  restart of the Odoo service (not just "Update" on the module in
+  Apps) to rule out a stale worker process still running old code.
 - **v19.0.1.8.0 — plain-text Notes**: `crm.lead.description` turned out
   to be a plain Text field, not Html — the previous version's HTML
   block (bold labels, a clickable link) showed up as literal
