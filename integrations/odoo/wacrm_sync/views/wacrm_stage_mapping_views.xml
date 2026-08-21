@@ -40,4 +40,20 @@
               parent="menu_wacrm_configuration"
               action="action_wacrm_stage_mapping"
               sequence="10"/>
+
+    <!-- "wacrm chat" — a second, separate app tile in the home menu that
+         opens the live wacrm inbox in a new browser tab. wacrm sends
+         X-Frame-Options: DENY on every response, so it can never be
+         embedded in an Odoo iframe/client action; a plain act_url is
+         the only way to link out to it. -->
+    <record id="action_wacrm_chat_url" model="ir.actions.act_url">
+        <field name="name">wacrm chat</field>
+        <field name="url">https://whatsapp.ventabot.cloud/</field>
+        <field name="target">new</field>
+    </record>
+    <menuitem id="menu_wacrm_chat_root"
+              name="wacrm chat"
+              web_icon="wacrm_sync,static/description/icon_chat.png"
+              action="action_wacrm_chat_url"
+              sequence="96"/>
 </odoo>

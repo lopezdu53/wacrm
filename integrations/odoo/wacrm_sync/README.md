@@ -20,6 +20,17 @@ Tested against **Odoo 19.0** (Enterprise). Requires the `crm` and
 2. Restart Odoo and **update the apps list** (Apps → Update Apps List).
 3. Install **wacrm Sync**.
 
+Installing adds two tiles to the Odoo home menu (app drawer):
+
+- **wacrm** (purple) — this module's own Settings screen (base URL, API
+  key, what to sync, Pipeline Mapping).
+- **wacrm chat** (green) — opens your wacrm inbox
+  (`https://whatsapp.ventabot.cloud/` by default; edit the
+  `action_wacrm_chat_url` record's `url` field if your instance lives
+  elsewhere) in a new browser tab. wacrm sends `X-Frame-Options: DENY`,
+  so it can't be embedded inside Odoo — this is a plain link-out, not a
+  live chat widget running inside Odoo itself.
+
 ## Configure
 
 1. In wacrm: **Settings → API keys → New API key**. Grant the scopes
