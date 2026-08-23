@@ -98,6 +98,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith('/api/v1/') ||
     pathname === '/api/whatsapp/webhook' ||
     pathname === '/api/whatsapp/evolution/webhook' ||
+    pathname.startsWith('/api/whatsapp/evolution/webhook/') ||
     pathname === '/api/automations/cron' ||
     pathname === '/api/flows/cron' ||
     pathname.includes('/webhook') ||

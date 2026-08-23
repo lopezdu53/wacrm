@@ -49,8 +49,10 @@ Hardens security, multi-number routing, and the Odoo connector.
 - **Meta status webhooks** update only messages on the number that
   emitted them. Template lifecycle updates are scoped by WABA when
   possible.
-- **Evolution button/list taps** now advance Flows and can fire
-  `interactive_reply` automations (parity with Meta).
+- **Evolution inbound after webhook auth.** Accept the per-instance
+  token Evolution puts in `apikey` (not only the global key saved in
+  wacrm), re-apply webhook headers on settings poll, and resolve
+  `@lid` chats via `remoteJidAlt` so messages are not silently skipped.
 - **Meta and Evolution inbound share one persist/fan-out path.** The Meta
   webhook no longer keeps a private copy of contact/conversation create,
   message insert, unread, Flows, automations, AI, or outbound webhooks.

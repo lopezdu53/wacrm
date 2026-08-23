@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   extractContextStanzaId,
   parseBaileys,
+  resolveEvolutionSenderPhone,
 } from './evolution-inbound';
 
 describe('extractContextStanzaId', () => {
@@ -43,5 +44,32 @@ describe('parseBaileys', () => {
       reply_id: 'btn-1',
       reply_title: 'Yes',
     });
+  });
+});
+
+describe('resolveEvolutionSenderPhone', () => {
+  it('resolves a phone from LID + remoteJidAlt', () => {
+    expect(
+      resolveEvolutionSenderPhone({
+        key: {
+          remoteJid: '123456789012345@lid',
+          remoteJidAlt: '573001112233@s.whatsapp.net',
+          id: 'm1',
+        },
+      }),
+    ).toBe('573001112233');
+  });
+
+  it('skips groups and bare LIDs', () => {
+    expect(
+      resolveEvolutionSenderPhone({
+        key: { remoteJid: '120363@g.us', id: 'm1' },
+      }),
+    ).toBeNull();
+    expect(
+      resolveEvolutionSenderPhone({
+        key: { remoteJid: '123456789012345@lid', id: 'm1' },
+      }),
+    ).toBeNull();
   });
 });

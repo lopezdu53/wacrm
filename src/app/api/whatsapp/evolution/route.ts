@@ -82,6 +82,12 @@ export async function GET(request: Request) {
       try {
         const auth = authFor(row);
         const state = await getEvolutionState(auth);
+        void setEvolutionWebhook({
+          ...auth,
+          webhookUrl: inboundWebhookUrl(request),
+        }).catch((err) =>
+          console.warn('[evolution] webhook rewire failed:', err),
+        );
         const qr = state === 'open' ? null : await getEvolutionQr(auth);
         const desiredStatus = state === 'open' ? 'connected' : 'disconnected';
         if (row.status !== desiredStatus) {
@@ -114,7 +120,14 @@ export async function GET(request: Request) {
       configs.map(async (row) => {
         let state: string = 'unknown';
         try {
-          state = await getEvolutionState(authFor(row));
+          const auth = authFor(row);
+          state = await getEvolutionState(auth);
+          void setEvolutionWebhook({
+            ...auth,
+            webhookUrl: inboundWebhookUrl(request),
+          }).catch((err) =>
+            console.warn('[evolution] webhook rewire failed:', err),
+          );
         } catch {
           state = 'unknown';
         }

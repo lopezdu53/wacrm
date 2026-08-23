@@ -43,13 +43,64 @@ export function baseMime(mime: string | undefined): string | undefined {
 export type BaileysMessage = Record<string, unknown>;
 
 export interface UpsertData {
-  key?: { remoteJid?: string; fromMe?: boolean; id?: string };
+  key?: {
+    remoteJid?: string;
+    remoteJidAlt?: string;
+    senderPn?: string;
+    participant?: string;
+    participantAlt?: string;
+    fromMe?: boolean;
+    id?: string;
+  };
   pushName?: string;
   message?: BaileysMessage;
   messageType?: string;
   messageTimestamp?: number | string | { low?: number };
   base64?: string;
   mediaBase64?: string;
+  senderPn?: string;
+  remoteJidAlt?: string;
+}
+
+/** Phone digits from a WhatsApp JID, or null for LID/groups/newsletters. */
+export function phoneFromJid(jid: string | undefined | null): string | null {
+  if (!jid || typeof jid !== 'string') return null;
+  const at = jid.indexOf('@');
+  const user = (at >= 0 ? jid.slice(0, at) : jid).trim();
+  const host = at >= 0 ? jid.slice(at).toLowerCase() : '';
+  if (!user) return null;
+  if (
+    host === '@lid' ||
+    host === '@g.us' ||
+    host === '@broadcast' ||
+    host === '@newsletter'
+  ) {
+    return null;
+  }
+  if (host && host !== '@s.whatsapp.net' && host !== '@c.us') return null;
+  return user;
+}
+
+/**
+ * Evolution/Baileys now often addresses 1:1 chats as `@lid`. The phone
+ * lives on `remoteJidAlt` / `senderPn` when present. Groups stay skipped.
+ */
+export function resolveEvolutionSenderPhone(item: UpsertData): string | null {
+  const key = item.key ?? {};
+  const candidates = [
+    key.remoteJid,
+    key.remoteJidAlt,
+    key.senderPn,
+    item.senderPn,
+    item.remoteJidAlt,
+    key.participant,
+    key.participantAlt,
+  ];
+  for (const candidate of candidates) {
+    const phone = phoneFromJid(candidate);
+    if (phone) return phone;
+  }
+  return null;
 }
 
 /** The bits of a whatsapp_config row the inbound pipeline needs. */
@@ -252,12 +303,16 @@ export async function processEvolutionItem(
   item: UpsertData,
 ): Promise<'recorded' | 'skipped' | 'error'> {
   try {
-    const jid = item.key?.remoteJid ?? '';
-    if (!jid.endsWith('@s.whatsapp.net')) return 'skipped';
+    const phone = resolveEvolutionSenderPhone(item);
+    if (!phone) {
+      console.warn(
+        '[evolution-inbound] skipped non-1:1 or LID-only jid',
+        item.key?.remoteJid,
+      );
+      return 'skipped';
+    }
 
     const outbound = item.key?.fromMe === true;
-    const phone = jid.split('@')[0];
-    if (!phone) return 'skipped';
 
     const parsed = parseBaileys(item.message);
 

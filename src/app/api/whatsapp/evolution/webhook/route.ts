@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { secretsMatch } from '@/lib/auth/secret-compare';
+import { verifyEvolutionApiKey } from '@/lib/whatsapp/evolution-api';
 import {
   processEvolutionItem,
   type UpsertData,
@@ -14,17 +15,17 @@ import {
  * and hand each item to the shared inbound pipeline (also used by the
  * on-demand sync backfill).
  *
- * Evolution does not HMAC-sign webhooks the way Meta does. It does
- * send the instance API key — in the `apikey` header (same as its
- * REST API) and sometimes in the JSON body. We require that key to
- * match the encrypted `evolution_api_key` stored for the instance;
- * without a match the request is 401'd so a guessed instance name
- * cannot inject contacts / automations / AI replies.
+ * Auth: Evolution does not HMAC-sign webhooks. It may send:
+ *   - the global manager key (what wacrm usually stores), or
+ *   - the per-instance token (what recent Evolution puts in `body.apikey`)
+ * We accept a match against the stored key, or a presented key that
+ * Evolution itself accepts for this instance.
  */
 export async function POST(request: Request) {
   let body: {
     event?: string;
     instance?: string;
+    instanceName?: string;
     apikey?: string;
     data?: UpsertData | UpsertData[] | { messages?: UpsertData[] };
   };
@@ -34,68 +35,47 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 });
   }
 
-  // Only inbound-message events. Evolution uses dot ("messages.upsert")
-  // in the body even though webhook config uses the MESSAGES_UPSERT slug.
   const event = (body.event || '').toLowerCase().replace(/_/g, '.');
-  if (event !== 'messages.upsert') {
+  const hasUpsertShape = looksLikeUpsert(body.data);
+  if (event && event !== 'messages.upsert' && !hasUpsertShape) {
+    return NextResponse.json({ ignored: true });
+  }
+  if (event !== 'messages.upsert' && !hasUpsertShape) {
     return NextResponse.json({ ignored: true });
   }
 
-  const instance = body.instance;
+  const instance =
+    (typeof body.instance === 'string' && body.instance) ||
+    (typeof body.instanceName === 'string' && body.instanceName) ||
+    request.headers.get('instance') ||
+    '';
   if (!instance) return NextResponse.json({ ignored: true });
 
-  const presented =
-    request.headers.get('apikey') ||
-    request.headers.get('x-api-key') ||
-    (typeof body.apikey === 'string' ? body.apikey : '') ||
-    '';
+  const presented = presentedSecret(request, body);
 
-  // Resolve the owning account by instance name.
-  const { data: config } = await supabaseAdmin()
-    .from('whatsapp_config')
-    .select(
-      'id, account_id, user_id, evolution_instance, evolution_api_key, provider',
-    )
-    .eq('evolution_instance', instance)
-    .eq('provider', 'evolution')
-    .maybeSingle();
-
+  const config = await findEvolutionConfig(instance);
   if (!config) {
-    // Unknown instance — 200 so Evolution doesn't spam retries, and so
-    // we don't leak whether a given name exists.
     return NextResponse.json({ ignored: true });
   }
 
-  const storedEnc = config.evolution_api_key as string | null;
-  if (!storedEnc) {
+  const allowed = await isPresentedKeyAllowed(presented, config, instance);
+  if (!allowed) {
     console.warn(
-      '[evolution/webhook] instance has no stored API key — rejecting',
+      '[evolution/webhook] rejected (key missing or not valid for instance)',
       instance,
+      presented ? 'presented' : 'empty',
     );
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  let storedPlain: string;
-  try {
-    storedPlain = decrypt(storedEnc);
-  } catch (err) {
-    console.error('[evolution/webhook] failed to decrypt instance key:', err);
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  if (!secretsMatch(presented, storedPlain)) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
-  }
-
-  // Normalise `data` into a list of message objects.
   const raw = body.data;
   const items: UpsertData[] = Array.isArray(raw)
     ? raw
     : raw && 'messages' in raw && Array.isArray(raw.messages)
-    ? raw.messages
-    : raw
-      ? [raw as UpsertData]
-      : [];
+      ? raw.messages
+      : raw
+        ? [raw as UpsertData]
+        : [];
 
   for (const item of items) {
     await processEvolutionItem(
@@ -109,4 +89,91 @@ export async function POST(request: Request) {
   }
 
   return NextResponse.json({ received: true });
+}
+
+function presentedSecret(
+  request: Request,
+  body: { apikey?: string },
+): string {
+  const auth = request.headers.get('authorization') ?? '';
+  const bearer = auth.match(/^Bearer\s+(.+)$/i)?.[1] ?? '';
+  return (
+    request.headers.get('apikey') ||
+    request.headers.get('x-api-key') ||
+    bearer ||
+    (typeof body.apikey === 'string' ? body.apikey : '') ||
+    new URL(request.url).searchParams.get('apikey') ||
+    ''
+  ).trim();
+}
+
+function looksLikeUpsert(data: unknown): boolean {
+  if (!data || typeof data !== 'object') return false;
+  if (Array.isArray(data)) return data.some(looksLikeUpsert);
+  const row = data as { key?: unknown; messages?: unknown; message?: unknown };
+  if (row.key || row.message) return true;
+  return Array.isArray(row.messages);
+}
+
+async function findEvolutionConfig(instance: string) {
+  const db = supabaseAdmin();
+  const select =
+    'id, account_id, user_id, evolution_instance, evolution_api_key, evolution_base_url, provider';
+
+  const exact = await db
+    .from('whatsapp_config')
+    .select(select)
+    .eq('evolution_instance', instance)
+    .eq('provider', 'evolution')
+    .limit(1)
+    .maybeSingle();
+  if (exact.data) return exact.data;
+
+  const safe = instance.replace(/[%_]/g, '');
+  if (!safe) return null;
+  const fuzzy = await db
+    .from('whatsapp_config')
+    .select(select)
+    .ilike('evolution_instance', safe)
+    .eq('provider', 'evolution')
+    .limit(1)
+    .maybeSingle();
+  return fuzzy.data ?? null;
+}
+
+async function isPresentedKeyAllowed(
+  presented: string,
+  config: {
+    evolution_api_key: unknown;
+    evolution_base_url: unknown;
+    evolution_instance: unknown;
+  },
+  instance: string,
+): Promise<boolean> {
+  const storedEnc = config.evolution_api_key as string | null;
+  if (!storedEnc) return false;
+
+  let storedPlain: string;
+  try {
+    storedPlain = decrypt(storedEnc).trim();
+  } catch (err) {
+    console.error('[evolution/webhook] failed to decrypt instance key:', err);
+    return false;
+  }
+
+  if (presented && secretsMatch(presented, storedPlain)) return true;
+
+  // Evolution often puts the *instance* token in body.apikey while
+  // wacrm stored the global manager key used to create the instance.
+  const baseUrl = (config.evolution_base_url as string | null) ?? '';
+  if (presented && baseUrl) {
+    const ok = await verifyEvolutionApiKey({
+      baseUrl,
+      apiKey: presented,
+      instance: (config.evolution_instance as string) || instance,
+    });
+    if (ok) return true;
+  }
+
+  return false;
 }
