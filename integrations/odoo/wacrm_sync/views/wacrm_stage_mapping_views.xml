@@ -41,14 +41,18 @@
               action="action_wacrm_stage_mapping"
               sequence="10"/>
 
-    <!-- "wacrm chat" — a second, separate app tile in the home menu that
-         opens the live wacrm inbox in a new browser tab. wacrm sends
-         X-Frame-Options: DENY on every response, so it can never be
-         embedded in an Odoo iframe/client action; a plain act_url is
-         the only way to link out to it. -->
+    <!-- "wacrm chat" — a second, separate app tile in the home menu.
+         Points at this module's own /wacrm/sso controller (not
+         straight at wacrm) so the click also logs the agent in: the
+         controller exchanges their Odoo session for a one-time wacrm
+         login link server-side, then redirects the browser in already
+         authenticated — no separate wacrm password to type. wacrm
+         sends X-Frame-Options: DENY on every response, so it can never
+         be embedded in an Odoo iframe/client action; this opens in a
+         new browser tab instead. -->
     <record id="action_wacrm_chat_url" model="ir.actions.act_url">
         <field name="name">wacrm chat</field>
-        <field name="url">https://whatsapp.ventabot.cloud/</field>
+        <field name="url">/wacrm/sso</field>
         <field name="target">new</field>
     </record>
     <menuitem id="menu_wacrm_chat_root"

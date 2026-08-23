@@ -44,9 +44,10 @@ class WacrmClient(models.AbstractModel):
         }
 
     @api.model
-    def _request(self, path, params=None):
-        """GET `path` (e.g. '/api/v1/contacts') and return the parsed JSON.
+    def _request(self, path, params=None, method="GET", json_body=None):
+        """Call `path` (e.g. '/api/v1/contacts') and return the parsed JSON.
 
+        `method` is "GET" (query `params`) or "POST" (JSON `json_body`).
         Raises UserError on missing config, network failure, or a non-2xx
         response (mapping the API's error envelope to a clear message).
         """
@@ -59,12 +60,20 @@ class WacrmClient(models.AbstractModel):
 
         url = "%s%s" % (base_url, path)
         try:
-            resp = requests.get(
-                url,
-                headers=self._headers(api_key),
-                params=params or {},
-                timeout=DEFAULT_TIMEOUT,
-            )
+            if method == "POST":
+                resp = requests.post(
+                    url,
+                    headers=self._headers(api_key),
+                    json=json_body or {},
+                    timeout=DEFAULT_TIMEOUT,
+                )
+            else:
+                resp = requests.get(
+                    url,
+                    headers=self._headers(api_key),
+                    params=params or {},
+                    timeout=DEFAULT_TIMEOUT,
+                )
         except requests.RequestException as exc:
             raise UserError("Could not reach wacrm at %s: %s" % (url, exc))
 
@@ -72,8 +81,7 @@ class WacrmClient(models.AbstractModel):
             raise UserError("wacrm rejected the API key (401). Check the token.")
         if resp.status_code == 403:
             raise UserError(
-                "The API key is missing a required scope (403). It needs "
-                "'contacts:read' and 'deals:read'."
+                "The API key is missing a required scope (403) for %s." % path
             )
         if resp.status_code >= 400:
             message = None
@@ -123,3 +131,18 @@ class WacrmClient(models.AbstractModel):
     def test_connection(self):
         """Call GET /api/v1/me. Returns the parsed body or raises UserError."""
         return self._request("/api/v1/me")
+
+    @api.model
+    def request_sso_login_link(self, email):
+        """Mint a one-time wacrm login link for `email` via
+        POST /api/v1/sso/login-link (requires the 'sso:login' scope on
+        the configured API key). Returns the URL, or raises UserError —
+        including when `email` doesn't match any member of the wacrm
+        account the key belongs to."""
+        payload = self._request(
+            "/api/v1/sso/login-link", method="POST", json_body={"email": email}
+        )
+        url = (payload.get("data") or {}).get("url")
+        if not url:
+            raise UserError("wacrm did not return a login link.")
+        return url

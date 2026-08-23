@@ -22,6 +22,7 @@ export const API_SCOPES = [
   'deals:read',
   'broadcasts:send',
   'webhooks:manage',
+  'sso:login',
 ] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];
@@ -36,6 +37,7 @@ export const SCOPE_DESCRIPTIONS: Record<ApiScope, string> = {
   'deals:read': 'List and read deals (opportunities) and pipelines',
   'broadcasts:send': 'Launch broadcast campaigns',
   'webhooks:manage': 'Register and manage outbound event webhooks',
+  'sso:login': 'Mint one-time login links for account members (SSO bridge)',
 };
 
 /** Type-narrow an unknown value into a valid `ApiScope`. */

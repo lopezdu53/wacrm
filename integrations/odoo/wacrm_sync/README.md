@@ -24,17 +24,23 @@ Installing adds two tiles to the Odoo home menu (app drawer):
 
 - **wacrm** (purple) — this module's own Settings screen (base URL, API
   key, what to sync, Pipeline Mapping).
-- **wacrm chat** (green) — opens your wacrm inbox
-  (`https://whatsapp.ventabot.cloud/` by default; edit the
-  `action_wacrm_chat_url` record's `url` field if your instance lives
-  elsewhere) in a new browser tab. wacrm sends `X-Frame-Options: DENY`,
-  so it can't be embedded inside Odoo — this is a plain link-out, not a
-  live chat widget running inside Odoo itself.
+- **wacrm chat** (green) — logs the agent straight into your wacrm
+  inbox in a new browser tab, **already authenticated, no wacrm
+  password to type**. Clicking it hits this module's own `/wacrm/sso`
+  controller, which exchanges the agent's Odoo session for a one-time
+  wacrm login link (server-side, via the API key configured below)
+  and redirects the browser into it. wacrm sends `X-Frame-Options:
+  DENY` on every response, so it can't be embedded inside Odoo — this
+  opens the real wacrm app in its own tab, it isn't a chat widget
+  running inside Odoo itself. See **Single sign-on** below for setup
+  and how it decides *which* wacrm user to log in as.
 
 ## Configure
 
 1. In wacrm: **Settings → API keys → New API key**. Grant the scopes
-   **`contacts:read`** and **`deals:read`**. Copy the key (shown once).
+   **`contacts:read`**, **`deals:read`**, and **`sso:login`** (needed
+   for the "wacrm chat" tile's auto-login — see below; skip it if you
+   don't want that). Copy the key (shown once).
 2. In Odoo: **Settings → wacrm Sync**.
    - **Base URL:** your wacrm URL, e.g. `https://crm.example.com`.
    - **API Key:** the key from step 1.
@@ -42,6 +48,31 @@ Installing adds two tiles to the Odoo home menu (app drawer):
 3. Pick what to sync (Contacts / Opportunities) and the **Polling
    Interval** (minutes). Save.
 4. Click **Sync Now** for an immediate first import, or wait for the cron.
+
+## Single sign-on ("wacrm chat" tile)
+
+The green **wacrm chat** app tile logs an agent into wacrm without
+asking for a wacrm password, by minting a one-time login link
+server-side (`POST /api/v1/sso/login-link`, wacrm's SSO bridge) using
+the Odoo user's **own email**.
+
+- **Requirement:** the Odoo user's email (Settings → Users) must
+  **exactly match** that person's email in wacrm (Settings → Team).
+  wacrm only mints a link for an existing member of your wacrm
+  account — it never creates one. No match → the tile shows a plain
+  error page telling the agent to get their email fixed, instead of
+  silently failing.
+- **Requirement:** the API key configured above must carry the
+  **`sso:login`** scope (step 1 above). Missing it → a clear
+  "missing scope" error page, same as any other scope-gated call.
+- The link is single-use and short-lived (a standard Supabase magic
+  link) — the controller redirects to it immediately, it's never
+  shown or stored.
+- Treat the API key as sensitive: whoever holds it can mint a login
+  link for **any** member of your wacrm account by email, not just
+  the person currently clicking the tile. That's fine as long as it
+  only ever lives in this Settings screen (server-side), which is the
+  only place this module uses it — never paste it anywhere else.
 
 ## Pipeline Mapping
 
@@ -99,6 +130,13 @@ just clear them by hand once; nothing will write there again.
 
 ## Notes / limits
 
+- **v19.0.1.12.0 — single sign-on for "wacrm chat"**: the green app
+  tile now logs the agent straight into wacrm (see **Single sign-on**
+  above) instead of just opening the logged-out wacrm URL. Requires
+  the API key to carry the new `sso:login` scope, and the Odoo user's
+  email to match their wacrm one — an account with mismatched emails
+  just sees an explanatory error page and can still open wacrm
+  manually and log in with a password as before.
 - **v19.0.1.11.0 — AI summary moved out of the Notes tab**: three
   separate attempts (v19.0.1.7.0 - v19.0.1.9.0) to keep the AI summary
   merged non-destructively into the free-text `description` field all
