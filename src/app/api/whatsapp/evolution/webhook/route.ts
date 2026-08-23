@@ -26,6 +26,7 @@ export async function POST(request: Request) {
     event?: string;
     instance?: string;
     instanceName?: string;
+    sender?: string;
     apikey?: string;
     data?: UpsertData | UpsertData[] | { messages?: UpsertData[] };
   };
@@ -77,6 +78,9 @@ export async function POST(request: Request) {
         ? [raw as UpsertData]
         : [];
 
+  const envelopeSender =
+    typeof body.sender === 'string' ? body.sender : undefined;
+
   for (const item of items) {
     await processEvolutionItem(
       {
@@ -85,6 +89,7 @@ export async function POST(request: Request) {
         user_id: config.user_id as string,
       },
       item,
+      { envelopeSender },
     );
   }
 

@@ -13,9 +13,8 @@ and polish.
 
 Hardens security, multi-number routing, and the Odoo connector.
 
-> **Migration required:** apply `supabase/migrations/046_message_id_conversation_unique.sql`
-> (dedupes any duplicate `(conversation, message_id)` rows, then adds a
-> unique index so webhook retries cannot double-insert). Also upgrade
+> **Migration required:** apply `046_message_id_conversation_unique.sql`
+> and `047_conversation_channel_unique_again.sql`. Also upgrade
 > the Odoo module to **19.0.1.13.0**.
 
 ### Security
@@ -52,7 +51,14 @@ Hardens security, multi-number routing, and the Odoo connector.
 - **Evolution inbound after webhook auth.** Accept the per-instance
   token Evolution puts in `apikey` (not only the global key saved in
   wacrm), re-apply webhook headers on settings poll, and resolve
-  `@lid` chats via `remoteJidAlt` so messages are not silently skipped.
+  `@lid` chats via `remoteJidAlt` / webhook `sender` so messages are
+  not silently skipped.
+- **Same contact → two Evolution numbers.** If the old
+  `UNIQUE(account, contact)` index is still present, the second inbound
+  was dropped. Migration 047 re-applies the per-channel unique.
+- **Evolution 24h template gate.** Mixed Meta+Evolution accounts no
+  longer lock Evolution threads behind a template after 24 hours. The
+  window is per conversation (Meta only).
 - **Meta and Evolution inbound share one persist/fan-out path.** The Meta
   webhook no longer keeps a private copy of contact/conversation create,
   message insert, unread, Flows, automations, AI, or outbound webhooks.
@@ -66,7 +72,7 @@ Hardens security, multi-number routing, and the Odoo connector.
 
 ### Docs
 
-- EasyPanel guide lists all 46 migrations and documents Evolution.
+- EasyPanel guide lists all 47 migrations and documents Evolution.
 - Public API scope table includes `deals:read` and `sso:login`.
 
 ## [0.8.1] — 2026-07-10

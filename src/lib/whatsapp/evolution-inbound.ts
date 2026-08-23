@@ -78,6 +78,9 @@ export function phoneFromJid(jid: string | undefined | null): string | null {
     return null;
   }
   if (host && host !== '@s.whatsapp.net' && host !== '@c.us') return null;
+  // Bare values (webhook `sender` without a host) must be a phone, not
+  // an Evolution instance name like "ventas".
+  if (!host && !/^\d{8,15}$/.test(user)) return null;
   return user;
 }
 
@@ -301,13 +304,18 @@ export async function uploadInboundMedia(
 export async function processEvolutionItem(
   config: EvoInboundConfig,
   item: UpsertData,
+  extras?: { envelopeSender?: string },
 ): Promise<'recorded' | 'skipped' | 'error'> {
   try {
-    const phone = resolveEvolutionSenderPhone(item);
+    const phone =
+      resolveEvolutionSenderPhone(item) ??
+      phoneFromJid(extras?.envelopeSender) ??
+      null;
     if (!phone) {
       console.warn(
         '[evolution-inbound] skipped non-1:1 or LID-only jid',
         item.key?.remoteJid,
+        extras?.envelopeSender ?? '',
       );
       return 'skipped';
     }

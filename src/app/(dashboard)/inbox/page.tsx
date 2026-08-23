@@ -16,6 +16,7 @@ import { ContactSidebar } from "@/components/inbox/contact-sidebar";
 import { toast } from "sonner";
 import { WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { conversationHasNoSessionWindow } from "@/lib/inbox/session-window";
 
 // Remembers the agent's show/hide choice for the desktop contact panel
 // across reloads and sessions (device-scoped, like the theme prefs).
@@ -40,9 +41,11 @@ export default function InboxPage() {
   const [whatsappConnected, setWhatsappConnected] = useState<boolean | null>(
     null
   );
-  // True when the account's WhatsApp transport is Evolution (QR / WhatsApp
-  // Web), which has no 24-hour session window.
-  const [isEvolution, setIsEvolution] = useState(false);
+  // provider per whatsapp_config id — Evolution threads have no 24h window
+  // even when the same account also has a Meta number.
+  const [providerByConfigId, setProviderByConfigId] = useState<
+    Record<string, string>
+  >({});
   /**
    * Bumped whenever we want children (ConversationList, MessageThread)
    * to refetch from the DB — used as a safety net against missed
@@ -196,19 +199,16 @@ export default function InboxPage() {
       // fetch the list rather than assume one row.
       const { data: rows } = await supabase
         .from("whatsapp_config")
-        .select("status, provider")
+        .select("id, status, provider")
         .eq("account_id", accountId);
 
       const configs = rows ?? [];
       setWhatsappConnected(configs.some((c) => c.status === "connected"));
-      // Evolution (WhatsApp Web) has no 24-hour customer-service window,
-      // so the inbox must not show the "session expired / use a template"
-      // gating that only applies to the Meta Cloud API. Treat the account
-      // as windowless when every connected channel is Evolution.
-      const providers = configs.map((c) => c.provider);
-      setIsEvolution(
-        providers.length > 0 && providers.every((p) => p === "evolution"),
-      );
+      const providers: Record<string, string> = {};
+      for (const row of configs) {
+        if (row.id && row.provider) providers[row.id] = row.provider;
+      }
+      setProviderByConfigId(providers);
     };
 
     checkConnection();
@@ -629,7 +629,10 @@ export default function InboxPage() {
             onRefresh={handleManualRefresh}
             contactPanelOpen={contactPanelOpen}
             onToggleContactPanel={handleToggleContactPanel}
-            noSessionWindow={isEvolution}
+            noSessionWindow={conversationHasNoSessionWindow(
+              activeConversation?.whatsapp_config_id,
+              providerByConfigId,
+            )}
           />
         </div>
 

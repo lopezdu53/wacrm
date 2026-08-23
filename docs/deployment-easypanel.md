@@ -33,7 +33,7 @@ There are two ways to build the app on Easypanel:
 - A Supabase project — see [`Supabase setup`](https://wacrm.tech/docs/supabase-setup).
   You need its **Project URL**, **anon key**, and **service-role key**.
 - The SQL migrations in [`supabase/migrations/`](../supabase/migrations)
-  (currently **046_*.sql** — apply every file in order) applied to that
+  (currently **047_*.sql** — apply every file in order) applied to that
   project (via the Supabase CLI `supabase db push`, or by pasting them
   into the SQL editor in order).
 - A Meta for Developers app with the WhatsApp product added — see

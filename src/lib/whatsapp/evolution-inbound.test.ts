@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   extractContextStanzaId,
   parseBaileys,
+  phoneFromJid,
   resolveEvolutionSenderPhone,
 } from './evolution-inbound';
 
@@ -58,6 +59,11 @@ describe('resolveEvolutionSenderPhone', () => {
         },
       }),
     ).toBe('573001112233');
+  });
+
+  it('accepts a bare phone sender and rejects instance names', () => {
+    expect(phoneFromJid('573001112233')).toBe('573001112233');
+    expect(phoneFromJid('ventas')).toBeNull();
   });
 
   it('skips groups and bare LIDs', () => {

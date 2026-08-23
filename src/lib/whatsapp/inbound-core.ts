@@ -151,6 +151,31 @@ export async function findOrCreateConversation(
       if (raced && raced.length > 0) {
         return { conversation: raced[0] as ConversationRow, created: false };
       }
+      // Legacy UNIQUE(account_id, contact_id) from migration 036 may
+      // still be live if 039/047 were not applied. Reuse that thread
+      // so the inbound is not dropped; stamp the channel when unset.
+      const { data: anyRows } = await supabaseAdmin()
+        .from('conversations')
+        .select('*')
+        .eq('account_id', accountId)
+        .eq('contact_id', contactId)
+        .order('created_at', { ascending: true })
+        .limit(1);
+      const legacy = anyRows?.[0] as ConversationRow | undefined;
+      if (legacy) {
+        if (!legacy.whatsapp_config_id && whatsappConfigId) {
+          await supabaseAdmin()
+            .from('conversations')
+            .update({ whatsapp_config_id: whatsappConfigId })
+            .eq('id', legacy.id);
+          legacy.whatsapp_config_id = whatsappConfigId;
+        }
+        console.warn(
+          '[inbound-core] per-contact unique still active — apply migration 047. Reusing',
+          legacy.id,
+        );
+        return { conversation: legacy, created: false };
+      }
     }
     console.error('[inbound-core] error creating conversation:', createError);
     return null;
