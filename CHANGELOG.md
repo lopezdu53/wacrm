@@ -41,7 +41,8 @@ Hardens security, multi-number routing, and the Odoo connector.
 
 - **API / dashboard conversation resolution is channel-aware.** Public
   API sends and Contact-detail sends stamp `whatsapp_config_id` and no
-  longer use `.maybeSingle()` on an account with two numbers.
+  longer use `.maybeSingle()` on an account with two numbers. Settings
+  overview no longer treats two connected numbers as “not configured”.
 - **Broadcast, react, media, template sync** pick a specific Meta
   config (conversation channel, or explicit `whatsapp_config_id`)
   instead of `.single()`.
