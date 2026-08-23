@@ -25,9 +25,11 @@ Hardens security, multi-number routing, and the Odoo connector.
   stored key. A guessed instance name can no longer inject contacts,
   automations, or AI replies.
 - **Role checks on WhatsApp writes.** Send, broadcast, react, config
-  health-check, and Evolution/Meta settings writes require `agent` or
-  `admin`. Viewers can no longer send real WhatsApp messages by hitting
-  the API directly (RLS only blocked the DB insert, not the Meta call).
+  health-check, registration probe, and Evolution/Meta settings writes
+  require `agent` or `admin`. Viewers can no longer send real WhatsApp
+  messages by hitting the API directly (RLS only blocked the DB insert,
+  not the Meta call). The settings UI no longer selects access-token
+  ciphertext into the browser.
 - **Cron + link-preview + outbound webhooks.** Automations cron uses a
   constant-time secret compare. Link-preview and webhook registration
   reuse the DNS SSRF guard and do not follow redirects to private hosts.
@@ -48,6 +50,13 @@ Hardens security, multi-number routing, and the Odoo connector.
   possible.
 - **Evolution button/list taps** now advance Flows and can fire
   `interactive_reply` automations (parity with Meta).
+- **Meta and Evolution inbound share one persist/fan-out path.** The Meta
+  webhook no longer keeps a private copy of contact/conversation create,
+  message insert, unread, Flows, automations, AI, or outbound webhooks.
+  Dedup is per conversation (so the same Meta id on two numbers is not
+  collapsed), swipe-replies and `interactive_reply_id` persist on both
+  transports, stickers store as images, and AI auto-reply skips button
+  taps.
 - **Odoo cron** is incremental (`updated_since`), maps `won` deals,
   assigns a configured default salesperson (not OdooBot), and lets you
   rename the VAT/street/city custom fields.

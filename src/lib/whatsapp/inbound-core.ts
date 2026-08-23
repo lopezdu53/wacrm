@@ -1,18 +1,13 @@
 /**
  * Provider-agnostic inbound-message core.
  *
- * The Meta webhook (`/api/whatsapp/webhook`) has always owned this logic
- * inline. The Evolution webhook (`/api/whatsapp/evolution/webhook`) needs
- * the exact same behaviour — find-or-create the contact + conversation,
- * persist the message, then fan out to the Flow runner, automations, the
- * AI auto-reply, and the public webhook dispatcher.
- *
- * Rather than refactor the battle-tested Meta path (and risk a regression
- * on the critical inbound route), this module re-implements the shared
- * core once, transport-neutral: callers hand in already-normalised fields
- * (a plain E.164-ish phone, the text, an optional media URL) instead of a
- * Meta- or Baileys-shaped payload. The Meta webhook keeps its own copy;
- * the Evolution webhook uses this.
+ * Meta (`/api/whatsapp/webhook`) and Evolution (`/api/whatsapp/evolution/webhook`)
+ * both parse their own payload, then call `recordInboundMessage` with
+ * already-normalised fields (phone, text, optional media URL, optional
+ * button/list tap). Persist + fan-out live here so the two transports
+ * cannot drift: find-or-create contact + conversation, insert the
+ * message, then Flow runner, automations, AI auto-reply, qualify, and
+ * the public webhook dispatcher.
  */
 
 import { supabaseAdmin } from '@/lib/flows/admin-client';
@@ -35,6 +30,13 @@ const ALLOWED_CONTENT_TYPES = new Set([
   'template',
   'interactive',
 ]);
+
+/** Map provider types onto the CHECK-allowed set (stickers are images). */
+export function normalizeInboundContentType(raw: string): string {
+  if (ALLOWED_CONTENT_TYPES.has(raw)) return raw;
+  if (raw === 'sticker') return 'image';
+  return 'text';
+}
 
 interface ContactRow {
   id: string;
@@ -215,14 +217,46 @@ export interface RecordInboundArgs {
    * Button / list tap. When set, the Flow runner sees an
    * `interactive_reply` (so Evolution menus advance the same way
    * Meta ones do) and automations can match `interactive_reply`.
+   * Also persisted on `messages.interactive_reply_id`.
    */
   interactiveReply?: { reply_id: string; reply_title: string };
+  /**
+   * Provider id of the message this one swipe-replies to (Meta
+   * `context.id`, Baileys `contextInfo.stanzaId`). Resolved to an
+   * internal `messages.id` after the conversation is known. Missing
+   * parent → stored as null.
+   */
+  replyToMetaMessageId?: string | null;
+}
+
+/**
+ * Resolve a provider-side message id into the matching internal UUID,
+ * scoped to one conversation. Returns null when we never stored the
+ * parent (e.g. a swipe-reply to a message older than this CRM).
+ */
+async function lookupInternalIdByProviderId(
+  providerId: string,
+  conversationId: string,
+): Promise<string | null> {
+  const { data, error } = await supabaseAdmin()
+    .from('messages')
+    .select('id')
+    .eq('message_id', providerId)
+    .eq('conversation_id', conversationId)
+    .maybeSingle();
+  if (error) {
+    console.error('[inbound-core] reply parent lookup failed:', error);
+    return null;
+  }
+  return (data?.id as string | undefined) ?? null;
 }
 
 /**
  * The full inbound pipeline. Idempotent-ish: a duplicate provider
- * `messageId` is caught by the Flow runner's dedup and by a pre-insert
- * check here so a webhook retry doesn't double-store the message.
+ * `messageId` on the same conversation is a no-op (pre-insert check
+ * plus the unique `(conversation_id, message_id)` index from
+ * migration 046). Dedup is per-thread so the same Meta id on two
+ * numbers is not collapsed.
  */
 export async function recordInboundMessage(args: RecordInboundArgs): Promise<void> {
   const {
@@ -239,20 +273,7 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
   const outbound = args.outbound === true;
   const whatsappConfigId = args.whatsappConfigId ?? null;
   const senderPhone = normalizePhone(rawPhone);
-  const contentType = ALLOWED_CONTENT_TYPES.has(args.contentType)
-    ? args.contentType
-    : 'text';
-
-  // Dedup: a webhook replay for a message we already stored is a no-op.
-  if (messageId) {
-    const { data: dup } = await supabaseAdmin()
-      .from('messages')
-      .select('id')
-      .eq('message_id', messageId)
-      .limit(1)
-      .maybeSingle();
-    if (dup) return;
-  }
+  const contentType = normalizeInboundContentType(args.contentType);
 
   const contactOutcome = await findOrCreateContact(
     accountId,
@@ -279,6 +300,33 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
     });
   }
 
+  // Dedup AFTER the conversation is known so we scope by thread
+  // (migration 046 / 009 — Meta ids can repeat across numbers).
+  if (messageId) {
+    const { data: dup } = await supabaseAdmin()
+      .from('messages')
+      .select('id')
+      .eq('message_id', messageId)
+      .eq('conversation_id', conversation.id)
+      .limit(1)
+      .maybeSingle();
+    if (dup) return;
+  }
+
+  let replyToInternalId: string | null = null;
+  if (args.replyToMetaMessageId) {
+    replyToInternalId = await lookupInternalIdByProviderId(
+      args.replyToMetaMessageId,
+      conversation.id,
+    );
+    if (!replyToInternalId) {
+      console.warn(
+        '[inbound-core] reply context parent not found:',
+        args.replyToMetaMessageId,
+      );
+    }
+  }
+
   const { count: priorCustomerMsgCount } = await supabaseAdmin()
     .from('messages')
     .select('id', { count: 'exact', head: true })
@@ -295,6 +343,8 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
     message_id: messageId || null,
     status: outbound ? 'sent' : 'delivered',
     created_at: new Date(timestampMs).toISOString(),
+    reply_to_message_id: replyToInternalId,
+    interactive_reply_id: args.interactiveReply?.reply_id ?? null,
   });
   if (msgError) {
     // A concurrent webhook retry lost the unique race
@@ -307,7 +357,7 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
   await supabaseAdmin()
     .from('conversations')
     .update({
-      last_message_text: contentText || `[${contentType}]`,
+      last_message_text: contentText || `[${args.contentType}]`,
       last_message_at: new Date().toISOString(),
       // Outgoing (fromMe) messages never add to the unread badge.
       unread_count: outbound
@@ -373,8 +423,9 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
     }).catch((err) => console.error('[inbound-core] automation dispatch failed:', err));
   }
 
-  // AI auto-reply for plain text a flow didn't consume.
-  if (!flowConsumed && inboundText.trim()) {
+  // AI auto-reply for plain text a flow didn't consume. Button/list
+  // taps are not free-text — the menu already chose the next step.
+  if (!flowConsumed && !args.interactiveReply && inboundText.trim()) {
     await dispatchInboundToAiReply({
       accountId,
       conversationId: conversation.id,

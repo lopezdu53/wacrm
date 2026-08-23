@@ -17,6 +17,7 @@ export const CONTENT_TYPE_BY_MEDIA = {
   videoMessage: 'video',
   audioMessage: 'audio',
   documentMessage: 'document',
+  stickerMessage: 'sticker',
 } as const;
 
 const EXT_BY_MIME: Record<string, string> = {
@@ -77,20 +78,47 @@ export interface ParsedBaileys {
   mimetype: string | undefined;
   fileName: string | undefined;
   interactiveReply?: { reply_id: string; reply_title: string };
+  /** Quoted message's provider id (`contextInfo.stanzaId`). */
+  replyToMetaMessageId?: string;
+}
+
+/** Walk a Baileys payload for a swipe-reply / quoted stanza id. */
+export function extractContextStanzaId(msg: BaileysMessage): string | undefined {
+  for (const value of Object.values(msg)) {
+    if (!value || typeof value !== 'object') continue;
+    const stanzaId = (value as { contextInfo?: { stanzaId?: string } })
+      .contextInfo?.stanzaId;
+    if (typeof stanzaId === 'string' && stanzaId) return stanzaId;
+  }
+  return undefined;
 }
 
 /** Pull text + media descriptor out of a Baileys message object. */
+function withReply(
+  parsed: ParsedBaileys,
+  msg: BaileysMessage,
+): ParsedBaileys {
+  const replyTo = extractContextStanzaId(msg);
+  return replyTo ? { ...parsed, replyToMetaMessageId: replyTo } : parsed;
+}
+
 export function parseBaileys(msg: BaileysMessage | undefined): ParsedBaileys {
   if (!msg) {
     return { contentType: 'text', text: null, mediaKey: null, mimetype: undefined, fileName: undefined };
   }
 
   if (typeof msg.conversation === 'string') {
-    return { contentType: 'text', text: msg.conversation, mediaKey: null, mimetype: undefined, fileName: undefined };
+    return withReply(
+      { contentType: 'text', text: msg.conversation, mediaKey: null, mimetype: undefined, fileName: undefined },
+      msg,
+    );
   }
   const ext = msg.extendedTextMessage as { text?: string } | undefined;
   if (ext?.text) {
-    return { contentType: 'text', text: ext.text, mediaKey: null, mimetype: undefined, fileName: undefined };
+    return withReply(
+      { contentType: 'text', text: ext.text, mediaKey: null, mimetype: undefined, fileName: undefined },
+      msg,
+    );
   }
 
   // Shared contact card(s) — flatten to a labelled text line.
@@ -98,13 +126,19 @@ export function parseBaileys(msg: BaileysMessage | undefined): ParsedBaileys {
     | { displayName?: string; vcard?: string }
     | undefined;
   if (contactMsg?.vcard || contactMsg?.displayName) {
-    return { contentType: 'text', text: vcardsToText([contactMsg]), mediaKey: null, mimetype: undefined, fileName: undefined };
+    return withReply(
+      { contentType: 'text', text: vcardsToText([contactMsg]), mediaKey: null, mimetype: undefined, fileName: undefined },
+      msg,
+    );
   }
   const contactsArr = msg.contactsArrayMessage as
     | { contacts?: { displayName?: string; vcard?: string }[] }
     | undefined;
   if (contactsArr?.contacts?.length) {
-    return { contentType: 'text', text: vcardsToText(contactsArr.contacts), mediaKey: null, mimetype: undefined, fileName: undefined };
+    return withReply(
+      { contentType: 'text', text: vcardsToText(contactsArr.contacts), mediaKey: null, mimetype: undefined, fileName: undefined },
+      msg,
+    );
   }
 
   // Button / list replies (Evolution's rendering of interactive menus).
@@ -112,17 +146,20 @@ export function parseBaileys(msg: BaileysMessage | undefined): ParsedBaileys {
     | { selectedButtonId?: string; selectedDisplayText?: string }
     | undefined;
   if (buttons?.selectedButtonId || buttons?.selectedDisplayText) {
-    return {
-      contentType: 'interactive',
-      text: buttons.selectedDisplayText ?? buttons.selectedButtonId ?? null,
-      mediaKey: null,
-      mimetype: undefined,
-      fileName: undefined,
-      interactiveReply: {
-        reply_id: buttons.selectedButtonId ?? buttons.selectedDisplayText ?? '',
-        reply_title: buttons.selectedDisplayText ?? buttons.selectedButtonId ?? '',
+    return withReply(
+      {
+        contentType: 'interactive',
+        text: buttons.selectedDisplayText ?? buttons.selectedButtonId ?? null,
+        mediaKey: null,
+        mimetype: undefined,
+        fileName: undefined,
+        interactiveReply: {
+          reply_id: buttons.selectedButtonId ?? buttons.selectedDisplayText ?? '',
+          reply_title: buttons.selectedDisplayText ?? buttons.selectedButtonId ?? '',
+        },
       },
-    };
+      msg,
+    );
   }
   const list = msg.listResponseMessage as
     | {
@@ -132,14 +169,17 @@ export function parseBaileys(msg: BaileysMessage | undefined): ParsedBaileys {
     | undefined;
   if (list?.singleSelectReply?.selectedRowId || list?.title) {
     const replyId = list.singleSelectReply?.selectedRowId ?? list.title ?? '';
-    return {
-      contentType: 'interactive',
-      text: list.title ?? replyId,
-      mediaKey: null,
-      mimetype: undefined,
-      fileName: undefined,
-      interactiveReply: { reply_id: replyId, reply_title: list.title ?? replyId },
-    };
+    return withReply(
+      {
+        contentType: 'interactive',
+        text: list.title ?? replyId,
+        mediaKey: null,
+        mimetype: undefined,
+        fileName: undefined,
+        interactiveReply: { reply_id: replyId, reply_title: list.title ?? replyId },
+      },
+      msg,
+    );
   }
 
   // Documents can arrive wrapped in documentWithCaptionMessage.
@@ -151,17 +191,23 @@ export function parseBaileys(msg: BaileysMessage | undefined): ParsedBaileys {
       | { caption?: string; mimetype?: string; fileName?: string }
       | undefined;
     if (media) {
-      return {
-        contentType: CONTENT_TYPE_BY_MEDIA[key],
-        text: media.caption ?? null,
-        mediaKey: key,
-        mimetype: baseMime(media.mimetype),
-        fileName: media.fileName,
-      };
+      return withReply(
+        {
+          contentType: CONTENT_TYPE_BY_MEDIA[key],
+          text: media.caption ?? null,
+          mediaKey: key,
+          mimetype: baseMime(media.mimetype),
+          fileName: media.fileName,
+        },
+        { ...msg, ...source },
+      );
     }
   }
 
-  return { contentType: 'text', text: null, mediaKey: null, mimetype: undefined, fileName: undefined };
+  return withReply(
+    { contentType: 'text', text: null, mediaKey: null, mimetype: undefined, fileName: undefined },
+    msg,
+  );
 }
 
 /**
@@ -250,6 +296,7 @@ export async function processEvolutionItem(
       whatsappConfigId: config.id,
       outbound,
       interactiveReply: parsed.interactiveReply,
+      replyToMetaMessageId: parsed.replyToMetaMessageId ?? null,
     });
     return 'recorded';
   } catch (err) {
