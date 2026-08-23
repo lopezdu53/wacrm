@@ -1,5 +1,7 @@
 import { NextResponse } from 'next/server';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
+import { decrypt } from '@/lib/whatsapp/encryption';
+import { secretsMatch } from '@/lib/auth/secret-compare';
 import {
   processEvolutionItem,
   type UpsertData,
@@ -12,9 +14,12 @@ import {
  * and hand each item to the shared inbound pipeline (also used by the
  * on-demand sync backfill).
  *
- * There is no Meta-style HMAC here — Evolution doesn't sign requests.
- * We resolve the owning account by the instance name (unique per
- * account, migration 037).
+ * Evolution does not HMAC-sign webhooks the way Meta does. It does
+ * send the instance API key — in the `apikey` header (same as its
+ * REST API) and sometimes in the JSON body. We require that key to
+ * match the encrypted `evolution_api_key` stored for the instance;
+ * without a match the request is 401'd so a guessed instance name
+ * cannot inject contacts / automations / AI replies.
  */
 export async function POST(request: Request) {
   let body: {
@@ -39,17 +44,47 @@ export async function POST(request: Request) {
   const instance = body.instance;
   if (!instance) return NextResponse.json({ ignored: true });
 
+  const presented =
+    request.headers.get('apikey') ||
+    request.headers.get('x-api-key') ||
+    (typeof body.apikey === 'string' ? body.apikey : '') ||
+    '';
+
   // Resolve the owning account by instance name.
   const { data: config } = await supabaseAdmin()
     .from('whatsapp_config')
-    .select('id, account_id, user_id, evolution_instance, provider')
+    .select(
+      'id, account_id, user_id, evolution_instance, evolution_api_key, provider',
+    )
     .eq('evolution_instance', instance)
     .eq('provider', 'evolution')
     .maybeSingle();
 
   if (!config) {
-    // Unknown instance — 200 so Evolution doesn't spam retries.
+    // Unknown instance — 200 so Evolution doesn't spam retries, and so
+    // we don't leak whether a given name exists.
     return NextResponse.json({ ignored: true });
+  }
+
+  const storedEnc = config.evolution_api_key as string | null;
+  if (!storedEnc) {
+    console.warn(
+      '[evolution/webhook] instance has no stored API key — rejecting',
+      instance,
+    );
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  let storedPlain: string;
+  try {
+    storedPlain = decrypt(storedEnc);
+  } catch (err) {
+    console.error('[evolution/webhook] failed to decrypt instance key:', err);
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  if (!secretsMatch(presented, storedPlain)) {
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
   // Normalise `data` into a list of message objects.
@@ -57,10 +92,10 @@ export async function POST(request: Request) {
   const items: UpsertData[] = Array.isArray(raw)
     ? raw
     : raw && 'messages' in raw && Array.isArray(raw.messages)
-      ? raw.messages
-      : raw
-        ? [raw as UpsertData]
-        : [];
+    ? raw.messages
+    : raw
+      ? [raw as UpsertData]
+      : [];
 
   for (const item of items) {
     await processEvolutionItem(

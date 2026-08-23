@@ -48,8 +48,10 @@ it. Grant the minimum.
 | `contacts:read`      | List and read contacts                   |
 | `contacts:write`     | Create and update contacts               |
 | `conversations:read` | List and read conversations              |
+| `deals:read`         | List pipelines and deals (Odoo sync)     |
 | `broadcasts:send`    | Launch broadcast campaigns               |
 | `webhooks:manage`    | Register and manage outbound webhooks    |
+| `sso:login`          | Mint a one-time login link for a member (server-side integrations only) |
 
 A key with **no scopes** still authenticates and can call
 `GET /api/v1/me` — useful for verifying a key works.
@@ -119,7 +121,9 @@ curl https://your-crm.example.com/api/v1/me \
 
 Send a WhatsApp message to a phone number. Scope: `messages:send`. You
 pass an **E.164 number**, not an internal id — the endpoint
-finds-or-creates the contact + conversation, then sends.
+finds-or-creates the contact + conversation, then sends. Optional
+`whatsapp_config_id` picks which connected number to send from when
+the account has more than one.
 
 ```bash
 curl -X POST https://your-crm.example.com/api/v1/messages \
@@ -168,7 +172,8 @@ send), `template_malformed` (500).
 
 List contacts, newest first. Scope: `contacts:read`. Paginated (see
 [Pagination](#pagination)). Optional filters: `?search=` (matches name
-or phone) and `?tag=<tagId>`.
+or phone), `?tag=<tagId>`, and `?updated_since=<iso8601>` (incremental
+pulls — same contract as deals).
 
 ```json
 {

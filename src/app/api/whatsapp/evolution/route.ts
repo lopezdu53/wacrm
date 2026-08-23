@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { encrypt, decrypt } from '@/lib/whatsapp/encryption';
 import {
   createEvolutionInstance,
@@ -147,6 +148,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    await requireRole('admin');
     const supabase = await createClient();
     const { user, accountId } = await resolveAccount(supabase);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -282,6 +284,8 @@ export async function POST(request: Request) {
       });
     }
   } catch (err) {
+    const mapped = toErrorResponse(err);
+    if (mapped.status !== 500) return mapped;
     console.error('[evolution] POST failed:', err);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
@@ -289,6 +293,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    await requireRole('admin');
     const supabase = await createClient();
     const { user, accountId } = await resolveAccount(supabase);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -320,6 +325,8 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (err) {
+    const mapped = toErrorResponse(err);
+    if (mapped.status !== 500) return mapped;
     console.error('[evolution] DELETE failed:', err);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }

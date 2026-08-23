@@ -70,16 +70,39 @@ export async function middleware(request: NextRequest) {
   }
 
   // Protected pages - redirect to login if not authenticated
-  const protectedPaths = ['/dashboard', '/inbox', '/contacts', '/pipelines', '/broadcasts', '/automations', '/settings']
+  const protectedPaths = [
+    '/dashboard',
+    '/inbox',
+    '/contacts',
+    '/pipelines',
+    '/broadcasts',
+    '/automations',
+    '/settings',
+    '/flows',
+    '/agents',
+    '/internal-chat',
+    '/notifications',
+  ]
   if (!user && protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
     return withRefreshedCookies(NextResponse.redirect(url))
   }
 
-  // API routes that need auth (not webhooks)
-  if (!user && request.nextUrl.pathname.startsWith('/api/whatsapp/') &&
-      !request.nextUrl.pathname.includes('/webhook')) {
+  // API routes that need a session. Public exceptions: Meta/Evolution
+  // webhooks, public REST (`/api/v1` uses API keys), cron pingers,
+  // and invitation peek (token in the URL). Everything else 401s
+  // here so a new route can't ship unauthenticated by accident.
+  const pathname = request.nextUrl.pathname
+  const publicApi =
+    pathname.startsWith('/api/v1/') ||
+    pathname === '/api/whatsapp/webhook' ||
+    pathname === '/api/whatsapp/evolution/webhook' ||
+    pathname === '/api/automations/cron' ||
+    pathname === '/api/flows/cron' ||
+    pathname.includes('/webhook') ||
+    /\/api\/invitations\/[^/]+\/peek$/.test(pathname)
+  if (!user && pathname.startsWith('/api/') && !publicApi) {
     return withRefreshedCookies(
       NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     )

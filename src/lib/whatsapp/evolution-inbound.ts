@@ -70,14 +70,17 @@ export function coerceTimestampMs(ts: UpsertData['messageTimestamp']): number {
   return Date.now();
 }
 
-/** Pull text + media descriptor out of a Baileys message object. */
-export function parseBaileys(msg: BaileysMessage | undefined): {
+export interface ParsedBaileys {
   contentType: string;
   text: string | null;
   mediaKey: keyof typeof CONTENT_TYPE_BY_MEDIA | null;
   mimetype: string | undefined;
   fileName: string | undefined;
-} {
+  interactiveReply?: { reply_id: string; reply_title: string };
+}
+
+/** Pull text + media descriptor out of a Baileys message object. */
+export function parseBaileys(msg: BaileysMessage | undefined): ParsedBaileys {
   if (!msg) {
     return { contentType: 'text', text: null, mediaKey: null, mimetype: undefined, fileName: undefined };
   }
@@ -102,6 +105,41 @@ export function parseBaileys(msg: BaileysMessage | undefined): {
     | undefined;
   if (contactsArr?.contacts?.length) {
     return { contentType: 'text', text: vcardsToText(contactsArr.contacts), mediaKey: null, mimetype: undefined, fileName: undefined };
+  }
+
+  // Button / list replies (Evolution's rendering of interactive menus).
+  const buttons = msg.buttonsResponseMessage as
+    | { selectedButtonId?: string; selectedDisplayText?: string }
+    | undefined;
+  if (buttons?.selectedButtonId || buttons?.selectedDisplayText) {
+    return {
+      contentType: 'interactive',
+      text: buttons.selectedDisplayText ?? buttons.selectedButtonId ?? null,
+      mediaKey: null,
+      mimetype: undefined,
+      fileName: undefined,
+      interactiveReply: {
+        reply_id: buttons.selectedButtonId ?? buttons.selectedDisplayText ?? '',
+        reply_title: buttons.selectedDisplayText ?? buttons.selectedButtonId ?? '',
+      },
+    };
+  }
+  const list = msg.listResponseMessage as
+    | {
+        title?: string;
+        singleSelectReply?: { selectedRowId?: string };
+      }
+    | undefined;
+  if (list?.singleSelectReply?.selectedRowId || list?.title) {
+    const replyId = list.singleSelectReply?.selectedRowId ?? list.title ?? '';
+    return {
+      contentType: 'interactive',
+      text: list.title ?? replyId,
+      mediaKey: null,
+      mimetype: undefined,
+      fileName: undefined,
+      interactiveReply: { reply_id: replyId, reply_title: list.title ?? replyId },
+    };
   }
 
   // Documents can arrive wrapped in documentWithCaptionMessage.
@@ -211,6 +249,7 @@ export async function processEvolutionItem(
       timestampMs: coerceTimestampMs(item.messageTimestamp),
       whatsappConfigId: config.id,
       outbound,
+      interactiveReply: parsed.interactiveReply,
     });
     return 'recorded';
   } catch (err) {

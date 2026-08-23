@@ -230,6 +230,7 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
         await handleTemplateWebhookChange(
           { field: change.field, value: change.value as unknown },
           supabaseAdmin(),
+          { wabaId: entry.id },
         )
         continue
       }
@@ -238,8 +239,9 @@ async function processWebhook(body: { entry?: WhatsAppWebhookEntry[] }) {
 
       // Handle status updates
       if (value.statuses) {
+        const statusPhoneId = value.metadata?.phone_number_id
         for (const status of value.statuses) {
-          await handleStatusUpdate(status)
+          await handleStatusUpdate(status, statusPhoneId)
         }
       }
 
@@ -356,21 +358,44 @@ function isValidStatusTransition(current: string, incoming: string): boolean {
   return ii > ci
 }
 
-async function handleStatusUpdate(status: {
-  id: string
-  status: string
-  timestamp: string
-  recipient_id: string
-}) {
-  // 1) Mirror onto messages (legacy behavior) — Meta's status values
-  //    already match the CHECK constraint on messages.status. No
-  //    `.select()`: message_id is NOT unique (migration 009 — Meta ids
-  //    repeat across numbers), so this updates 0..N rows and must not
-  //    assume a single row.
-  const { error: msgErr } = await supabaseAdmin()
+async function handleStatusUpdate(
+  status: {
+    id: string
+    status: string
+    timestamp: string
+    recipient_id: string
+  },
+  phoneNumberId?: string,
+) {
+  // 1) Mirror onto messages. message_id is NOT unique globally
+  //    (migration 009 — Meta ids can repeat across numbers), so we
+  //    scope the update to conversations on this phone_number_id
+  //    whenever we have it. Fall back to the unscoped update for
+  //    legacy unstamped threads so status webhooks still land.
+  let convIds: string[] | null = null
+  if (phoneNumberId) {
+    const { data: cfg } = await supabaseAdmin()
+      .from('whatsapp_config')
+      .select('id')
+      .eq('phone_number_id', phoneNumberId)
+      .maybeSingle()
+    if (cfg?.id) {
+      const { data: convs } = await supabaseAdmin()
+        .from('conversations')
+        .select('id')
+        .eq('whatsapp_config_id', cfg.id)
+      convIds = (convs ?? []).map((c: { id: string }) => c.id)
+    }
+  }
+
+  let msgQuery = supabaseAdmin()
     .from('messages')
     .update({ status: status.status })
     .eq('message_id', status.id)
+  if (convIds && convIds.length > 0) {
+    msgQuery = msgQuery.in('conversation_id', convIds)
+  }
+  const { error: msgErr } = await msgQuery
 
   if (msgErr) {
     console.error('Error updating message status:', msgErr)
@@ -419,12 +444,14 @@ async function handleStatusUpdate(status: {
   //    Runs last so a slow subscriber can't delay the mirrors above.
   //    Bounded to one row (message_id isn't unique) purely to resolve
   //    the owning account for delivery.
-  const { data: msgRow } = await supabaseAdmin()
+  let fanQuery = supabaseAdmin()
     .from('messages')
     .select('conversation_id, conversations(account_id)')
     .eq('message_id', status.id)
-    .limit(1)
-    .maybeSingle()
+  if (convIds && convIds.length > 0) {
+    fanQuery = fanQuery.in('conversation_id', convIds)
+  }
+  const { data: msgRow } = await fanQuery.limit(1).maybeSingle()
 
   if (msgRow) {
     const conv = msgRow.conversations as { account_id: string } | null

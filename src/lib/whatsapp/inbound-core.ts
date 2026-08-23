@@ -211,6 +211,12 @@ export interface RecordInboundArgs {
    * broadcast reply, or triggers flows / automations / the AI bot.
    */
   outbound?: boolean;
+  /**
+   * Button / list tap. When set, the Flow runner sees an
+   * `interactive_reply` (so Evolution menus advance the same way
+   * Meta ones do) and automations can match `interactive_reply`.
+   */
+  interactiveReply?: { reply_id: string; reply_title: string };
 }
 
 /**
@@ -291,6 +297,9 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
     created_at: new Date(timestampMs).toISOString(),
   });
   if (msgError) {
+    // A concurrent webhook retry lost the unique race
+    // (migration 046). Treat as already stored.
+    if (isUniqueViolation(msgError)) return;
     console.error('[inbound-core] error inserting message:', msgError);
     return;
   }
@@ -323,7 +332,14 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
     userId: configOwnerUserId,
     contactId: contactRecord.id,
     conversationId: conversation.id,
-    message: { kind: 'text', text: inboundText, meta_message_id: messageId },
+    message: args.interactiveReply
+      ? {
+          kind: 'interactive_reply',
+          reply_id: args.interactiveReply.reply_id,
+          reply_title: args.interactiveReply.reply_title,
+          meta_message_id: messageId,
+        }
+      : { kind: 'text', text: inboundText, meta_message_id: messageId },
     isFirstInboundMessage,
   });
   const flowConsumed = flowResult.consumed;
@@ -333,9 +349,13 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
     | 'first_inbound_message'
     | 'new_message_received'
     | 'keyword_match'
+    | 'interactive_reply'
   )[] = [];
   if (!flowConsumed) {
     automationTriggers.push('new_message_received', 'keyword_match');
+    if (args.interactiveReply?.reply_id) {
+      automationTriggers.push('interactive_reply');
+    }
   }
   if (contactOutcome.wasCreated) automationTriggers.unshift('new_contact_created');
   if (isFirstInboundMessage) automationTriggers.unshift('first_inbound_message');
@@ -348,6 +368,7 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
       context: {
         message_text: inboundText,
         conversation_id: conversation.id,
+        interactive_reply_id: args.interactiveReply?.reply_id,
       },
     }).catch((err) => console.error('[inbound-core] automation dispatch failed:', err));
   }

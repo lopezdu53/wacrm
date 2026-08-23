@@ -50,6 +50,11 @@ describe("phonesMatch", () => {
     expect(phonesMatch("+37063949836", "+37063949837")).toBe(false);
   });
 
+  it("does not match unrelated numbers that only share an 8-digit tail", () => {
+    // Different country codes, 4-digit length gap — not a trunk-0 variant.
+    expect(phonesMatch("14155550123", "99914155550123")).toBe(false);
+  });
+
   it("rejects very short inputs that would false-positive on tail match", () => {
     // Only 7 digits — the last-8 fallback is gated to len>=8 on both
     // sides to avoid declaring "12345" and "67890-12345" a match.

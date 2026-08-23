@@ -9,6 +9,54 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.2] — 2026-08-23
+
+Hardens security, multi-number routing, and the Odoo connector.
+
+> **Migration required:** apply `supabase/migrations/046_message_id_conversation_unique.sql`
+> (dedupes any duplicate `(conversation, message_id)` rows, then adds a
+> unique index so webhook retries cannot double-insert). Also upgrade
+> the Odoo module to **19.0.1.13.0**.
+
+### Security
+
+- **Evolution webhook authentication.** `POST /api/whatsapp/evolution/webhook`
+  now requires the instance API key (`apikey` header or body) to match the
+  stored key. A guessed instance name can no longer inject contacts,
+  automations, or AI replies.
+- **Role checks on WhatsApp writes.** Send, broadcast, react, config
+  health-check, and Evolution/Meta settings writes require `agent` or
+  `admin`. Viewers can no longer send real WhatsApp messages by hitting
+  the API directly (RLS only blocked the DB insert, not the Meta call).
+- **Cron + link-preview + outbound webhooks.** Automations cron uses a
+  constant-time secret compare. Link-preview and webhook registration
+  reuse the DNS SSRF guard and do not follow redirects to private hosts.
+- **Middleware** now protects `/flows`, `/agents`, `/internal-chat`,
+  `/notifications`, and every `/api/*` route except an explicit public
+  allowlist.
+
+### Fixed
+
+- **API / dashboard conversation resolution is channel-aware.** Public
+  API sends and Contact-detail sends stamp `whatsapp_config_id` and no
+  longer use `.maybeSingle()` on an account with two numbers.
+- **Broadcast, react, media, template sync** pick a specific Meta
+  config (conversation channel, or explicit `whatsapp_config_id`)
+  instead of `.single()`.
+- **Meta status webhooks** update only messages on the number that
+  emitted them. Template lifecycle updates are scoped by WABA when
+  possible.
+- **Evolution button/list taps** now advance Flows and can fire
+  `interactive_reply` automations (parity with Meta).
+- **Odoo cron** is incremental (`updated_since`), maps `won` deals,
+  assigns a configured default salesperson (not OdooBot), and lets you
+  rename the VAT/street/city custom fields.
+
+### Docs
+
+- EasyPanel guide lists all 46 migrations and documents Evolution.
+- Public API scope table includes `deals:read` and `sso:login`.
+
 ## [0.8.1] — 2026-07-10
 
 Fixes inbound chats fragmenting into multiple threads for the same

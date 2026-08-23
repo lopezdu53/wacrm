@@ -48,36 +48,56 @@ export async function GET(
       )
     }
 
-    // Fetch and decrypt WhatsApp config
-    const { data: config, error: configError } = await supabase
+    // An account can hold several Meta numbers; a media id is only
+    // fetchable with the token of the number that received it. Try
+    // each Meta config until one succeeds.
+    const { data: configs } = await supabase
       .from('whatsapp_config')
-      .select('*')
+      .select('id, access_token')
       .eq('account_id', accountId)
       .eq('provider', 'meta')
-      .single()
+      .order('created_at', { ascending: true })
 
-    if (configError || !config) {
+    if (!configs || configs.length === 0) {
       return NextResponse.json(
         { error: 'WhatsApp not configured' },
         { status: 400 }
       )
     }
 
-    const accessToken = decrypt(config.access_token)
+    let buffer: Buffer | null = null
+    let contentType: string | undefined
+    let mimeType: string | undefined
+    let lastError: unknown = null
+    for (const config of configs) {
+      try {
+        const accessToken = decrypt(config.access_token)
+        const mediaInfo = await getMediaUrl({ mediaId, accessToken })
+        const downloaded = await downloadMedia({
+          downloadUrl: mediaInfo.url,
+          accessToken,
+        })
+        buffer = downloaded.buffer
+        contentType = downloaded.contentType
+        mimeType = mediaInfo.mimeType
+        break
+      } catch (err) {
+        lastError = err
+      }
+    }
 
-    // Get the download URL from Meta
-    const mediaInfo = await getMediaUrl({ mediaId, accessToken })
-
-    // Download the binary data
-    const { buffer, contentType } = await downloadMedia({
-      downloadUrl: mediaInfo.url,
-      accessToken,
-    })
+    if (!buffer) {
+      console.error('Error fetching WhatsApp media:', lastError)
+      return NextResponse.json(
+        { error: 'Failed to fetch media' },
+        { status: 502 }
+      )
+    }
 
     return new Response(new Uint8Array(buffer), {
       status: 200,
       headers: {
-        'Content-Type': contentType || mediaInfo.mimeType || 'application/octet-stream',
+        'Content-Type': contentType || mimeType || 'application/octet-stream',
         'Cache-Control': 'public, max-age=86400',
       },
     })

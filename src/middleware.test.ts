@@ -110,4 +110,33 @@ describe("middleware — refreshed auth cookies survive redirects", () => {
     expect(res.headers.get("location")).toBeNull();
     expect(res.cookies.get(ROTATED.name)?.value).toBe(ROTATED.value);
   });
+
+  it("redirects an unauth user away from /flows and /agents", async () => {
+    mockUser = null;
+    const flows = await middleware(new NextRequest("https://app.test/flows"));
+    expect(flows.status).toBe(307);
+    expect(flows.headers.get("location")).toContain("/login");
+
+    const agents = await middleware(new NextRequest("https://app.test/agents"));
+    expect(agents.status).toBe(307);
+    expect(agents.headers.get("location")).toContain("/login");
+  });
+
+  it("401s unauthenticated dashboard API routes but lets webhooks through", async () => {
+    mockUser = null;
+    const send = await middleware(
+      new NextRequest("https://app.test/api/whatsapp/send", { method: "POST" }),
+    );
+    expect(send.status).toBe(401);
+
+    const hook = await middleware(
+      new NextRequest("https://app.test/api/whatsapp/webhook", { method: "POST" }),
+    );
+    expect(hook.status).not.toBe(401);
+
+    const v1 = await middleware(
+      new NextRequest("https://app.test/api/v1/me"),
+    );
+    expect(v1.status).not.toBe(401);
+  });
 });

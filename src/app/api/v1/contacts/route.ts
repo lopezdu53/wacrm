@@ -3,7 +3,8 @@
 // POST /api/v1/contacts  — create a contact  (scope: contacts:write)
 //
 // List is keyset-paginated (see src/lib/api/v1/pagination.ts) and
-// supports `?search=` (name/phone) and `?tag=<tagId>` filters. Create
+// supports `?search=` (name/phone), `?tag=<tagId>`, and
+// `?updated_since=<iso8601>` (incremental pulls). Create
 // is find-or-create by phone: an existing match returns 200 with
 // `created: false`; a new row returns 201 with `created: true`.
 // ============================================================
@@ -39,6 +40,7 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const search = sanitizeSearch(url.searchParams.get('search') ?? '');
     const tag = url.searchParams.get('tag');
+    const updatedSince = url.searchParams.get('updated_since');
 
     // When filtering by tag, add an aliased INNER join on contact_tags
     // used purely for the WHERE — the parent is kept only if it has the
@@ -61,6 +63,14 @@ export async function GET(request: Request) {
 
     if (tag) {
       query = query.eq('tag_filter.tag_id', tag);
+    }
+
+    if (updatedSince) {
+      const ts = new Date(updatedSince);
+      if (Number.isNaN(ts.getTime())) {
+        return fail('bad_request', "'updated_since' must be an ISO-8601 timestamp", 400);
+      }
+      query = query.gte('updated_at', ts.toISOString());
     }
 
     query = query

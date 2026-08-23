@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import {
   deleteMessageTemplate,
@@ -56,6 +57,7 @@ export async function PATCH(
         { status: 400 },
       )
     }
+    await requireRole('admin')
     const supabase = await createClient()
     const {
       data: { user },
@@ -219,6 +221,8 @@ export async function PATCH(
       dry_run: isDryRun(),
     })
   } catch (error) {
+    const mapped = toErrorResponse(error)
+    if (mapped.status !== 500) return mapped
     console.error('Error editing template:', error)
     return NextResponse.json(
       {
@@ -242,6 +246,7 @@ export async function DELETE(
         { status: 400 },
       )
     }
+    await requireRole('admin')
     const supabase = await createClient()
     const {
       data: { user },
@@ -318,6 +323,8 @@ export async function DELETE(
 
     return NextResponse.json({ success: true, dry_run: isDryRun() })
   } catch (error) {
+    const mapped = toErrorResponse(error)
+    if (mapped.status !== 500) return mapped
     console.error('Error deleting template:', error)
     return NextResponse.json(
       {
