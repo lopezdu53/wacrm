@@ -27,7 +27,6 @@ import {
   AlertTriangle,
   EyeOff,
   Loader2,
-  Mail,
   MailX,
   Plus,
   Trash2,
@@ -556,8 +555,11 @@ export function MembersTab() {
         </CardContent>
       </Card>
 
-      {/* Pending invitations — admin+ only */}
+      {/* Leftover invite links — only when any remain. New teammates
+          are created directly (email + password), so this list is
+          historical until those rows expire or are revoked. */}
       <RequireRole min="admin">
+        {invitations.length > 0 ? (
         <div>
           <div className="mb-2 flex items-center gap-2">
             <UsersRound className="size-4 text-muted-foreground" />
@@ -573,25 +575,10 @@ export function MembersTab() {
               no "copy link again" button. Stating the constraint up
               front (rather than letting the user discover it by
               looking for a button) keeps it from feeling like a bug. */}
-          {invitations.length > 0 ? (
-            <p className="mb-3 text-xs text-muted-foreground">
-              {t('inviteHint')}
-            </p>
-          ) : null}
+          <p className="mb-3 text-xs text-muted-foreground">
+            {t('inviteHint')}
+          </p>
 
-          {invitations.length === 0 ? (
-            <Card>
-              <CardContent className="flex flex-col items-center justify-center py-8 text-center">
-                <Mail className="size-6 text-muted-foreground" />
-                <p className="mt-2 text-sm text-muted-foreground">
-                  {t('noPendingTitle')}
-                </p>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {t.rich('noPendingDesc', { bold: (chunks) => <strong>{chunks}</strong> })}
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
             <Card>
               <CardContent className="p-0">
                 <ul className="divide-y divide-border">
@@ -639,8 +626,8 @@ export function MembersTab() {
                 </ul>
               </CardContent>
             </Card>
-          )}
         </div>
+        ) : null}
       </RequireRole>
 
       <InviteMemberDialog

@@ -59,6 +59,9 @@ Hardens security, multi-number routing, and the Odoo connector.
 - **Evolution 24h template gate.** Mixed Meta+Evolution accounts no
   longer lock Evolution threads behind a template after 24 hours. The
   window is per conversation (Meta only).
+- **Add teammates without an invite link.** Settings → Members creates
+  the login (name, email, password, role) immediately; no verification
+  email or join URL.
 - **Meta and Evolution inbound share one persist/fan-out path.** The Meta
   webhook no longer keeps a private copy of contact/conversation create,
   message insert, unread, Flows, automations, AI, or outbound webhooks.
