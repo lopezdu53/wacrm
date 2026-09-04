@@ -9,6 +9,7 @@ import { NextRequest } from "next/server";
 //                      of the test is that these must survive onto whatever
 //                      response the middleware returns — including redirects.
 let mockUser: { id: string } | null = null;
+let getUserShouldThrow = false;
 let refreshedCookies: Array<{
   name: string;
   value: string;
@@ -28,6 +29,7 @@ vi.mock("@supabase/ssr", () => ({
       // refreshed inside getUser(), which rotates the refresh token and
       // pushes the new cookies through setAll() before resolving.
       getUser: async () => {
+        if (getUserShouldThrow) throw new Error('user deleted');
         if (refreshedCookies.length) opts.cookies.setAll(refreshedCookies);
         return { data: { user: mockUser } };
       },
@@ -42,6 +44,7 @@ beforeEach(() => {
   process.env.NEXT_PUBLIC_SUPABASE_URL = "https://test.supabase.co";
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = "anon-key";
   mockUser = null;
+  getUserShouldThrow = false;
   refreshedCookies = [];
 });
 
@@ -109,5 +112,47 @@ describe("middleware — refreshed auth cookies survive redirects", () => {
     // No redirect — the normal NextResponse.next() already carries cookies.
     expect(res.headers.get("location")).toBeNull();
     expect(res.cookies.get(ROTATED.name)?.value).toBe(ROTATED.value);
+  });
+
+  it("redirects an unauth user away from /flows and /agents", async () => {
+    mockUser = null;
+    const flows = await middleware(new NextRequest("https://app.test/flows"));
+    expect(flows.status).toBe(307);
+    expect(flows.headers.get("location")).toContain("/login");
+
+    const agents = await middleware(new NextRequest("https://app.test/agents"));
+    expect(agents.status).toBe(307);
+    expect(agents.headers.get("location")).toContain("/login");
+  });
+
+  it("clears a dead session and redirects when getUser throws", async () => {
+    getUserShouldThrow = true;
+    const req = new NextRequest("https://app.test/settings?tab=members", {
+      headers: { cookie: "sb-test-auth-token=dead" },
+    });
+
+    const res = await middleware(req);
+
+    expect(res.status).toBe(307);
+    expect(res.headers.get("location")).toContain("/login");
+    expect(res.cookies.get("sb-test-auth-token")?.value).toBe("");
+  });
+
+  it("401s unauthenticated dashboard API routes but lets webhooks through", async () => {
+    mockUser = null;
+    const send = await middleware(
+      new NextRequest("https://app.test/api/whatsapp/send", { method: "POST" }),
+    );
+    expect(send.status).toBe(401);
+
+    const hook = await middleware(
+      new NextRequest("https://app.test/api/whatsapp/webhook", { method: "POST" }),
+    );
+    expect(hook.status).not.toBe(401);
+
+    const v1 = await middleware(
+      new NextRequest("https://app.test/api/v1/me"),
+    );
+    expect(v1.status).not.toBe(401);
   });
 });

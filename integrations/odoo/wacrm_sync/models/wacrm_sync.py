@@ -10,6 +10,14 @@ PARAM_SYNC_CONTACTS = "wacrm_sync.sync_contacts"
 PARAM_SYNC_DEALS = "wacrm_sync.sync_opportunities"
 PARAM_LAST_CONTACTS = "wacrm_sync.last_sync_contacts"
 PARAM_LAST_DEALS = "wacrm_sync.last_sync_deals"
+PARAM_SALESPERSON = "wacrm_sync.salesperson_user_id"
+PARAM_FIELD_VAT = "wacrm_sync.field_vat"
+PARAM_FIELD_STREET = "wacrm_sync.field_street"
+PARAM_FIELD_CITY = "wacrm_sync.field_city"
+
+DEFAULT_FIELD_VAT = "NIT / CC"
+DEFAULT_FIELD_STREET = "Dirección"
+DEFAULT_FIELD_CITY = "Ciudad"
 
 # Prefix v19.0.1.7.0 - v19.0.1.9.0 wrote at the top of crm.lead.description
 # for the AI summary line. No longer written (see wacrm_ai_summary on
@@ -63,16 +71,14 @@ class WacrmSync(models.AbstractModel):
             if domain:
                 partner = Partner.search(domain, limit=1)
 
-        # Custom fields travel as a { field_name: value } map. Map the
-        # ones wacrm's AI qualification fills onto native res.partner
-        # columns so a synced contact is complete in Odoo:
-        #   "NIT / CC"  -> vat    (tax id / Número de Identificación)
-        #   "Dirección" -> street (billing / delivery address)
-        #   "Ciudad"    -> city
+        # Custom fields travel as a { field_name: value } map. Names are
+        # configurable (Settings → wacrm Sync) so a locale that isn't
+        # the default Spanish labels still maps onto vat / street / city.
         cf = contact.get("custom_fields") or {}
-        vat = (cf.get("NIT / CC") or "").strip()
-        street = (cf.get("Dirección") or "").strip()
-        city = (cf.get("Ciudad") or "").strip()
+        names = self._custom_field_names()
+        vat = (cf.get(names["vat"]) or "").strip()
+        street = (cf.get(names["street"]) or "").strip()
+        city = (cf.get(names["city"]) or "").strip()
 
         values = {
             "name": (contact.get("name") or contact.get("phone") or "wacrm contact"),
@@ -113,20 +119,57 @@ class WacrmSync(models.AbstractModel):
         return Partner.create(values)
 
     @api.model
-    def sync_contacts(self):
-        """Pull every wacrm contact into res.partner. Returns a count."""
+    def _custom_field_names(self):
+        icp = self.env["ir.config_parameter"].sudo()
+        return {
+            "vat": (icp.get_param(PARAM_FIELD_VAT) or DEFAULT_FIELD_VAT).strip() or DEFAULT_FIELD_VAT,
+            "street": (icp.get_param(PARAM_FIELD_STREET) or DEFAULT_FIELD_STREET).strip()
+            or DEFAULT_FIELD_STREET,
+            "city": (icp.get_param(PARAM_FIELD_CITY) or DEFAULT_FIELD_CITY).strip() or DEFAULT_FIELD_CITY,
+        }
+
+    @api.model
+    def _assigned_user_id(self):
+        """Salesperson for imported opportunities.
+
+        Prefer the configured default. Fall back to the user running
+        the action (Sync Now). Never assign OdooBot / Superuser (uid 1)
+        — that's who the cron runs as, and it hid deals from 'My Pipeline'.
+        """
+        icp = self.env["ir.config_parameter"].sudo()
+        raw = (icp.get_param(PARAM_SALESPERSON) or "").strip()
+        if raw.isdigit():
+            user = self.env["res.users"].sudo().browse(int(raw))
+            if user.exists() and user.active:
+                return user.id
+        user = self.env.user
+        if user and user.id != 1 and getattr(user, "share", False) is False:
+            return user.id
+        return False
+
+    @api.model
+    def sync_contacts(self, incremental=False):
+        """Pull wacrm contacts into res.partner. Returns a count.
+
+        When `incremental` is True and a previous watermark exists, only
+        rows with `updated_at >= last_sync` are fetched.
+        """
         client = self.env["wacrm.client"]
+        icp = self.env["ir.config_parameter"].sudo()
+        params = {}
+        last = icp.get_param(PARAM_LAST_CONTACTS)
+        if incremental and last:
+            params["updated_since"] = last
+        started = fields.Datetime.now()
         count = 0
-        for contact in client.iter_records("/api/v1/contacts"):
+        for contact in client.iter_records("/api/v1/contacts", params=params):
             try:
                 self._upsert_partner(contact)
                 count += 1
             except Exception as exc:  # noqa: BLE001 - one bad row must not abort the run
                 _logger.exception("wacrm_sync: failed to import contact %s: %s", contact.get("id"), exc)
-        self.env["ir.config_parameter"].sudo().set_param(
-            PARAM_LAST_CONTACTS, fields.Datetime.to_string(fields.Datetime.now())
-        )
-        _logger.info("wacrm_sync: imported %s contacts", count)
+        icp.set_param(PARAM_LAST_CONTACTS, fields.Datetime.to_string(started))
+        _logger.info("wacrm_sync: imported %s contacts (incremental=%s)", count, incremental)
         return count
 
     # ------------------------------------------------------------------
@@ -221,9 +264,19 @@ class WacrmSync(models.AbstractModel):
                 values["phone"] = partner.phone or False
         if stage_id:
             values["stage_id"] = stage_id
-        # A lost deal is archived; anything else stays active.
-        if (deal.get("status") or "").lower() == "lost":
+        # lost → archive. won → stay active, probability 100, prefer
+        # Odoo's won stage so the pipeline reflects the close.
+        status = (deal.get("status") or "").lower()
+        if status == "lost":
             values["active"] = False
+        elif status == "won":
+            values["active"] = True
+            values["probability"] = 100
+            won_stage = self.env["crm.stage"].sudo().search(
+                [("is_won", "=", True)], limit=1
+            )
+            if won_stage:
+                values["stage_id"] = won_stage.id
 
         # wacrm's AI summary of what the customer is looking for lives in
         # its own field, fully owned by the sync — every pass just
@@ -243,55 +296,65 @@ class WacrmSync(models.AbstractModel):
             if scrubbed != lead.description:
                 values["description"] = scrubbed
 
-        # Assign the salesperson (the user running the sync) so the
-        # opportunity shows in Odoo's default CRM pipeline, which filters
-        # by "My Pipeline" (salesperson). Fill-blank only: set it on
-        # create and on existing imports that have no salesperson yet,
-        # but never overwrite a manual reassignment made in Odoo.
+        # Assign a salesperson so the opportunity shows in Odoo's
+        # default "My Pipeline" filter. Fill-blank only: never overwrite
+        # a manual reassignment. The cron runs as OdooBot — use the
+        # configured default (or skip) instead of uid 1.
+        salesperson_id = self._assigned_user_id()
         if lead:
-            if not lead.user_id:
-                values["user_id"] = self.env.user.id
+            if not lead.user_id and salesperson_id:
+                values["user_id"] = salesperson_id
             lead.write(values)
             return lead
-        values["user_id"] = self.env.user.id
+        if salesperson_id:
+            values["user_id"] = salesperson_id
         return Lead.create(values)
 
     @api.model
-    def sync_deals(self):
+    def sync_deals(self, incremental=False):
         client = self.env["wacrm.client"]
+        icp = self.env["ir.config_parameter"].sudo()
+        params = {}
+        last = icp.get_param(PARAM_LAST_DEALS)
+        if incremental and last:
+            params["updated_since"] = last
+        started = fields.Datetime.now()
         count = 0
-        for deal in client.iter_records("/api/v1/deals"):
+        for deal in client.iter_records("/api/v1/deals", params=params):
             try:
                 self._upsert_deal(deal)
                 count += 1
             except Exception as exc:  # noqa: BLE001
                 _logger.exception("wacrm_sync: failed to import deal %s: %s", deal.get("id"), exc)
-        self.env["ir.config_parameter"].sudo().set_param(
-            PARAM_LAST_DEALS, fields.Datetime.to_string(fields.Datetime.now())
-        )
-        _logger.info("wacrm_sync: imported %s deals", count)
+        icp.set_param(PARAM_LAST_DEALS, fields.Datetime.to_string(started))
+        _logger.info("wacrm_sync: imported %s deals (incremental=%s)", count, incremental)
         return count
 
     # ------------------------------------------------------------------
     # Orchestration
     # ------------------------------------------------------------------
     @api.model
-    def run_sync(self):
-        """Run the enabled syncs. Returns (contacts, deals) counts."""
+    def run_sync(self, incremental=False):
+        """Run the enabled syncs. Returns (contacts, deals) counts.
+
+        `incremental=False` (Sync Now) re-walks every page so drift can
+        be healed. The cron passes `incremental=True` and uses
+        `updated_since` against the last watermark.
+        """
         icp = self.env["ir.config_parameter"].sudo()
         contacts = 0
         deals = 0
         if icp.get_param(PARAM_SYNC_CONTACTS, "1") in ("1", "True", "true"):
-            contacts = self.sync_contacts()
+            contacts = self.sync_contacts(incremental=incremental)
         # Deals reference contacts, so sync contacts first (above) when both on.
         if icp.get_param(PARAM_SYNC_DEALS, "1") in ("1", "True", "true"):
-            deals = self.sync_deals()
+            deals = self.sync_deals(incremental=incremental)
         return contacts, deals
 
     @api.model
     def cron_sync(self):
         """Entry point for the scheduled action. Never raises — logs instead."""
         try:
-            self.run_sync()
+            self.run_sync(incremental=True)
         except Exception as exc:  # noqa: BLE001
             _logger.exception("wacrm_sync: scheduled sync failed: %s", exc)

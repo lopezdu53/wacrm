@@ -12,7 +12,7 @@
 
 import { NextResponse } from 'next/server';
 
-import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account';
+import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import {
@@ -27,7 +27,7 @@ import {
 
 export async function POST(request: Request) {
   try {
-    const ctx = await getCurrentAccount();
+    const ctx = await requireRole('agent');
     const db = supabaseAdmin();
 
     const body = (await request.json().catch(() => null)) as {

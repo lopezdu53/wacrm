@@ -6,15 +6,16 @@ The same steps work with minimal changes on Coolify, Dokploy, or any
 Docker host.
 
 wacrm is a Next.js 16 app. Its data lives in **Supabase** (an external
-service), and it talks to WhatsApp through the **official Meta WhatsApp
-Cloud API** — not a QR/web-session bridge. So a deployment has three
-moving parts:
+service). WhatsApp can be connected two ways: the **official Meta
+WhatsApp Cloud API**, and/or **Evolution API** (QR / Baileys). A
+deployment has these moving parts:
 
 1. **Supabase** — Postgres + Auth + Storage (Supabase Cloud, or
    self-hosted).
 2. **The wacrm app** — this repo, built into a Docker image.
-3. **A Meta WhatsApp Business** app — provides the Phone Number ID,
-   WABA ID, and access token you paste into the app after it's live.
+3. **A WhatsApp transport** — a Meta WhatsApp Business app (Phone
+   Number ID, WABA ID, access token) and/or a self-hosted Evolution
+   API instance. You can attach several numbers per account.
 
 There are two ways to build the app on Easypanel:
 
@@ -31,9 +32,10 @@ There are two ways to build the app on Easypanel:
   can point at it.
 - A Supabase project — see [`Supabase setup`](https://wacrm.tech/docs/supabase-setup).
   You need its **Project URL**, **anon key**, and **service-role key**.
-- The 36 SQL migrations in [`supabase/migrations/`](../supabase/migrations)
-  applied to that project (via the Supabase CLI `supabase db push`, or by
-  pasting them into the SQL editor in order).
+- The SQL migrations in [`supabase/migrations/`](../supabase/migrations)
+  (currently **047_*.sql** — apply every file in order) applied to that
+  project (via the Supabase CLI `supabase db push`, or by pasting them
+  into the SQL editor in order).
 - A Meta for Developers app with the WhatsApp product added — see
   [`WhatsApp setup`](https://wacrm.tech/docs/whatsapp-setup). You can set
   this up after the app is live; you only need it before you send/receive
@@ -163,10 +165,32 @@ Use the **Test API Connection** button in Settings to confirm the token
 and phone number resolve. Send a message to your business number — it
 should land in the inbox.
 
-> wacrm uses the **official WhatsApp Cloud API**. There is **no QR-code /
-> WhatsApp-Web pairing** — outside the 24-hour customer service window you
-> must use Meta-approved message templates, and standard Meta
-> per-conversation pricing applies.
+> The Meta Cloud API has **no QR-code / WhatsApp-Web pairing** — outside
+> the 24-hour customer service window you must use Meta-approved message
+> templates, and standard Meta per-conversation pricing applies.
+
+### Evolution API (QR numbers)
+
+If you also run [Evolution API](https://doc.evolution-api.com), add
+instances under **Settings → WhatsApp → Evolution**:
+
+- **Base URL** of your Evolution server (must be reachable from the
+  wacrm container).
+- **API key** (stored encrypted). Evolution will POST inbound events
+  to `https://<your-domain>/api/whatsapp/evolution/webhook` and must
+  send that same key as the `apikey` header (or in the JSON body).
+  Requests without a matching key are rejected with 401.
+- **Instance name** — letters, digits, `.`, `_`, `-` only.
+
+Scan the QR from the same settings panel. Templates, interactive
+buttons, and delivery receipts are Meta-only; on Evolution they
+degrade to plain text. History backfill is Evolution-only
+(`POST /api/whatsapp/evolution/sync`).
+
+An optional Odoo connector lives in
+[`integrations/odoo/wacrm_sync/`](../integrations/odoo/wacrm_sync/README.md)
+(one-way pull of contacts + opportunities, plus an SSO tile into the
+inbox).
 
 ---
 

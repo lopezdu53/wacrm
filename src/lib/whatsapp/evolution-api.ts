@@ -130,6 +130,10 @@ export async function createEvolutionInstance({
       url: webhookUrl,
       byEvents: false,
       base64: true,
+      headers: {
+        apikey: apiKey,
+        'x-api-key': apiKey,
+      },
       events: ['MESSAGES_UPSERT'],
     };
   }
@@ -168,6 +172,14 @@ export async function setEvolutionWebhook({
       url: webhookUrl,
       byEvents: false,
       base64: true,
+      // So inbound POSTs carry a key we can check. Evolution's JSON
+      // body often sends the *instance* token, which may differ from
+      // the global key stored in wacrm — the header uses the key we
+      // actually saved.
+      headers: {
+        apikey: apiKey,
+        'x-api-key': apiKey,
+      },
       events: ['MESSAGES_UPSERT'],
     },
   };
@@ -216,6 +228,28 @@ export async function getEvolutionState({
     state?: string;
   };
   return normalizeState(data.instance?.state ?? data.state);
+}
+
+/**
+ * True when `apiKey` is accepted by this Evolution server for `instance`.
+ * Used by the inbound webhook: Evolution's payload `apikey` is often the
+ * per-instance token, while wacrm stored the global manager key.
+ */
+export async function verifyEvolutionApiKey({
+  baseUrl,
+  apiKey,
+  instance,
+}: EvolutionAuth): Promise<boolean> {
+  const url = `${normalizeBaseUrl(baseUrl)}/instance/connectionState/${encodeURIComponent(instance)}`;
+  try {
+    const response = await fetch(url, {
+      headers: authHeaders(apiKey),
+      signal: AbortSignal.timeout(5000),
+    });
+    return response.status !== 401 && response.status !== 403;
+  } catch {
+    return false;
+  }
 }
 
 /**

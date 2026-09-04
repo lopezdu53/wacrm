@@ -32,17 +32,75 @@ export interface ResolvedConversation {
   contactCreated: boolean;
 }
 
+export interface ResolveConversationOptions {
+  /**
+   * Channel to stamp / look up. When omitted we pick the account's
+   * oldest Meta config (then any config) so API-created threads land
+   * on a real number instead of a null-channel row that later replies
+   * can send out the wrong provider.
+   */
+  whatsappConfigId?: string | null;
+}
+
 /**
  * Find or create the contact + conversation for `phone` within
  * `accountId`. Throws `SendMessageError` (shared with the send core,
  * so the route maps one error family) on a bad phone, a missing
  * WhatsApp config, or a DB failure.
  */
+function firstRow<T extends { id?: string }>(
+  data: T | T[] | null | undefined
+): T | null {
+  if (!data) return null;
+  if (Array.isArray(data)) return data[0] ?? null;
+  return data;
+}
+
+/**
+ * Pick the WhatsApp config an outbound-created conversation should
+ * belong to: an explicit id, else the oldest Meta number, else any.
+ */
+async function resolveDefaultConfigId(
+  db: SupabaseClient,
+  accountId: string,
+  preferredId?: string | null
+): Promise<{ id: string } | null> {
+  if (preferredId) {
+    const { data } = await db
+      .from('whatsapp_config')
+      .select('id')
+      .eq('account_id', accountId)
+      .eq('id', preferredId)
+      .maybeSingle();
+    if (data?.id) return { id: data.id as string };
+  }
+
+  const { data: meta } = await db
+    .from('whatsapp_config')
+    .select('id')
+    .eq('account_id', accountId)
+    .eq('provider', 'meta')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  if (meta?.id) return { id: meta.id as string };
+
+  const { data } = await db
+    .from('whatsapp_config')
+    .select('id')
+    .eq('account_id', accountId)
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return data?.id ? { id: data.id as string } : null;
+}
+
 export async function resolveConversationByPhone(
   db: SupabaseClient,
   accountId: string,
   phone: string,
-  name?: string | null
+  name?: string | null,
+  options: ResolveConversationOptions = {}
 ): Promise<ResolvedConversation> {
   const sanitized = sanitizePhoneForMeta(phone);
   if (!isValidE164(sanitized)) {
@@ -54,12 +112,14 @@ export async function resolveConversationByPhone(
   }
 
   // Fail fast (and create nothing) when the account has no WhatsApp
-  // connected — the same error the send would raise anyway.
-  const { data: config } = await db
-    .from('whatsapp_config')
-    .select('id')
-    .eq('account_id', accountId)
-    .maybeSingle();
+  // connected — the same error the send would raise anyway. Prefer an
+  // explicit channel, then Meta, then any — `.maybeSingle()` without
+  // a limit throws (PGRST116) once the account has two numbers.
+  const config = await resolveDefaultConfigId(
+    db,
+    accountId,
+    options.whatsappConfigId
+  );
   if (!config) {
     throw new SendMessageError(
       'whatsapp_not_configured',
@@ -142,43 +202,74 @@ export async function resolveConversationByPhone(
   // `.maybeSingle()`, which errors on ≥2 rows: if duplicates predate the
   // unique index (migration 036), we resolve to the canonical survivor
   // instead of falling through and creating yet another (issue #363).
-  const conversationId = await findOrCreateConversationRow(
+  const conversationId = await findOrCreateConversationForContact(
     db,
     accountId,
     contactId,
-    ownerUserId
+    ownerUserId,
+    config.id
   );
 
   return { conversationId, contactId, contactCreated };
 }
 
 /**
- * Find (oldest-first) or create the single conversation for
- * `(accountId, contactId)`. Handles the unique-index race the same way
- * the inbound webhook does: on a 23505 from a concurrent create,
- * re-resolve the winning row rather than failing the send.
+ * Find (oldest-first) or create the conversation for
+ * `(accountId, contactId[, channel])`. When `whatsappConfigId` is
+ * set the lookup is scoped to that channel (migration 039); a
+ * null-channel legacy thread for the same contact is reused so we
+ * don't fragment the inbox. Unique-index races re-resolve the
+ * winning row instead of failing the send (issue #363).
  */
-async function findOrCreateConversationRow(
+export async function findOrCreateConversationForContact(
   db: SupabaseClient,
   accountId: string,
   contactId: string,
-  ownerUserId: string
+  ownerUserId: string,
+  whatsappConfigId?: string | null
 ): Promise<string> {
-  const { data: existing, error: findErr } = await db
-    .from('conversations')
-    .select('id')
-    .eq('account_id', accountId)
-    .eq('contact_id', contactId)
-    .order('created_at', { ascending: true })
-    .limit(1);
+  const lookup = async (channelId: string | null | undefined) => {
+    let q = db
+      .from('conversations')
+      .select('id')
+      .eq('account_id', accountId)
+      .eq('contact_id', contactId);
+    q = channelId
+      ? q.eq('whatsapp_config_id', channelId)
+      : q.is('whatsapp_config_id', null);
+    return q.order('created_at', { ascending: true }).limit(1);
+  };
 
+  // Prefer the stamped channel; if none exists, reuse a legacy
+  // null-channel thread for this contact so an API send doesn't
+  // open a second chat next to the inbound one.
+  const { data: onChannel, error: findErr } = await lookup(
+    whatsappConfigId ?? null
+  );
   if (findErr) {
     console.error('[resolve-conversation] conversation lookup error:', findErr);
     throw new SendMessageError('db_error', 'Failed to resolve conversation', 500);
   }
+  const channelHit = firstRow(onChannel);
+  if (channelHit?.id) return channelHit.id;
 
-  if (existing && existing.length > 0) {
-    return existing[0].id;
+  if (whatsappConfigId) {
+    const { data: legacy } = await lookup(null);
+    const legacyHit = firstRow(legacy);
+    if (legacyHit?.id) return legacyHit.id;
+
+    // Last resort: any existing thread for this contact (pre-039
+    // duplicates, or a thread on another number the agent is
+    // already working). Reusing beats fragmenting.
+    const { data: anyRows } = await db
+      .from('conversations')
+      .select('id')
+      .eq('account_id', accountId)
+      .eq('contact_id', contactId)
+      .order('created_at', { ascending: true })
+      .limit(1);
+    const anyHit = firstRow(anyRows);
+    if (anyHit?.id) return anyHit.id;
   }
 
   const { data: newConv, error: convErr } = await db
@@ -187,22 +278,25 @@ async function findOrCreateConversationRow(
       account_id: accountId,
       user_id: ownerUserId,
       contact_id: contactId,
+      whatsapp_config_id: whatsappConfigId ?? null,
     })
     .select('id')
     .single();
 
   if (convErr || !newConv) {
     if (isUniqueViolation(convErr)) {
-      const { data: raced } = await db
+      const { data: raced } = await lookup(whatsappConfigId ?? null);
+      const racedHit = firstRow(raced);
+      if (racedHit?.id) return racedHit.id;
+      const { data: anyRaced } = await db
         .from('conversations')
         .select('id')
         .eq('account_id', accountId)
         .eq('contact_id', contactId)
         .order('created_at', { ascending: true })
         .limit(1);
-      if (raced && raced.length > 0) {
-        return raced[0].id;
-      }
+      const anyRacedHit = firstRow(anyRaced);
+      if (anyRacedHit?.id) return anyRacedHit.id;
     }
     console.error('[resolve-conversation] conversation create error:', convErr);
     throw new SendMessageError('db_error', 'Failed to create conversation', 500);

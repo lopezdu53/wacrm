@@ -26,7 +26,10 @@ export function phonesMatch(phone1: string, phone2: string): boolean {
   const n1 = normalizePhone(phone1)
   const n2 = normalizePhone(phone2)
   if (n1 === n2) return true
-  if (n1.length >= 8 && n2.length >= 8) {
+  // Last-8 match is only for a trunk-prefix 0 (length differs by 1).
+  // A 4-digit gap between two unrelated numbers that share a
+  // subscriber suffix is not a match.
+  if (n1.length >= 8 && n2.length >= 8 && Math.abs(n1.length - n2.length) <= 1) {
     return n1.slice(-8) === n2.slice(-8)
   }
   return false

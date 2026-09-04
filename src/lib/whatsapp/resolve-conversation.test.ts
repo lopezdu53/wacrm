@@ -12,7 +12,7 @@ import { SendMessageError } from './send-message';
 type ContactRow = { id: string; phone: string; name?: string | null };
 
 interface Script {
-  config?: { user_id: string } | null; // whatsapp_config.maybeSingle
+  config?: { id?: string; user_id: string } | null; // whatsapp_config.maybeSingle
   contactCandidates?: ContactRow[]; // contacts .like (same every call)
   /** Per-call `.like` results — overrides contactCandidates. Lets a
    *  test simulate "miss, then hit" for the unique-race path. */
@@ -46,9 +46,11 @@ function makeDb(script: Script): SupabaseClient {
       return builder;
     },
     eq: () => builder,
+    is: () => builder,
     order: () => builder,
     limit: () => {
-      // Only the conversation lookup terminates on `.limit(1)`.
+      // Conversation lookups terminate on `.limit(1)`. Config lookups
+      // chain `.limit(1).maybeSingle()` — keep the builder there.
       if (table === 'conversations' && mode === 'select') {
         const row = script.existingConversationByCall
           ? (script.existingConversationByCall[convLookupCalls] ?? null)
@@ -56,7 +58,7 @@ function makeDb(script: Script): SupabaseClient {
         convLookupCalls++;
         return Promise.resolve({ data: row ? [row] : [], error: null });
       }
-      return Promise.resolve({ data: [], error: null });
+      return builder;
     },
     like: () => {
       const data = script.contactCandidatesByCall
@@ -136,7 +138,7 @@ describe('resolveConversationByPhone', () => {
 
   it('returns the existing contact + conversation without creating', async () => {
     const db = makeDb({
-      config: { user_id: 'owner-1' },
+      config: { id: 'cfg-1', user_id: 'owner-1' },
       contactCandidates: [{ id: 'c1', phone: '14155550123' }],
       existingConversation: { id: 'cv1' },
     });
@@ -154,7 +156,7 @@ describe('resolveConversationByPhone', () => {
 
   it('creates contact + conversation when none exist', async () => {
     const db = makeDb({
-      config: { user_id: 'owner-1' },
+      config: { id: 'cfg-1', user_id: 'owner-1' },
       contactCandidates: [],
       insertedContactId: 'c2',
       existingConversation: null,
@@ -178,7 +180,7 @@ describe('resolveConversationByPhone', () => {
     // 23505 unique violation, and the post-race re-lookup now returns
     // the row a concurrent writer created.
     const db = makeDb({
-      config: { user_id: 'owner-1' },
+      config: { id: 'cfg-1', user_id: 'owner-1' },
       contactCandidatesByCall: [[], [{ id: 'c-raced', phone: '14155550123' }]],
       insertContactError: { code: '23505' },
       existingConversation: { id: 'cv-raced' },
@@ -195,9 +197,11 @@ describe('resolveConversationByPhone', () => {
     // post-race re-lookup returns the winning conversation — no duplicate
     // conversation is created (issue #363).
     const db = makeDb({
-      config: { user_id: 'owner-1' },
+      config: { id: 'cfg-1', user_id: 'owner-1' },
       contactCandidates: [{ id: 'c1', phone: '14155550123' }],
-      existingConversationByCall: [null, { id: 'cv-raced' }],
+      // channel lookup, legacy null-channel, any-contact, then
+      // the post-unique-violation re-lookup.
+      existingConversationByCall: [null, null, null, { id: 'cv-raced' }],
       insertConversationError: { code: '23505' },
     });
     const res = await resolveConversationByPhone(db, 'acct', '+14155550123');

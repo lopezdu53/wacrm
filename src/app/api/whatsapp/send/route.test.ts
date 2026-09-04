@@ -83,7 +83,7 @@ function makeSupabaseMock() {
 
     const b: Record<string, unknown> = {}
     const chain = () => b
-    for (const m of ['select', 'eq', 'in', 'order', 'limit', 'update', 'delete']) {
+    for (const m of ['select', 'eq', 'in', 'is', 'order', 'limit', 'update', 'delete']) {
       b[m] = vi.fn(chain)
     }
     b.insert = vi.fn((payload: Record<string, unknown>) => {
@@ -123,6 +123,24 @@ let supabaseMock = makeSupabaseMock()
 vi.mock('@/lib/supabase/server', () => ({
   createClient: vi.fn(async () => supabaseMock),
 }))
+
+const requireRole = vi.hoisted(() =>
+  vi.fn(async () => ({
+    supabase: supabaseMock,
+    userId: 'user-1',
+    accountId: 'acct-1',
+    role: 'agent' as const,
+    account: { id: 'acct-1', name: 'Test' },
+  })),
+)
+
+vi.mock('@/lib/auth/account', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/lib/auth/account')>()
+  return {
+    ...actual,
+    requireRole,
+  }
+})
 
 vi.mock('@/lib/flows/admin-client', () => ({
   supabaseAdmin: () => ({
@@ -180,6 +198,13 @@ describe('POST /api/whatsapp/send — contact_id template path', () => {
     createdConversation = null
     contactRow = CONTACT
     supabaseMock = makeSupabaseMock()
+    requireRole.mockImplementation(async () => ({
+      supabase: supabaseMock,
+      userId: 'user-1',
+      accountId: 'acct-1',
+      role: 'agent',
+      account: { id: 'acct-1', name: 'Test' },
+    }))
     sendTemplateMessage.mockClear()
   })
 
@@ -245,6 +270,16 @@ describe('POST /api/whatsapp/send — contact_id template path', () => {
 
     expect(res.status).toBe(404)
     expect(json.error).toMatch(/contact not found/i)
+    expect(sendTemplateMessage).not.toHaveBeenCalled()
+  })
+
+  it('403s when the caller is a viewer', async () => {
+    const { ForbiddenError } = await import('@/lib/auth/account')
+    requireRole.mockRejectedValueOnce(
+      new ForbiddenError("This action requires the 'agent' role or higher"),
+    )
+    const res = await postContactTemplate()
+    expect(res.status).toBe(403)
     expect(sendTemplateMessage).not.toHaveBeenCalled()
   })
 

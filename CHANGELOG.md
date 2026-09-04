@@ -9,6 +9,75 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.2] — 2026-08-23
+
+Hardens security, multi-number routing, and the Odoo connector.
+
+> **Migration required:** apply `046_message_id_conversation_unique.sql`
+> and `047_conversation_channel_unique_again.sql`. Also upgrade
+> the Odoo module to **19.0.1.13.0**.
+
+### Security
+
+- **Evolution webhook authentication.** `POST /api/whatsapp/evolution/webhook`
+  now requires the instance API key (`apikey` header or body) to match the
+  stored key. A guessed instance name can no longer inject contacts,
+  automations, or AI replies.
+- **Role checks on WhatsApp writes.** Send, broadcast, react, config
+  health-check, registration probe, and Evolution/Meta settings writes
+  require `agent` or `admin`. Viewers can no longer send real WhatsApp
+  messages by hitting the API directly (RLS only blocked the DB insert,
+  not the Meta call). The settings UI no longer selects access-token
+  ciphertext into the browser.
+- **Cron + link-preview + outbound webhooks.** Automations cron uses a
+  constant-time secret compare. Link-preview and webhook registration
+  reuse the DNS SSRF guard and do not follow redirects to private hosts.
+- **Middleware** now protects `/flows`, `/agents`, `/internal-chat`,
+  `/notifications`, and every `/api/*` route except an explicit public
+  allowlist.
+
+### Fixed
+
+- **API / dashboard conversation resolution is channel-aware.** Public
+  API sends and Contact-detail sends stamp `whatsapp_config_id` and no
+  longer use `.maybeSingle()` on an account with two numbers. Settings
+  overview no longer treats two connected numbers as “not configured”.
+- **Broadcast, react, media, template sync** pick a specific Meta
+  config (conversation channel, or explicit `whatsapp_config_id`)
+  instead of `.single()`.
+- **Meta status webhooks** update only messages on the number that
+  emitted them. Template lifecycle updates are scoped by WABA when
+  possible.
+- **Evolution inbound after webhook auth.** Accept the per-instance
+  token Evolution puts in `apikey` (not only the global key saved in
+  wacrm), re-apply webhook headers on settings poll, and resolve
+  `@lid` chats via `remoteJidAlt` / webhook `sender` so messages are
+  not silently skipped.
+- **Same contact → two Evolution numbers.** If the old
+  `UNIQUE(account, contact)` index is still present, the second inbound
+  was dropped. Migration 047 re-applies the per-channel unique.
+- **Evolution 24h template gate.** Mixed Meta+Evolution accounts no
+  longer lock Evolution threads behind a template after 24 hours. The
+  window is per conversation (Meta only).
+- **Add teammates without an invite link.** Settings → Members creates
+  the login (name, email, password, role) immediately; no verification
+  email or join URL.
+- **Meta and Evolution inbound share one persist/fan-out path.** The Meta
+  webhook no longer keeps a private copy of contact/conversation create,
+  message insert, unread, Flows, automations, AI, or outbound webhooks.
+  Dedup is per conversation (so the same Meta id on two numbers is not
+  collapsed), swipe-replies and `interactive_reply_id` persist on both
+  transports, stickers store as images, and AI auto-reply skips button
+  taps.
+- **Odoo cron** is incremental (`updated_since`), maps `won` deals,
+  assigns a configured default salesperson (not OdooBot), and lets you
+  rename the VAT/street/city custom fields.
+
+### Docs
+
+- EasyPanel guide lists all 47 migrations and documents Evolution.
+- Public API scope table includes `deals:read` and `sso:login`.
+
 ## [0.8.1] — 2026-07-10
 
 Fixes inbound chats fragmenting into multiple threads for the same

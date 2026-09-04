@@ -161,7 +161,9 @@ Key pages:
 
 - **App** — Next.js 16 (App Router), React 19, TypeScript, Tailwind v4.
 - **Data** — Supabase (Postgres + Auth + Storage + RLS).
-- **WhatsApp** — Meta Cloud API (official WhatsApp Business API).
+- **WhatsApp** — Meta Cloud API (official WhatsApp Business API) and
+  optional Evolution API (QR / Baileys). An Odoo 19 connector lives in
+  [`integrations/odoo/wacrm_sync/`](./integrations/odoo/wacrm_sync).
 
 ## Contributing
 

@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server'
-import { createClient } from '@/lib/supabase/server'
 import { decrypt } from '@/lib/whatsapp/encryption'
+import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import {
   getSubscribedApps,
   verifyPhoneNumber,
@@ -29,30 +29,16 @@ import {
  * what the UI badges on.
  */
 export async function GET(request: Request) {
-  const supabase = await createClient()
-  const {
-    data: { user },
-    error: authError,
-  } = await supabase.auth.getUser()
-  if (authError || !user) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
-  }
-
-  // whatsapp_config is one-row-per-account post-017. Resolve the
-  // caller's account_id so a teammate who joined an existing account
-  // sees the same registration state as the admin who set it up.
-  const { data: profile } = await supabase
-    .from('profiles')
-    .select('account_id')
-    .eq('user_id', user.id)
-    .maybeSingle()
-  const accountId = profile?.account_id as string | undefined
-  if (!accountId) {
-    return NextResponse.json({
-      live: false,
-      checks: { config_exists: false },
-      message: 'Your profile is not linked to an account.',
-    })
+  let supabase
+  let accountId: string
+  try {
+    // Decrypts the access token to ping Meta — viewers must not
+    // be able to burn API quota or exercise the stored credential.
+    const ctx = await requireRole('agent')
+    supabase = ctx.supabase
+    accountId = ctx.accountId
+  } catch (err) {
+    return toErrorResponse(err)
   }
 
   // Scope to the Meta config; target a specific number when

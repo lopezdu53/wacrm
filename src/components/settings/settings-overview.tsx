@@ -123,14 +123,15 @@ export function SettingsOverview({
       const [row, health] = await Promise.allSettled([
         supabase
           .from('whatsapp_config')
-          .select('phone_number_id')
+          .select('id')
           .eq('account_id', acctId)
+          .limit(1)
           .maybeSingle(),
         fetch('/api/whatsapp/config', { cache: 'no-store' }).then((r) => r.json()),
       ]);
       if (cancelled) return;
       setWhatsapp({
-        configured: row.status === 'fulfilled' && !!row.value.data?.phone_number_id,
+        configured: row.status === 'fulfilled' && !!row.value.data?.id,
         connected: health.status === 'fulfilled' && !!health.value?.connected,
       });
       setWhatsappLoading(false);

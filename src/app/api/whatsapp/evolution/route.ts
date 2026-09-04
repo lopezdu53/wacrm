@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
 import { createClient } from '@/lib/supabase/server';
+import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { encrypt, decrypt } from '@/lib/whatsapp/encryption';
 import {
   createEvolutionInstance,
@@ -81,6 +82,12 @@ export async function GET(request: Request) {
       try {
         const auth = authFor(row);
         const state = await getEvolutionState(auth);
+        void setEvolutionWebhook({
+          ...auth,
+          webhookUrl: inboundWebhookUrl(request),
+        }).catch((err) =>
+          console.warn('[evolution] webhook rewire failed:', err),
+        );
         const qr = state === 'open' ? null : await getEvolutionQr(auth);
         const desiredStatus = state === 'open' ? 'connected' : 'disconnected';
         if (row.status !== desiredStatus) {
@@ -113,7 +120,14 @@ export async function GET(request: Request) {
       configs.map(async (row) => {
         let state: string = 'unknown';
         try {
-          state = await getEvolutionState(authFor(row));
+          const auth = authFor(row);
+          state = await getEvolutionState(auth);
+          void setEvolutionWebhook({
+            ...auth,
+            webhookUrl: inboundWebhookUrl(request),
+          }).catch((err) =>
+            console.warn('[evolution] webhook rewire failed:', err),
+          );
         } catch {
           state = 'unknown';
         }
@@ -147,6 +161,7 @@ export async function GET(request: Request) {
 
 export async function POST(request: Request) {
   try {
+    await requireRole('admin');
     const supabase = await createClient();
     const { user, accountId } = await resolveAccount(supabase);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -282,6 +297,8 @@ export async function POST(request: Request) {
       });
     }
   } catch (err) {
+    const mapped = toErrorResponse(err);
+    if (mapped.status !== 500) return mapped;
     console.error('[evolution] POST failed:', err);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
@@ -289,6 +306,7 @@ export async function POST(request: Request) {
 
 export async function DELETE(request: Request) {
   try {
+    await requireRole('admin');
     const supabase = await createClient();
     const { user, accountId } = await resolveAccount(supabase);
     if (!user) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
@@ -320,6 +338,8 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ success: true });
   } catch (err) {
+    const mapped = toErrorResponse(err);
+    if (mapped.status !== 500) return mapped;
     console.error('[evolution] DELETE failed:', err);
     return NextResponse.json({ error: 'Internal error' }, { status: 500 });
   }
