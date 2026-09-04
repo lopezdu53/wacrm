@@ -5,6 +5,7 @@ export class DeleteAccountError extends Error {
   constructor(status: number, message: string) {
     super(message);
     this.name = 'DeleteAccountError';
+    this.status = status;
   }
 }
 
