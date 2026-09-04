@@ -1345,7 +1345,12 @@
       "creating": "Creating...",
       "addMember": "Add member",
       "createdToast": "Added {name} as {role}. They can sign in now.",
-      "createFailed": "Could not create the member. Try again."
+      "createFailed": "Could not create the member. Try again.",
+      "createTimedOut": "Creating the member took too long. Check whether the email already exists and try again.",
+      "cannotAddSelf": "That email is yours. You cannot add yourself as a teammate.",
+      "emailExists": "A user with this email already exists.",
+      "otherWorkspace": "That email already belongs to another workspace.",
+      "alreadyMember": "That email is already a member of this account."
     },
     "tagsAndFields": {
       "title": "Fields & tags",

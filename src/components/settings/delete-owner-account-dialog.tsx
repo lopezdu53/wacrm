@@ -62,6 +62,7 @@ export function DeleteOwnerAccountDialog({
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ confirmName: confirmName.trim(), password }),
+        signal: AbortSignal.timeout(20_000),
       });
       if (!res.ok) {
         const payload = await res.json().catch(() => ({}));

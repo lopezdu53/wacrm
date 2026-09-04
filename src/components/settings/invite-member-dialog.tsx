@@ -89,11 +89,25 @@ export function InviteMemberDialog({
           password,
           role,
         }),
+        signal: AbortSignal.timeout(20_000),
       });
 
       if (!res.ok) {
-        const payload = await res.json().catch(() => ({}));
-        toast.error(payload.error || t('createFailed'));
+        const payload = (await res.json().catch(() => ({}))) as {
+          error?: string;
+          code?: string;
+        };
+        const byCode: Record<string, string> = {
+          own_email: t('cannotAddSelf'),
+          email_exists: t('emailExists'),
+          other_workspace: t('otherWorkspace'),
+          already_member: t('alreadyMember'),
+        };
+        toast.error(
+          (payload.code && byCode[payload.code]) ||
+            payload.error ||
+            t('createFailed'),
+        );
         return;
       }
 
@@ -103,7 +117,10 @@ export function InviteMemberDialog({
       onOpenChange(false);
     } catch (err) {
       console.error('[InviteMemberDialog] create error:', err);
-      toast.error(t('createFailed'));
+      const timedOut =
+        err instanceof DOMException &&
+        (err.name === 'TimeoutError' || err.name === 'AbortError');
+      toast.error(timedOut ? t('createTimedOut') : t('createFailed'));
     } finally {
       setSubmitting(false);
     }

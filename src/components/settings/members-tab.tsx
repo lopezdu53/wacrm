@@ -74,6 +74,7 @@ import {
   PRESENCE_DOT_CLASS,
   PresenceDot,
 } from '@/components/presence/presence-dot';
+import { hardRedirectToLogin } from '@/lib/auth/hard-logout';
 import { DeleteOwnerAccountDialog } from './delete-owner-account-dialog';
 import { InviteMemberDialog } from './invite-member-dialog';
 import { SettingsPanelHead } from './settings-panel-head';
@@ -131,7 +132,7 @@ function fmtExpiresIn(iso: string, t: (key: string, values?: Record<string, stri
 export function MembersTab() {
   const t = useTranslations('Settings.members');
   const tRoles = useTranslations('Settings.roles');
-  const { user, canManageMembers, account, signOut } = useAuth();
+  const { user, canManageMembers, account } = useAuth();
   const canDeleteAccount = useCan('delete-account');
   const { getPresence, getRow, now } = usePresence();
 
@@ -682,7 +683,7 @@ export function MembersTab() {
         accountName={account?.name ?? ''}
         memberCount={members.length}
         onDeleted={() => {
-          void signOut();
+          hardRedirectToLogin();
         }}
       />
 

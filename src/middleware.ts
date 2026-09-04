@@ -23,7 +23,27 @@ export async function middleware(request: NextRequest) {
     }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  // A deleted Auth user (owner wiped their workspace) leaves a refresh
+  // cookie that makes getUser() throw or hang. That wedges every reload
+  // until cookies are cleared by hand. Fail closed to "logged out" and
+  // drop the dead session.
+  let user: { id: string } | null = null
+  let authFailed = false
+  let authTimer: ReturnType<typeof setTimeout> | undefined
+  try {
+    const result = await Promise.race([
+      supabase.auth.getUser(),
+      new Promise<never>((_, reject) => {
+        authTimer = setTimeout(() => reject(new Error('auth timeout')), 4000)
+      }),
+    ])
+    user = result.data.user ?? null
+  } catch {
+    authFailed = true
+    user = null
+  } finally {
+    if (authTimer) clearTimeout(authTimer)
+  }
 
   // getUser() transparently refreshes an expired access token, which
   // ROTATES the refresh token and writes the new cookies onto
@@ -40,6 +60,20 @@ export async function middleware(request: NextRequest) {
       response.cookies.set(cookie)
     })
     return response
+  }
+
+  const clearAuthCookies = <T extends NextResponse>(response: T): T => {
+    request.cookies.getAll().forEach(({ name }) => {
+      if (name.startsWith('sb-')) {
+        response.cookies.set(name, '', { path: '/', maxAge: 0 })
+      }
+    })
+    return response
+  }
+
+  const finalize = <T extends NextResponse>(response: T): T => {
+    const withCookies = withRefreshedCookies(response)
+    return authFailed ? clearAuthCookies(withCookies) : withCookies
   }
 
   // Auth pages - redirect to dashboard if already logged in.
@@ -66,7 +100,7 @@ export async function middleware(request: NextRequest) {
       url.pathname = '/dashboard'
       url.search = ''
     }
-    return withRefreshedCookies(NextResponse.redirect(url))
+    return finalize(NextResponse.redirect(url))
   }
 
   // Protected pages - redirect to login if not authenticated
@@ -86,7 +120,7 @@ export async function middleware(request: NextRequest) {
   if (!user && protectedPaths.some(path => request.nextUrl.pathname.startsWith(path))) {
     const url = request.nextUrl.clone()
     url.pathname = '/login'
-    return withRefreshedCookies(NextResponse.redirect(url))
+    return finalize(NextResponse.redirect(url))
   }
 
   // API routes that need a session. Public exceptions: Meta/Evolution
@@ -104,12 +138,12 @@ export async function middleware(request: NextRequest) {
     pathname.includes('/webhook') ||
     /\/api\/invitations\/[^/]+\/peek$/.test(pathname)
   if (!user && pathname.startsWith('/api/') && !publicApi) {
-    return withRefreshedCookies(
+    return finalize(
       NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     )
   }
 
-  return supabaseResponse
+  return finalize(supabaseResponse)
 }
 
 export const config = {

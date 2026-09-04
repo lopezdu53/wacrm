@@ -110,10 +110,14 @@ export async function POST(request: Request) {
 
     const body = await request.json().catch(() => null);
     const input = parseCreateMemberBody(body);
+    const {
+      data: { user },
+    } = await ctx.supabase.auth.getUser();
     const { userId } = await createAccountMember(
       supabaseAdmin(),
       ctx.accountId,
       input,
+      { caller: { userId: ctx.userId, email: user?.email ?? null } },
     );
 
     return NextResponse.json(
@@ -129,7 +133,10 @@ export async function POST(request: Request) {
     );
   } catch (err) {
     if (err instanceof CreateMemberError) {
-      return NextResponse.json({ error: err.message }, { status: err.status });
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: err.status },
+      );
     }
     return toErrorResponse(err);
   }

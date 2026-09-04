@@ -1345,7 +1345,12 @@
       "creating": "Creando...",
       "addMember": "Agregar miembro",
       "createdToast": "Se agregó a {name} como {role}. Ya puede iniciar sesión.",
-      "createFailed": "No se pudo crear el miembro. Intenta de nuevo."
+      "createFailed": "No se pudo crear el miembro. Intenta de nuevo.",
+      "createTimedOut": "La creación tardó demasiado. Revisa si el correo ya existe e intenta de nuevo.",
+      "cannotAddSelf": "Ese correo es el tuyo. No puedes agregarte como compañero.",
+      "emailExists": "Ya existe un usuario con ese correo.",
+      "otherWorkspace": "Ese correo ya pertenece a otro espacio de trabajo.",
+      "alreadyMember": "Ese correo ya es miembro de esta cuenta."
     },
     "tagsAndFields": {
       "title": "Campos y etiquetas",
