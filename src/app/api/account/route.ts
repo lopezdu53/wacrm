@@ -1,10 +1,11 @@
 // ============================================================
 // /api/account
 //
-//   GET   — current caller's account + role. Any member.
-//   PATCH — rename the account.                  Admin+.
+//   GET    — current caller's account + role. Any member.
+//   PATCH  — rename the account.                  Admin+.
+//   DELETE — wipe the workspace + owner login.    Owner only.
 //
-// Why both verbs share a route file
+// Why these verbs share a route file
 //   They speak about the same singular resource (the caller's
 //   account) and reuse the same `requireRole` plumbing. Splitting
 //   them across files would duplicate the `account_id` lookup
@@ -18,6 +19,13 @@ import {
   getCurrentAccount,
   toErrorResponse,
 } from "@/lib/auth/account";
+import {
+  DeleteAccountError,
+  parseDeleteAccountBody,
+  verifyOwnerPassword,
+  wipeAccountAndUsers,
+} from "@/lib/auth/delete-account";
+import { supabaseAdmin } from "@/lib/flows/admin-client";
 import {
   checkRateLimit,
   rateLimitResponse,
@@ -97,6 +105,64 @@ export async function PATCH(request: Request) {
     }
 
     return NextResponse.json({ account: data });
+  } catch (err) {
+    return toErrorResponse(err);
+  }
+}
+
+export async function DELETE(request: Request) {
+  try {
+    const ctx = await requireRole("owner");
+
+    // Tighter than generic admin actions: a wrong-password loop is
+    // the realistic abuse case, and a successful call is irreversible.
+    const limit = checkRateLimit(
+      `admin:deleteAccount:${ctx.userId}`,
+      RATE_LIMITS.deleteAccount,
+    );
+    if (!limit.success) return rateLimitResponse(limit);
+
+    const body = await request.json().catch(() => null);
+
+    let parsed;
+    try {
+      parsed = parseDeleteAccountBody(body, ctx.account.name);
+    } catch (err) {
+      if (err instanceof DeleteAccountError) {
+        return NextResponse.json({ error: err.message }, { status: err.status });
+      }
+      throw err;
+    }
+
+    const {
+      data: { user },
+    } = await ctx.supabase.auth.getUser();
+    const email = user?.email;
+    if (!email) {
+      return NextResponse.json(
+        { error: "Owner email is required to verify deletion" },
+        { status: 400 },
+      );
+    }
+
+    const passwordOk = await verifyOwnerPassword(email, parsed.password);
+    if (!passwordOk) {
+      return NextResponse.json(
+        { error: "Password is incorrect" },
+        { status: 403 },
+      );
+    }
+
+    try {
+      await wipeAccountAndUsers(supabaseAdmin(), ctx.accountId, ctx.userId);
+    } catch (err) {
+      if (err instanceof DeleteAccountError) {
+        return NextResponse.json({ error: err.message }, { status: err.status });
+      }
+      throw err;
+    }
+
+    return NextResponse.json({ ok: true });
   } catch (err) {
     return toErrorResponse(err);
   }

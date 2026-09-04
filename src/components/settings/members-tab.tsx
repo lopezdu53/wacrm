@@ -5,9 +5,9 @@
 //
 // Two stacked sections:
 //   1. Roster   — every member of the account. Admin+ can change a
-//                 teammate's role inline and remove them. Owner row
-//                 is non-editable everywhere (transfer is its own
-//                 separate flow, deferred to a later PR).
+//                 teammate's role inline and remove them. The owner
+//                 row has no role editor; the owner can open a
+//                 verified delete-account dialog instead.
 //   2. Pending  — outstanding invite links. Admin+ can revoke. The
 //                 plaintext URL is gone after the create dialog
 //                 closes, so we surface a "revoke + new link" hint
@@ -66,6 +66,7 @@ import {
 import { useTranslations } from 'next-intl';
 import { RequireRole } from '@/components/auth/require-role';
 import { useAuth } from '@/hooks/use-auth';
+import { useCan } from '@/hooks/use-can';
 import { usePresence } from '@/hooks/use-presence';
 import type { AccountRole } from '@/lib/auth/roles';
 import { presenceLabel, summarize } from '@/lib/presence';
@@ -73,6 +74,7 @@ import {
   PRESENCE_DOT_CLASS,
   PresenceDot,
 } from '@/components/presence/presence-dot';
+import { DeleteOwnerAccountDialog } from './delete-owner-account-dialog';
 import { InviteMemberDialog } from './invite-member-dialog';
 import { SettingsPanelHead } from './settings-panel-head';
 import { ROLE_META } from './role-meta';
@@ -129,7 +131,8 @@ function fmtExpiresIn(iso: string, t: (key: string, values?: Record<string, stri
 export function MembersTab() {
   const t = useTranslations('Settings.members');
   const tRoles = useTranslations('Settings.roles');
-  const { user, canManageMembers } = useAuth();
+  const { user, canManageMembers, account, signOut } = useAuth();
+  const canDeleteAccount = useCan('delete-account');
   const { getPresence, getRow, now } = usePresence();
 
   const [members, setMembers] = useState<Member[]>([]);
@@ -137,6 +140,7 @@ export function MembersTab() {
   const [loading, setLoading] = useState(true);
 
   const [inviteOpen, setInviteOpen] = useState(false);
+  const [deleteAccountOpen, setDeleteAccountOpen] = useState(false);
   const [removingMember, setRemovingMember] = useState<Member | null>(null);
   const [pendingMemberAction, setPendingMemberAction] = useState<string | null>(
     null,
@@ -547,6 +551,18 @@ export function MembersTab() {
                         <Trash2 className="size-4" />
                       </Button>
                     )}
+                    {canDeleteAccount && isOwnerRow && isSelf && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDeleteAccountOpen(true)}
+                        aria-label={t('deleteAccountAria')}
+                        className="border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:border-red-500/60 hover:text-red-200"
+                      >
+                        <Trash2 className="size-4" />
+                        {t('deleteAccount')}
+                      </Button>
+                    )}
                   </div>
                 </li>
               );
@@ -630,10 +646,44 @@ export function MembersTab() {
         ) : null}
       </RequireRole>
 
+      <RequireRole min="owner">
+        <Card className="border border-red-500/30 bg-red-500/5 ring-red-500/20">
+          <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div className="min-w-0">
+              <h3 className="text-sm font-semibold text-red-200">
+                {t('dangerZoneTitle')}
+              </h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                {t('dangerZoneDesc')}
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setDeleteAccountOpen(true)}
+              className="shrink-0 border-red-500/40 bg-red-500/10 text-red-300 hover:bg-red-500/20 hover:border-red-500/60 hover:text-red-200"
+            >
+              <Trash2 className="size-4" />
+              {t('deleteAccount')}
+            </Button>
+          </CardContent>
+        </Card>
+      </RequireRole>
+
       <InviteMemberDialog
         open={inviteOpen}
         onOpenChange={setInviteOpen}
         onCreated={loadEverything}
+      />
+
+      <DeleteOwnerAccountDialog
+        open={deleteAccountOpen}
+        onOpenChange={setDeleteAccountOpen}
+        accountName={account?.name ?? ''}
+        memberCount={members.length}
+        onDeleted={() => {
+          void signOut();
+        }}
       />
 
       <Dialog
