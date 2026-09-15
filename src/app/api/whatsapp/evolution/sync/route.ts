@@ -15,6 +15,7 @@ import { NextResponse } from 'next/server';
 import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { decrypt } from '@/lib/whatsapp/encryption';
+import { contactKeyToRemoteJid } from '@/lib/whatsapp/peer-identity';
 import {
   fetchEvolutionMessages,
   fetchEvolutionMediaBase64,
@@ -83,11 +84,13 @@ export async function POST(request: Request) {
       .select('phone')
       .eq('id', conv.contact_id)
       .maybeSingle();
-    const digits = String(contact?.phone ?? '').replace(/\D/g, '');
-    if (!digits) {
-      return NextResponse.json({ error: 'Contact has no phone' }, { status: 400 });
+    const remoteJid = contactKeyToRemoteJid(String(contact?.phone ?? ''));
+    if (!remoteJid) {
+      return NextResponse.json(
+        { error: 'Contact has no WhatsApp address' },
+        { status: 400 },
+      );
     }
-    const remoteJid = `${digits}@s.whatsapp.net`;
 
     const auth = {
       baseUrl: config.evolution_base_url as string,

@@ -36,6 +36,7 @@ import {
   sendEvolutionMedia,
   type EvolutionMediaType,
 } from '@/lib/whatsapp/evolution-api';
+import { resolveOutboundRecipient } from '@/lib/whatsapp/peer-identity';
 import {
   validateInteractivePayload,
   interactivePayloadPreviewText,
@@ -44,9 +45,6 @@ import {
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import {
-  sanitizePhoneForMeta,
-  isValidE164,
-  phoneVariants,
   isRecipientNotAllowedError,
 } from '@/lib/whatsapp/phone-utils';
 import type { MessageTemplate } from '@/types';
@@ -245,15 +243,6 @@ export async function sendMessageToConversation(
     );
   }
 
-  const sanitizedPhone = sanitizePhoneForMeta(contact.phone);
-  if (!isValidE164(sanitizedPhone)) {
-    throw new SendMessageError(
-      'bad_request',
-      'Invalid phone number format',
-      400
-    );
-  }
-
   // WhatsApp config. Replies go out the SAME number that owns this
   // thread. Unstamped legacy rows only resolve when the account has
   // exactly one number — never "oldest Evolution instance".
@@ -279,6 +268,10 @@ export async function sendMessageToConversation(
   }
 
   const isEvolution = config.provider === 'evolution';
+  const outbound = resolveOutboundRecipient(contact.phone, isEvolution);
+  if (!outbound.ok) {
+    throw new SendMessageError('bad_request', outbound.error, 400);
+  }
 
   // Meta rows carry an access_token; Evolution rows carry an encrypted
   // evolution_api_key instead. Decrypt whichever this provider uses.
@@ -449,10 +442,12 @@ export async function sendMessageToConversation(
   // Send via Meta — retry across phone-number variants if Meta rejects
   // with "recipient not in allowed list"; persist a working variant
   // back to the contact so the next send goes straight through.
+  // @username / LID keys are sent as-is on Evolution and never rewritten
+  // to digits (that would mix chats).
   let waMessageId = '';
-  let workingPhone = sanitizedPhone;
+  let workingPhone = outbound.baseline;
   try {
-    const variants = phoneVariants(sanitizedPhone);
+    const variants = outbound.variants;
     let lastError: unknown = null;
 
     for (const variant of variants) {
@@ -481,9 +476,9 @@ export async function sendMessageToConversation(
     throw new SendMessageError('meta_error', `Meta API error: ${message}`, 502);
   }
 
-  if (workingPhone !== sanitizedPhone) {
+  if (!outbound.isHandle && workingPhone !== outbound.baseline) {
     console.log(
-      `[send-message] Auto-corrected contact phone: ${sanitizedPhone} → ${workingPhone}`
+      `[send-message] Auto-corrected contact phone: ${outbound.baseline} → ${workingPhone}`
     );
     await db
       .from('contacts')

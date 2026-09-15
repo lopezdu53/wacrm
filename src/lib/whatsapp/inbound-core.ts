@@ -11,7 +11,7 @@
  */
 
 import { supabaseAdmin } from '@/lib/flows/admin-client';
-import { normalizePhone } from '@/lib/whatsapp/phone-utils';
+import { canonicalContactKey } from '@/lib/whatsapp/phone-utils';
 import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe';
 import { runAutomationsForTrigger } from '@/lib/automations/engine';
 import { dispatchInboundToFlows } from '@/lib/flows/engine';
@@ -57,7 +57,10 @@ export async function findOrCreateContact(
   phone: string,
   name: string,
 ): Promise<ContactOutcome | null> {
-  const existing = await findExistingContact(supabaseAdmin(), accountId, phone);
+  const key = canonicalContactKey(phone);
+  if (!key) return null;
+
+  const existing = await findExistingContact(supabaseAdmin(), accountId, key);
 
   if (existing) {
     if (name && name !== existing.name) {
@@ -74,8 +77,8 @@ export async function findOrCreateContact(
     .insert({
       account_id: accountId,
       user_id: configOwnerUserId,
-      phone,
-      name: name || phone,
+      phone: key,
+      name: name || key,
     })
     .select()
     .single();
@@ -83,7 +86,7 @@ export async function findOrCreateContact(
   if (error) {
     // Lost a race — re-resolve the row the unique index kept.
     if (isUniqueViolation(error)) {
-      const raced = await findExistingContact(supabaseAdmin(), accountId, phone);
+      const raced = await findExistingContact(supabaseAdmin(), accountId, key);
       if (raced) return { contact: raced as ContactRow, wasCreated: false };
     }
     console.error('[inbound-core] error creating contact:', error);
@@ -337,7 +340,8 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
 
   const outbound = args.outbound === true;
   const whatsappConfigId = args.whatsappConfigId ?? null;
-  const senderPhone = normalizePhone(rawPhone);
+  const senderPhone = canonicalContactKey(rawPhone);
+  if (!senderPhone) return;
   const contentType = normalizeInboundContentType(args.contentType);
 
   const contactOutcome = await findOrCreateContact(

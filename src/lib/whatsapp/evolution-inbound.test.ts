@@ -66,7 +66,7 @@ describe('resolveEvolutionSenderPhone', () => {
     expect(phoneFromJid('ventas')).toBeNull();
   });
 
-  it('skips groups and bare LIDs', () => {
+  it('skips groups and bare LIDs as phones', () => {
     expect(
       resolveEvolutionSenderPhone({
         key: { remoteJid: '120363@g.us', id: 'm1' },
@@ -75,6 +75,16 @@ describe('resolveEvolutionSenderPhone', () => {
     expect(
       resolveEvolutionSenderPhone({
         key: { remoteJid: '123456789012345@lid', id: 'm1' },
+      }),
+    ).toBeNull();
+  });
+
+  it('does not treat @username JIDs as phone digits', () => {
+    expect(phoneFromJid('yel_cac@s.whatsapp.net')).toBeNull();
+    expect(phoneFromJid('1E4NDRA@s.whatsapp.net')).toBeNull();
+    expect(
+      resolveEvolutionSenderPhone({
+        key: { remoteJid: '1E4NDRA@s.whatsapp.net', id: 'm1' },
       }),
     ).toBeNull();
   });

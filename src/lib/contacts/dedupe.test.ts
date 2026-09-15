@@ -64,16 +64,31 @@ describe("dedupeByPhone", () => {
     expect(unique).toHaveLength(1);
     expect(duplicates).toBe(1);
   });
+
+  it("keeps distinct WhatsApp @usernames instead of collapsing them", () => {
+    const { unique, duplicates } = dedupeByPhone([
+      { phone: "@1E4NDRA" },
+      { phone: "yel_cac" },
+      { phone: "user:1e4ndra" },
+    ]);
+    expect(unique.map((r) => r.phone)).toEqual(["@1E4NDRA", "yel_cac"]);
+    expect(duplicates).toBe(1);
+  });
 });
 
 describe("findExistingContact", () => {
   // Minimal SupabaseClient stub: resolves the .from().select().eq().like()
-  // chain to a fixed candidate set.
+  // / .in() chain to a fixed candidate set.
   function stubDb(rows: Array<{ id: string; phone: string }>): SupabaseClient {
     const builder = {
       select: () => builder,
       eq: () => builder,
       like: () => Promise.resolve({ data: rows, error: null }),
+      in: (_col: string, vals: string[]) =>
+        Promise.resolve({
+          data: rows.filter((r) => vals.includes(r.phone)),
+          error: null,
+        }),
     };
     return { from: () => builder } as unknown as SupabaseClient;
   }
@@ -93,5 +108,18 @@ describe("findExistingContact", () => {
   it("returns null for an empty phone without querying", async () => {
     const db = stubDb([{ id: "c1", phone: "15551234567" }]);
     expect(await findExistingContact(db, "acct", "   ")).toBeNull();
+  });
+
+  it("exact-matches @username keys and does not last-8 merge them", async () => {
+    const db = stubDb([
+      { id: "c1", phone: "user:1e4ndra" },
+      { id: "c2", phone: "user:yel_cac" },
+      { id: "c3", phone: "573001112233" },
+    ]);
+    expect((await findExistingContact(db, "acct", "1E4NDRA"))?.id).toBe("c1");
+    expect((await findExistingContact(db, "acct", "@yel_cac"))?.id).toBe("c2");
+    expect((await findExistingContact(db, "acct", "user:yel_cac"))?.id).toBe(
+      "c2",
+    );
   });
 });

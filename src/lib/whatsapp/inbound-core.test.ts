@@ -267,6 +267,27 @@ describe('recordInboundMessage', () => {
       }),
     );
   });
+
+  it('keeps WhatsApp @username keys instead of stripping them to digits', async () => {
+    h.findExistingContact.mockResolvedValue({
+      id: 'contact-u',
+      name: '@1E4NDRA',
+      phone: 'user:1e4ndra',
+    });
+    await recordInboundMessage({
+      ...BASE,
+      senderPhone: 'user:1e4ndra',
+      contactName: '@1E4NDRA',
+    });
+    expect(h.findExistingContact).toHaveBeenCalledWith(
+      expect.anything(),
+      'acct-1',
+      'user:1e4ndra',
+    );
+    expect(h.findExistingContact.mock.calls.some((c) => c[2] === '14')).toBe(
+      false,
+    );
+  });
 });
 
 describe('planLegacyConversationReuse', () => {

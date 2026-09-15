@@ -2,9 +2,13 @@
  * Sanitize phone number for Meta WhatsApp API.
  * Meta requires digits only — no + prefix, no spaces, no dashes.
  * e.g. "+370 63949836" → "37063949836"
+ *
+ * Do not use this on WhatsApp @username / LID contact keys — it would
+ * turn `1E4NDRA` into `14` and merge unrelated chats.
  */
 export function sanitizePhoneForMeta(phone: string): string {
   if (!phone) return ''
+  if (isWhatsAppHandleKey(phone)) return ''
   return phone.replace(/\D/g, '')
 }
 
@@ -14,15 +18,110 @@ export function sanitizePhoneForMeta(phone: string): string {
  */
 export function normalizePhone(phone: string): string {
   if (!phone) return ''
+  if (isWhatsAppHandleKey(phone)) return ''
   return phone.replace(/\D/g, '')
+}
+
+/** WhatsApp @username: 3–30 letters/digits/._ with at least one letter. */
+const USERNAME_BODY = /^[A-Za-z0-9][A-Za-z0-9._]{2,29}$/
+
+export function isWhatsAppUsername(value: string): boolean {
+  if (!value) return false
+  const u = value.trim().replace(/^@/, '')
+  return USERNAME_BODY.test(u) && /[A-Za-z]/.test(u)
+}
+
+/**
+ * True when `contacts.phone` is a WhatsApp @username or LID key, not
+ * an E.164 number. Stored as `user:{name}`, `lid:{id}`, `@name`, a
+ * bare username, or `{id}@lid`.
+ */
+export function isWhatsAppHandleKey(phone: string | null | undefined): boolean {
+  if (!phone || typeof phone !== 'string') return false
+  const t = phone.trim()
+  if (!t) return false
+  if (/^user:/i.test(t) || /^lid:/i.test(t)) return true
+  if (/@lid$/i.test(t)) return true
+  const userPart = t.includes('@') ? t.slice(0, t.indexOf('@')) : t.replace(/^@/, '')
+  return isWhatsAppUsername(userPart)
+}
+
+export function canonicalizeWhatsAppUsername(value: string): string {
+  return value.trim().replace(/^@/, '').replace(/^user:/i, '').toLowerCase()
+}
+
+/**
+ * Canonical `contacts.phone` value: E.164 digits, `user:{name}`, or
+ * `lid:{id}`. Empty when the input is not a usable identity.
+ */
+export function canonicalContactKey(phone: string | null | undefined): string {
+  if (!phone || typeof phone !== 'string') return ''
+  const t = phone.trim()
+  if (!t) return ''
+
+  if (/^lid:/i.test(t) || /@lid$/i.test(t)) {
+    const lid = t.replace(/^lid:/i, '').replace(/@lid$/i, '').replace(/\D/g, '')
+    return lid ? `lid:${lid}` : ''
+  }
+
+  if (/^user:/i.test(t) || t.startsWith('@') || isWhatsAppUsername(t)) {
+    const user = canonicalizeWhatsAppUsername(t)
+    return isWhatsAppUsername(user) ? `user:${user}` : ''
+  }
+
+  if (t.includes('@')) {
+    const user = t.slice(0, t.indexOf('@')).trim()
+    if (isWhatsAppUsername(user)) return `user:${canonicalizeWhatsAppUsername(user)}`
+    const digits = user.replace(/\D/g, '')
+    return digits
+  }
+
+  return t.replace(/\D/g, '')
+}
+
+/** Exact-match aliases for looking up a handle contact (legacy rows too). */
+export function contactKeyAliases(phone: string): string[] {
+  const key = canonicalContactKey(phone)
+  if (!key) return []
+  const aliases = new Set<string>([key, phone.trim()])
+  if (key.startsWith('user:')) {
+    const u = key.slice(5)
+    aliases.add(u)
+    aliases.add(`@${u}`)
+    aliases.add(`user:${u}`)
+  } else if (key.startsWith('lid:')) {
+    const lid = key.slice(4)
+    aliases.add(lid)
+    aliases.add(`${lid}@lid`)
+    aliases.add(`lid:${lid}`)
+  }
+  return [...aliases].filter(Boolean)
+}
+
+/** Inbox / sidebar label when the contact has no pushName. */
+export function formatWhatsAppAddress(phone: string | null | undefined): string {
+  if (!phone) return ''
+  const key = canonicalContactKey(phone)
+  if (key.startsWith('user:')) return `@${key.slice(5)}`
+  if (key.startsWith('lid:')) return phone.trim()
+  return phone.trim()
 }
 
 /**
  * Compare two phone numbers accounting for trunk prefix differences.
  * e.g. "370063949836" (with trunk 0) matches "37063949836" (without trunk 0)
  * by comparing the last 8 digits.
+ *
+ * @username and LID keys never use last-8 matching — two LIDs that
+ * share a suffix, or a username whose letters hide digits (`1E4NDRA`
+ * → `14`), must stay distinct contacts.
  */
 export function phonesMatch(phone1: string, phone2: string): boolean {
+  if (isWhatsAppHandleKey(phone1) || isWhatsAppHandleKey(phone2)) {
+    const a = canonicalContactKey(phone1)
+    const b = canonicalContactKey(phone2)
+    return Boolean(a && a === b)
+  }
   const n1 = normalizePhone(phone1)
   const n2 = normalizePhone(phone2)
   if (n1 === n2) return true

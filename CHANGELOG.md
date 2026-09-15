@@ -14,8 +14,9 @@ and polish.
 Hardens security, multi-number routing, and the Odoo connector.
 
 > **Migration required:** apply `046_message_id_conversation_unique.sql`,
-> `047_conversation_channel_unique_again.sql`, and
-> `048_conversation_channel_no_cross_number.sql`. Also upgrade
+> `047_conversation_channel_unique_again.sql`,
+> `048_conversation_channel_no_cross_number.sql`, and
+> `049_whatsapp_username_lid_contact_keys.sql`. Also upgrade
 > the Odoo module to **19.0.1.13.0**.
 
 ### Security
@@ -60,6 +61,14 @@ Hardens security, multi-number routing, and the Odoo connector.
   received in another). Code now refuses that merge; migration 048
   re-drops the leftover index and stamps single-Evolution null-channel
   rows. Replies never fall back to "the account's oldest number".
+- **WhatsApp @username / LID chats.** Evolution was treating
+  `@yel_cac` / `@1E4NDRA` as phone digits (`1E4NDRA` → `14`) and falling
+  LID-only chats back to the linked instance JID, so several people
+  landed in one thread. Each @username or LID now gets its own contact
+  key (`user:…` / `lid:…`); replies go to the username or `{lid}@lid`,
+  never stripped digits. Existing mixed threads are not split
+  automatically — new messages stay on the right person. Migration 049
+  unique-indexes those keys.
 - **Evolution 24h template gate.** Mixed Meta+Evolution accounts no
   longer lock Evolution threads behind a template after 24 hours. The
   window is per conversation (Meta only).

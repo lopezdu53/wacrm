@@ -11,11 +11,9 @@ import {
   isEvolutionConfig,
 } from '@/lib/whatsapp/engine-transport'
 import {
-  sanitizePhoneForMeta,
-  isValidE164,
-  phoneVariants,
   isRecipientNotAllowedError,
 } from '@/lib/whatsapp/phone-utils'
+import { resolveOutboundRecipient } from '@/lib/whatsapp/peer-identity'
 import { supabaseAdmin } from './admin-client'
 
 // ------------------------------------------------------------
@@ -131,11 +129,6 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
     throw new Error('contact not found for this account')
   }
 
-  const sanitized = sanitizePhoneForMeta(contact.phone)
-  if (!isValidE164(sanitized)) {
-    throw new Error(`contact phone invalid: ${contact.phone}`)
-  }
-
   const config = await loadConversationChannelConfig(
     db,
     input.accountId,
@@ -143,6 +136,14 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
   )
   if (!config) {
     throw new Error('WhatsApp not configured for this account')
+  }
+
+  const outbound = resolveOutboundRecipient(
+    contact.phone,
+    isEvolutionConfig(config),
+  )
+  if (!outbound.ok) {
+    throw new Error(outbound.error)
   }
 
   const attempt = async (phone: string): Promise<string> => {
@@ -172,8 +173,8 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
   // Same phone-variant retry as /api/whatsapp/send — Meta sandbox and
   // numbers registered with/without a trunk 0 both require this to
   // reliably land a message.
-  const variants = phoneVariants(sanitized)
-  let workingPhone = sanitized
+  const variants = outbound.variants
+  let workingPhone = outbound.baseline
   let waMessageId = ''
   let lastError: unknown = null
   for (const v of variants) {
@@ -190,7 +191,7 @@ async function sendViaMeta(input: SendInput): Promise<{ whatsapp_message_id: str
   }
   if (lastError) throw lastError
 
-  if (workingPhone !== sanitized) {
+  if (!outbound.isHandle && workingPhone !== outbound.baseline) {
     await db.from('contacts').update({ phone: workingPhone }).eq('id', contact.id)
   }
 

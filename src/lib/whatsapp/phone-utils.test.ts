@@ -1,7 +1,10 @@
 import { describe, expect, it } from "vitest";
 import {
+  canonicalContactKey,
+  formatWhatsAppAddress,
   isRecipientNotAllowedError,
   isValidE164,
+  isWhatsAppHandleKey,
   normalizePhone,
   phoneVariants,
   phonesMatch,
@@ -65,6 +68,32 @@ describe("phonesMatch", () => {
   it("ignores formatting noise on both sides", () => {
     expect(phonesMatch("+370 6 394 9836", "37063949836")).toBe(true);
     expect(phonesMatch("(415) 555-1212", "+1 415-555-1212")).toBe(true);
+  });
+
+  it("does not last-8 merge @username or LID keys", () => {
+    expect(phonesMatch("user:1e4ndra", "user:yel_cac")).toBe(false);
+    expect(phonesMatch("1E4NDRA", "14")).toBe(false);
+    expect(
+      phonesMatch("lid:123456789012345", "lid:223456789012345"),
+    ).toBe(false);
+    expect(phonesMatch("user:yel_cac", "@yel_cac")).toBe(true);
+  });
+});
+
+describe("WhatsApp @username / LID keys", () => {
+  it("does not strip letters out of a username into fake digits", () => {
+    expect(sanitizePhoneForMeta("1E4NDRA")).toBe("");
+    expect(normalizePhone("user:yel_cac")).toBe("");
+    expect(canonicalContactKey("1E4NDRA")).toBe("user:1e4ndra");
+    expect(canonicalContactKey("@yel_cac")).toBe("user:yel_cac");
+    expect(canonicalContactKey("12345@lid")).toBe("lid:12345");
+    expect(canonicalContactKey("573001112233")).toBe("573001112233");
+  });
+
+  it("formats handles for the inbox", () => {
+    expect(formatWhatsAppAddress("user:yel_cac")).toBe("@yel_cac");
+    expect(isWhatsAppHandleKey("1E4NDRA")).toBe(true);
+    expect(isWhatsAppHandleKey("573001112233")).toBe(false);
   });
 });
 

@@ -15,6 +15,8 @@
  * bodies here need adjusting.
  */
 
+import { toEvolutionRecipient } from '@/lib/whatsapp/peer-identity';
+
 export interface EvolutionAuth {
   /** Base URL of the Evolution server, no trailing slash (validated). */
   baseUrl: string;
@@ -316,9 +318,9 @@ export async function logoutEvolutionInstance({
 // Sending
 // ============================================================
 
-/** Evolution accepts the bare national+country number (no leading +). */
+/** Evolution accepts E.164 digits, a bare @username, or `{lid}@lid`. */
 export function toEvolutionNumber(e164OrDigits: string): string {
-  return e164OrDigits.replace(/[^\d]/g, '');
+  return toEvolutionRecipient(e164OrDigits);
 }
 
 function extractMessageId(data: unknown): string {

@@ -10,6 +10,8 @@
 
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { recordInboundMessage } from '@/lib/whatsapp/inbound-core';
+import { resolveEvolutionPeer } from '@/lib/whatsapp/peer-identity';
+import { formatWhatsAppAddress } from '@/lib/whatsapp/phone-utils';
 import { vcardsToText } from '@/lib/whatsapp/vcard';
 
 export const CONTENT_TYPE_BY_MEDIA = {
@@ -49,6 +51,8 @@ export interface UpsertData {
     senderPn?: string;
     participant?: string;
     participantAlt?: string;
+    remoteJidUsername?: string;
+    participantUsername?: string;
     fromMe?: boolean;
     id?: string;
   };
@@ -62,7 +66,11 @@ export interface UpsertData {
   remoteJidAlt?: string;
 }
 
-/** Phone digits from a WhatsApp JID, or null for LID/groups/newsletters. */
+/**
+ * Phone digits from a WhatsApp PN JID, or null for LID / groups /
+ * newsletters / @usernames. Usernames are not phones — extracting
+ * `14` from `1E4NDRA` merges unrelated chats.
+ */
 export function phoneFromJid(jid: string | undefined | null): string | null {
   if (!jid || typeof jid !== 'string') return null;
   const at = jid.indexOf('@');
@@ -79,31 +87,18 @@ export function phoneFromJid(jid: string | undefined | null): string | null {
   }
   if (host && host !== '@s.whatsapp.net' && host !== '@c.us') return null;
   // Bare values (webhook `sender` without a host) must be a phone, not
-  // an Evolution instance name like "ventas".
-  if (!host && !/^\d{8,15}$/.test(user)) return null;
+  // an Evolution instance name like "ventas" or a @username.
+  if (!/^\d{8,15}$/.test(user)) return null;
   return user;
 }
 
 /**
  * Evolution/Baileys now often addresses 1:1 chats as `@lid`. The phone
  * lives on `remoteJidAlt` / `senderPn` when present. Groups stay skipped.
+ * @username JIDs are not phones — use `resolveEvolutionPeer`.
  */
 export function resolveEvolutionSenderPhone(item: UpsertData): string | null {
-  const key = item.key ?? {};
-  const candidates = [
-    key.remoteJid,
-    key.remoteJidAlt,
-    key.senderPn,
-    item.senderPn,
-    item.remoteJidAlt,
-    key.participant,
-    key.participantAlt,
-  ];
-  for (const candidate of candidates) {
-    const phone = phoneFromJid(candidate);
-    if (phone) return phone;
-  }
-  return null;
+  return resolveEvolutionPeer(item)?.phone ?? null;
 }
 
 /** The bits of a whatsapp_config row the inbound pipeline needs. */
@@ -304,18 +299,13 @@ export async function uploadInboundMedia(
 export async function processEvolutionItem(
   config: EvoInboundConfig,
   item: UpsertData,
-  extras?: { envelopeSender?: string },
 ): Promise<'recorded' | 'skipped' | 'error'> {
   try {
-    const phone =
-      resolveEvolutionSenderPhone(item) ??
-      phoneFromJid(extras?.envelopeSender) ??
-      null;
-    if (!phone) {
+    const peer = resolveEvolutionPeer(item);
+    if (!peer) {
       console.warn(
-        '[evolution-inbound] skipped non-1:1 or LID-only jid',
+        '[evolution-inbound] skipped non-1:1 jid',
         item.key?.remoteJid,
-        extras?.envelopeSender ?? '',
       );
       return 'skipped';
     }
@@ -344,11 +334,13 @@ export async function processEvolutionItem(
     // Nothing renderable and no text — skip (e.g. unsupported type).
     if (!parsed.text && !mediaUrl && parsed.contentType === 'text') return 'skipped';
 
+    const fallbackName = formatWhatsAppAddress(peer.contactKey) || peer.contactKey;
+
     await recordInboundMessage({
       accountId: config.account_id,
       configOwnerUserId: config.user_id,
-      senderPhone: phone,
-      contactName: outbound ? '' : (item.pushName ?? phone),
+      senderPhone: peer.contactKey,
+      contactName: outbound ? '' : (item.pushName ?? fallbackName),
       contentText:
         parsed.text ??
         (parsed.contentType === 'document' ? (parsed.fileName ?? null) : null),
