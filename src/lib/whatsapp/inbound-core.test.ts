@@ -149,6 +149,7 @@ vi.mock('@/lib/flows/admin-client', () => ({
 
 import {
   normalizeInboundContentType,
+  planLegacyConversationReuse,
   recordInboundMessage,
 } from './inbound-core';
 
@@ -265,5 +266,27 @@ describe('recordInboundMessage', () => {
         contactId: 'contact-1',
       }),
     );
+  });
+});
+
+describe('planLegacyConversationReuse', () => {
+  it('stamps a null-channel leftover onto the incoming number', () => {
+    expect(planLegacyConversationReuse(null, 'cfg-b')).toEqual({
+      action: 'use',
+      stamp: true,
+    });
+  });
+
+  it('reuses a thread already on the same number', () => {
+    expect(planLegacyConversationReuse('cfg-a', 'cfg-a')).toEqual({
+      action: 'use',
+      stamp: false,
+    });
+  });
+
+  it('refuses to merge number B into a thread stamped for number A', () => {
+    expect(planLegacyConversationReuse('cfg-a', 'cfg-b')).toEqual({
+      action: 'reject',
+    });
   });
 });

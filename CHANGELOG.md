@@ -13,8 +13,9 @@ and polish.
 
 Hardens security, multi-number routing, and the Odoo connector.
 
-> **Migration required:** apply `046_message_id_conversation_unique.sql`
-> and `047_conversation_channel_unique_again.sql`. Also upgrade
+> **Migration required:** apply `046_message_id_conversation_unique.sql`,
+> `047_conversation_channel_unique_again.sql`, and
+> `048_conversation_channel_no_cross_number.sql`. Also upgrade
 > the Odoo module to **19.0.1.13.0**.
 
 ### Security
@@ -55,7 +56,10 @@ Hardens security, multi-number routing, and the Odoo connector.
   not silently skipped.
 - **Same contact → two Evolution numbers.** If the old
   `UNIQUE(account, contact)` index is still present, the second inbound
-  was dropped. Migration 047 re-applies the per-channel unique.
+  was merged into the first number's thread (sent in one window,
+  received in another). Code now refuses that merge; migration 048
+  re-drops the leftover index and stamps single-Evolution null-channel
+  rows. Replies never fall back to "the account's oldest number".
 - **Evolution 24h template gate.** Mixed Meta+Evolution accounts no
   longer lock Evolution threads behind a template after 24 hours. The
   window is per conversation (Meta only).
@@ -75,7 +79,7 @@ Hardens security, multi-number routing, and the Odoo connector.
 
 ### Docs
 
-- EasyPanel guide lists all 47 migrations and documents Evolution.
+- EasyPanel guide lists all 48 migrations and documents Evolution.
 - Public API scope table includes `deals:read` and `sso:login`.
 
 ## [0.8.1] — 2026-07-10

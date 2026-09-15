@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import type { SupabaseClient } from '@supabase/supabase-js'
-import { loadAccountWhatsAppConfig } from './resolve-config'
+import {
+  loadAccountWhatsAppConfig,
+  loadConfigForConversationSend,
+} from './resolve-config'
 
 type Script = {
   byId?: Record<string, unknown> | null
@@ -78,6 +81,50 @@ describe('loadAccountWhatsAppConfig', () => {
   it('returns null when the account has no config', async () => {
     const db = makeDb({})
     const row = await loadAccountWhatsAppConfig(db, 'acct', { provider: 'meta' })
+    expect(row).toBeNull()
+  })
+})
+
+describe('loadConfigForConversationSend', () => {
+  it('returns the stamped config', async () => {
+    const db = makeDb({ byId: { id: 'cfg-a', provider: 'evolution' } })
+    const row = await loadConfigForConversationSend(db, 'acct', 'cfg-a')
+    expect(row.id).toBe('cfg-a')
+  })
+
+  it('returns the only config when the thread is unstamped', async () => {
+    const db = {
+      from: () => {
+        const b: Record<string, unknown> = {
+          select: () => b,
+          eq: () => b,
+          order: () => b,
+          limit: () => Promise.resolve({ data: [{ id: 'only' }], error: null }),
+        }
+        return b
+      },
+    } as unknown as SupabaseClient
+    const row = await loadConfigForConversationSend(db, 'acct', null)
+    expect(row?.id).toBe('only')
+  })
+
+  it('returns null when several numbers exist and the thread is unstamped', async () => {
+    const db = {
+      from: () => {
+        const b: Record<string, unknown> = {
+          select: () => b,
+          eq: () => b,
+          order: () => b,
+          limit: () =>
+            Promise.resolve({
+              data: [{ id: 'a' }, { id: 'b' }],
+              error: null,
+            }),
+        }
+        return b
+      },
+    } as unknown as SupabaseClient
+    const row = await loadConfigForConversationSend(db, 'acct', null)
     expect(row).toBeNull()
   })
 })

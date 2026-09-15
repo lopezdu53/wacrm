@@ -99,6 +99,30 @@ interface ConversationRow {
   [key: string]: unknown;
 }
 
+export type LegacyConversationReuse =
+  | { action: 'use'; stamp: boolean }
+  | { action: 'reject' };
+
+/**
+ * A leftover UNIQUE(account, contact) (migration 036) can make creating
+ * a second per-number thread fail. Reuse that row only when it has no
+ * channel yet (stamp it) or already belongs to this number. Never merge
+ * Evolution number B into a thread already stamped for number A — that
+ * is the crossed-chat bug.
+ */
+export function planLegacyConversationReuse(
+  existingConfigId: string | null | undefined,
+  incomingConfigId: string | null,
+): LegacyConversationReuse {
+  if (!existingConfigId) {
+    return { action: 'use', stamp: Boolean(incomingConfigId) };
+  }
+  if (!incomingConfigId || existingConfigId === incomingConfigId) {
+    return { action: 'use', stamp: false };
+  }
+  return { action: 'reject' };
+}
+
 /**
  * Find the account's oldest conversation for a contact ON A GIVEN CHANNEL,
  * or create one. When `whatsappConfigId` is set, the lookup + dedup are
@@ -152,8 +176,9 @@ export async function findOrCreateConversation(
         return { conversation: raced[0] as ConversationRow, created: false };
       }
       // Legacy UNIQUE(account_id, contact_id) from migration 036 may
-      // still be live if 039/047 were not applied. Reuse that thread
-      // so the inbound is not dropped; stamp the channel when unset.
+      // still be live if 039/047/048 were not applied. Only reuse a
+      // null-channel row (and stamp it). A thread already bound to
+      // another number must not absorb this inbound.
       const { data: anyRows } = await supabaseAdmin()
         .from('conversations')
         .select('*')
@@ -163,7 +188,22 @@ export async function findOrCreateConversation(
         .limit(1);
       const legacy = anyRows?.[0] as ConversationRow | undefined;
       if (legacy) {
-        if (!legacy.whatsapp_config_id && whatsappConfigId) {
+        const plan = planLegacyConversationReuse(
+          (legacy.whatsapp_config_id as string | null | undefined) ?? null,
+          whatsappConfigId,
+        );
+        if (plan.action === 'reject') {
+          console.error(
+            '[inbound-core] refused to merge inbound onto another number\'s thread — apply migration 048',
+            {
+              conversationId: legacy.id,
+              existingConfigId: legacy.whatsapp_config_id,
+              incomingConfigId: whatsappConfigId,
+            },
+          );
+          return null;
+        }
+        if (plan.stamp && whatsappConfigId) {
           await supabaseAdmin()
             .from('conversations')
             .update({ whatsapp_config_id: whatsappConfigId })
@@ -171,7 +211,7 @@ export async function findOrCreateConversation(
           legacy.whatsapp_config_id = whatsappConfigId;
         }
         console.warn(
-          '[inbound-core] per-contact unique still active — apply migration 047. Reusing',
+          '[inbound-core] per-contact unique still active — apply migration 048. Reusing',
           legacy.id,
         );
         return { conversation: legacy, created: false };

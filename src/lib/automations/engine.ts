@@ -463,11 +463,14 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
         agentId = profiles?.[0]?.user_id
       }
       if (!agentId) return 'no agent resolved'
-      await db
+      let assign = db
         .from('conversations')
         .update({ assigned_agent_id: agentId })
         .eq('account_id', args.automation.account_id)
-        .eq('contact_id', args.contactId)
+      assign = args.context.conversation_id
+        ? assign.eq('id', args.context.conversation_id)
+        : assign.eq('contact_id', args.contactId)
+      await assign
       return `assigned to ${agentId}`
     }
 
@@ -578,11 +581,14 @@ async function runStep(step: AutomationStep, args: ExecuteArgs): Promise<string>
 
     case 'close_conversation': {
       if (!args.contactId) throw new Error('close_conversation needs a contact')
-      await db
+      let close = db
         .from('conversations')
         .update({ status: 'closed', updated_at: new Date().toISOString() })
         .eq('account_id', args.automation.account_id)
-        .eq('contact_id', args.contactId)
+      close = args.context.conversation_id
+        ? close.eq('id', args.context.conversation_id)
+        : close.eq('contact_id', args.contactId)
+      await close
       return 'conversation closed'
     }
 
@@ -611,10 +617,12 @@ async function resolveConversationId(args: ExecuteArgs): Promise<string> {
     .select('id')
     .eq('account_id', args.automation.account_id)
     .eq('contact_id', args.contactId)
-    .maybeSingle()
+    .order('updated_at', { ascending: false })
+    .limit(1)
   if (error) throw new Error(`conversation lookup failed: ${error.message}`)
-  if (!data?.id) throw new Error('no conversation for contact')
-  return data.id as string
+  const row = Array.isArray(data) ? data[0] : data
+  if (!row?.id) throw new Error('no conversation for contact')
+  return row.id as string
 }
 
 export function triggerMatches(automation: Automation, ctx: AutomationContext | undefined): boolean {

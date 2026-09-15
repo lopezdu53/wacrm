@@ -21,6 +21,8 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { loadConfigForConversationSend } from '@/lib/whatsapp/resolve-config';
+
 import {
   sendTextMessage,
   sendTemplateMessage,
@@ -252,64 +254,26 @@ export async function sendMessageToConversation(
     );
   }
 
-  // WhatsApp config. Prefer the channel the conversation belongs to
-  // (migration 039 — an account can now have several numbers), so the
-  // reply goes back out the SAME number that received it. Fall back to
-  // the account's first config for legacy conversations with no channel.
+  // WhatsApp config. Replies go out the SAME number that owns this
+  // thread. Unstamped legacy rows only resolve when the account has
+  // exactly one number — never "oldest Evolution instance".
   const conversationConfigId = conversation.whatsapp_config_id as
     | string
     | null
     | undefined;
 
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  let config: any = null;
-  let configError: { message: string } | null = null;
-  if (conversationConfigId) {
-    const res = await db
-      .from('whatsapp_config')
-      .select('*')
-      .eq('account_id', accountId)
-      .eq('id', conversationConfigId)
-      .maybeSingle();
-    config = res.data;
-    configError = res.error;
-  }
-  if (!config) {
-    // Fallback for a conversation with no stamped channel (a legacy
-    // thread predating migration 039, or one created by a path that
-    // hasn't been updated to stamp it). Prefer a Meta config — null-
-    // channel conversations predate multi-channel and were always
-    // Meta — over "whichever config happens to be oldest", which can
-    // be an unrelated Evolution number and would send the reply out
-    // the wrong number entirely.
-    const metaRes = await db
-      .from('whatsapp_config')
-      .select('*')
-      .eq('account_id', accountId)
-      .eq('provider', 'meta')
-      .order('created_at', { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    if (metaRes.data) {
-      config = metaRes.data;
-      configError = metaRes.error;
-    } else {
-      const res = await db
-        .from('whatsapp_config')
-        .select('*')
-        .eq('account_id', accountId)
-        .order('created_at', { ascending: true })
-        .limit(1)
-        .maybeSingle();
-      config = res.data;
-      configError = res.error;
-    }
-  }
+  const config = await loadConfigForConversationSend(
+    db,
+    accountId,
+    conversationConfigId,
+  );
 
-  if (configError || !config) {
+  if (!config) {
     throw new SendMessageError(
       'whatsapp_not_configured',
-      'WhatsApp not configured. Please set up your WhatsApp integration first.',
+      conversationConfigId
+        ? 'This conversation\'s WhatsApp number is no longer connected.'
+        : 'This conversation is not linked to a WhatsApp number. Open the thread that belongs to the number you want to use.',
       400
     );
   }

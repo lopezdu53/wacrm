@@ -100,3 +100,38 @@ export async function loadAccountWhatsAppConfig(
     .maybeSingle()
   return data ?? null
 }
+
+/**
+ * Config used to SEND on an existing conversation. Never guess among
+ * several Evolution/Meta numbers — that routed replies (and fromMe
+ * echoes) into the wrong inbox thread.
+ *
+ * Stamped channel → that row or nothing. Unstamped legacy thread →
+ * only when the account has exactly one WhatsApp number.
+ */
+export async function loadConfigForConversationSend(
+  db: SupabaseClient,
+  accountId: string,
+  conversationConfigId: string | null | undefined,
+): Promise<WhatsAppConfigRow | null> {
+  if (conversationConfigId) {
+    const { data } = await db
+      .from('whatsapp_config')
+      .select('*')
+      .eq('account_id', accountId)
+      .eq('id', conversationConfigId)
+      .maybeSingle()
+    return data ?? null
+  }
+
+  const { data: rows } = await db
+    .from('whatsapp_config')
+    .select('*')
+    .eq('account_id', accountId)
+    .order('created_at', { ascending: true })
+    .limit(2)
+  const list = Array.isArray(rows) ? rows : rows ? [rows] : []
+  if (list.length === 0) return null
+  if (list.length === 1) return list[0]
+  return null
+}

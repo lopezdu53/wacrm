@@ -216,10 +216,9 @@ export async function resolveConversationByPhone(
 /**
  * Find (oldest-first) or create the conversation for
  * `(accountId, contactId[, channel])`. When `whatsappConfigId` is
- * set the lookup is scoped to that channel (migration 039); a
- * null-channel legacy thread for the same contact is reused so we
- * don't fragment the inbox. Unique-index races re-resolve the
- * winning row instead of failing the send (issue #363).
+ * set the lookup is scoped to that channel (migration 039). A
+ * null-channel leftover is reused only after stamping it — never a
+ * thread that already belongs to another WhatsApp number.
  */
 export async function findOrCreateConversationForContact(
   db: SupabaseClient,
@@ -231,7 +230,7 @@ export async function findOrCreateConversationForContact(
   const lookup = async (channelId: string | null | undefined) => {
     let q = db
       .from('conversations')
-      .select('id')
+      .select('id, whatsapp_config_id')
       .eq('account_id', accountId)
       .eq('contact_id', contactId);
     q = channelId
@@ -240,9 +239,6 @@ export async function findOrCreateConversationForContact(
     return q.order('created_at', { ascending: true }).limit(1);
   };
 
-  // Prefer the stamped channel; if none exists, reuse a legacy
-  // null-channel thread for this contact so an API send doesn't
-  // open a second chat next to the inbound one.
   const { data: onChannel, error: findErr } = await lookup(
     whatsappConfigId ?? null
   );
@@ -256,20 +252,13 @@ export async function findOrCreateConversationForContact(
   if (whatsappConfigId) {
     const { data: legacy } = await lookup(null);
     const legacyHit = firstRow(legacy);
-    if (legacyHit?.id) return legacyHit.id;
-
-    // Last resort: any existing thread for this contact (pre-039
-    // duplicates, or a thread on another number the agent is
-    // already working). Reusing beats fragmenting.
-    const { data: anyRows } = await db
-      .from('conversations')
-      .select('id')
-      .eq('account_id', accountId)
-      .eq('contact_id', contactId)
-      .order('created_at', { ascending: true })
-      .limit(1);
-    const anyHit = firstRow(anyRows);
-    if (anyHit?.id) return anyHit.id;
+    if (legacyHit?.id) {
+      await db
+        .from('conversations')
+        .update({ whatsapp_config_id: whatsappConfigId })
+        .eq('id', legacyHit.id);
+      return legacyHit.id;
+    }
   }
 
   const { data: newConv, error: convErr } = await db
@@ -288,15 +277,22 @@ export async function findOrCreateConversationForContact(
       const { data: raced } = await lookup(whatsappConfigId ?? null);
       const racedHit = firstRow(raced);
       if (racedHit?.id) return racedHit.id;
-      const { data: anyRaced } = await db
-        .from('conversations')
-        .select('id')
-        .eq('account_id', accountId)
-        .eq('contact_id', contactId)
-        .order('created_at', { ascending: true })
-        .limit(1);
-      const anyRacedHit = firstRow(anyRaced);
-      if (anyRacedHit?.id) return anyRacedHit.id;
+      if (whatsappConfigId) {
+        const { data: nullRaced } = await lookup(null);
+        const nullHit = firstRow(nullRaced);
+        if (nullHit?.id) {
+          await db
+            .from('conversations')
+            .update({ whatsapp_config_id: whatsappConfigId })
+            .eq('id', nullHit.id);
+          return nullHit.id;
+        }
+      }
+      throw new SendMessageError(
+        'db_error',
+        'This contact already has a conversation on another WhatsApp number. Apply migration 048 so each number can have its own thread.',
+        409,
+      );
     }
     console.error('[resolve-conversation] conversation create error:', convErr);
     throw new SendMessageError('db_error', 'Failed to create conversation', 500);

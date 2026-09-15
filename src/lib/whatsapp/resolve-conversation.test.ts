@@ -199,9 +199,9 @@ describe('resolveConversationByPhone', () => {
     const db = makeDb({
       config: { id: 'cfg-1', user_id: 'owner-1' },
       contactCandidates: [{ id: 'c1', phone: '14155550123' }],
-      // channel lookup, legacy null-channel, any-contact, then
-      // the post-unique-violation re-lookup.
-      existingConversationByCall: [null, null, null, { id: 'cv-raced' }],
+      // channel lookup, null-channel leftover, then the post-unique
+      // re-lookup of the same channel.
+      existingConversationByCall: [null, null, { id: 'cv-raced' }],
       insertConversationError: { code: '23505' },
     });
     const res = await resolveConversationByPhone(db, 'acct', '+14155550123');

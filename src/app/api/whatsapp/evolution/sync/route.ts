@@ -53,19 +53,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
     }
 
-    // Resolve the Evolution channel: the conversation's own config, else
-    // the account's Evolution config (legacy single-channel).
-    let configQuery = db
+    // Resolve the Evolution channel from the conversation itself.
+    // Guessing "the account's first Evolution instance" mixed history
+    // from number A into number B's thread.
+    if (!conv.whatsapp_config_id) {
+      return NextResponse.json(
+        { error: 'This conversation is not linked to a WhatsApp number.' },
+        { status: 400 },
+      );
+    }
+    const { data: config } = await db
       .from('whatsapp_config')
       .select(
         'id, account_id, user_id, provider, evolution_base_url, evolution_api_key, evolution_instance',
       )
       .eq('account_id', ctx.accountId)
-      .eq('provider', 'evolution');
-    if (conv.whatsapp_config_id) {
-      configQuery = configQuery.eq('id', conv.whatsapp_config_id);
-    }
-    const { data: config } = await configQuery.limit(1).maybeSingle();
+      .eq('provider', 'evolution')
+      .eq('id', conv.whatsapp_config_id)
+      .maybeSingle();
     if (!config || !config.evolution_base_url || !config.evolution_instance) {
       return NextResponse.json(
         { error: 'This conversation is not on an Evolution (QR) number.' },

@@ -121,21 +121,37 @@ export async function POST(request: Request) {
         )
       }
 
-      const channel = await loadAccountWhatsAppConfig(supabase, accountId)
-      try {
-        conversationId = await findOrCreateConversationForContact(
-          supabase,
-          accountId,
-          contact_id,
-          userId,
-          channel?.id ?? null,
-        )
-      } catch (err) {
-        console.error('Error creating conversation for contact send:', err)
-        return NextResponse.json(
-          { error: 'Failed to open a conversation for this contact' },
-          { status: 500 }
-        )
+      const { data: existingConvs } = await supabase
+        .from('conversations')
+        .select('id')
+        .eq('account_id', accountId)
+        .eq('contact_id', contact_id)
+        .order('updated_at', { ascending: false })
+        .limit(1)
+      const existingRows = Array.isArray(existingConvs)
+        ? existingConvs
+        : existingConvs
+          ? [existingConvs]
+          : []
+      if (existingRows[0]?.id) {
+        conversationId = existingRows[0].id as string
+      } else {
+        const channel = await loadAccountWhatsAppConfig(supabase, accountId)
+        try {
+          conversationId = await findOrCreateConversationForContact(
+            supabase,
+            accountId,
+            contact_id,
+            userId,
+            channel?.id ?? null,
+          )
+        } catch (err) {
+          console.error('Error creating conversation for contact send:', err)
+          return NextResponse.json(
+            { error: 'Failed to open a conversation for this contact' },
+            { status: 500 }
+          )
+        }
       }
     }
 
