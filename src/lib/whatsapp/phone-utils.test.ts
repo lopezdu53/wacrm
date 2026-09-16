@@ -87,12 +87,16 @@ describe("WhatsApp @username / LID keys", () => {
     expect(canonicalContactKey("1E4NDRA")).toBe("user:1e4ndra");
     expect(canonicalContactKey("@yel_cac")).toBe("user:yel_cac");
     expect(canonicalContactKey("12345@lid")).toBe("lid:12345");
+    expect(canonicalContactKey("66244327888465593")).toBe(
+      "lid:66244327888465593",
+    );
     expect(canonicalContactKey("573001112233")).toBe("573001112233");
   });
 
   it("formats handles for the inbox", () => {
     expect(formatWhatsAppAddress("user:yel_cac")).toBe("@yel_cac");
     expect(isWhatsAppHandleKey("1E4NDRA")).toBe(true);
+    expect(isWhatsAppHandleKey("66244327888465593")).toBe(true);
     expect(isWhatsAppHandleKey("573001112233")).toBe(false);
   });
 });

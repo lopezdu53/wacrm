@@ -89,6 +89,8 @@ describe("findExistingContact", () => {
           data: rows.filter((r) => vals.includes(r.phone)),
           error: null,
         }),
+      limit: () => builder,
+      maybeSingle: () => Promise.resolve({ data: null, error: null }),
     };
     return { from: () => builder } as unknown as SupabaseClient;
   }
@@ -121,5 +123,12 @@ describe("findExistingContact", () => {
     expect((await findExistingContact(db, "acct", "user:yel_cac"))?.id).toBe(
       "c2",
     );
+  });
+
+  it("treats a raw 16+ digit id as a LID key", async () => {
+    const db = stubDb([{ id: "c1", phone: "lid:66244327888465593" }]);
+    expect(
+      (await findExistingContact(db, "acct", "66244327888465593"))?.id,
+    ).toBe("c1");
   });
 });

@@ -54,12 +54,37 @@ export async function findExistingContact(
       .eq("account_id", accountId)
       .in("phone", aliases);
 
-    if (error || !data) return null;
-    return (
-      (data as ExistingContact[]).find(
-        (c) => canonicalContactKey(c.phone) === key,
-      ) ?? (data[0] as ExistingContact | undefined) ?? null
-    );
+    if (!error && data && data.length > 0) {
+      return (
+        (data as ExistingContact[]).find(
+          (c) => canonicalContactKey(c.phone) === key,
+        ) ?? (data[0] as ExistingContact)
+      );
+    }
+
+    if (key.startsWith("lid:")) {
+      const lid = key.slice(4);
+      const byLid = await db
+        .from("contacts")
+        .select("*")
+        .eq("account_id", accountId)
+        .eq("whatsapp_lid", lid)
+        .limit(1)
+        .maybeSingle();
+      if (byLid.data) return byLid.data as ExistingContact;
+    }
+    if (key.startsWith("user:")) {
+      const username = key.slice(5);
+      const byUser = await db
+        .from("contacts")
+        .select("*")
+        .eq("account_id", accountId)
+        .eq("whatsapp_username", username)
+        .limit(1)
+        .maybeSingle();
+      if (byUser.data) return byUser.data as ExistingContact;
+    }
+    return null;
   }
 
   const normalized = normalizePhone(phone);
@@ -78,6 +103,24 @@ export async function findExistingContact(
   return (
     (data as ExistingContact[]).find((c) => phonesMatch(c.phone, phone)) ?? null
   );
+}
+
+/** Look up every identity key and return unique matching contacts. */
+export async function findContactsMatchingKeys(
+  db: SupabaseClient,
+  accountId: string,
+  keys: string[],
+): Promise<ExistingContact[]> {
+  const found: ExistingContact[] = [];
+  const seen = new Set<string>();
+  for (const key of keys) {
+    const hit = await findExistingContact(db, accountId, key);
+    if (hit && !seen.has(hit.id)) {
+      seen.add(hit.id);
+      found.push(hit);
+    }
+  }
+  return found;
 }
 
 /**

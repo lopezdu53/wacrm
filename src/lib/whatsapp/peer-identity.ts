@@ -68,9 +68,10 @@ function parseJid(jid: string | undefined | null): ParsedJid | null {
   if (host === '@g.us' || host === '@broadcast' || host === '@newsletter') {
     return { kind: 'group', user };
   }
-  if (host === '@lid') {
-    const lid = user.replace(/\D/g, '');
-    return lid ? { kind: 'lid', user: lid } : null;
+  const digitUser = user.replace(/\D/g, '');
+  // LIDs are 16+ digits and may arrive as @lid or wrongly as @s.whatsapp.net.
+  if (host === '@lid' || /^\d{16,}$/.test(digitUser)) {
+    return digitUser ? { kind: 'lid', user: digitUser } : null;
   }
   // Bare values (webhook `sender` / instance name) are phones only.
   // A @username always arrives with @s.whatsapp.net or on
@@ -98,13 +99,21 @@ function usernameFromField(value: string | undefined | null): string | null {
 
 /**
  * Identify the 1:1 peer on an Evolution/Baileys upsert.
- * Prefers a real phone, then @username, then LID. Groups and the
- * instance envelope are ignored.
+ *
+ * The *chat* JID (`remoteJid`) is the identity. `remoteJidAlt` / `senderPn`
+ * are the other addressing mode (PN vs LID) — collecting them as aliases
+ * is required so inbound LID and outbound PN land on one contact, but
+ * they must not *replace* the chat JID. Preferring the alt phone was
+ * splitting Sebastian's replies (`662…@lid`) from agent sends
+ * (`573131423412`).
  */
 export function resolveEvolutionPeer(
   item: EvolutionPeerSource,
 ): EvolutionPeer | null {
   const key = item.key ?? {};
+  const chat = parseJid(key.remoteJid);
+  if (chat?.kind === 'group') return null;
+
   const jids = [
     key.remoteJid,
     key.remoteJidAlt,
@@ -116,7 +125,7 @@ export function resolveEvolutionPeer(
   ];
 
   let phone: string | null = null;
-  let lid: string | null = null;
+  let lid: string | null = chat?.kind === 'lid' ? chat.user : null;
   let username =
     usernameFromField(key.remoteJidUsername) ??
     usernameFromField(key.participantUsername);
@@ -133,16 +142,59 @@ export function resolveEvolutionPeer(
     username = usernameFromField(item.pushName);
   }
 
-  const contactKey = phone
-    ? phone
-    : username
-      ? `user:${username}`
-      : lid
-        ? `lid:${lid}`
-        : '';
+  if (!username && chat?.kind === 'username') username = chat.user;
+  if (!phone && chat?.kind === 'phone') phone = chat.user;
+
+  // Chat JID first. Username overlays a LID chat so @sebastianac01
+  // stays one person even when some events omit the LID.
+  let contactKey = '';
+  if (username && chat?.kind !== 'phone') {
+    contactKey = `user:${username}`;
+  } else if (chat?.kind === 'lid' || (!chat && lid && !phone)) {
+    contactKey = `lid:${lid ?? chat?.user ?? ''}`;
+  } else if (chat?.kind === 'username') {
+    contactKey = `user:${chat.user}`;
+  } else if (chat?.kind === 'phone') {
+    contactKey = chat.user;
+  } else if (username) {
+    contactKey = `user:${username}`;
+  } else if (lid) {
+    contactKey = `lid:${lid}`;
+  } else if (phone) {
+    contactKey = phone;
+  }
 
   if (!contactKey) return null;
   return { contactKey, phone, lid, username };
+}
+
+/** Every stored key that might already identify this peer. */
+export function peerLookupKeys(peer: EvolutionPeer): string[] {
+  const raw: string[] = [];
+  const add = (value: string | null | undefined) => {
+    if (value && value.trim()) raw.push(value.trim());
+  };
+  if (peer.username) {
+    add(`user:${peer.username}`);
+    add(peer.username);
+    add(`@${peer.username}`);
+  }
+  if (peer.lid) {
+    add(`lid:${peer.lid}`);
+    add(peer.lid);
+  }
+  add(peer.phone);
+  add(peer.contactKey);
+
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const value of raw) {
+    const key = canonicalContactKey(value);
+    if (!key || seen.has(key)) continue;
+    seen.add(key);
+    out.push(key);
+  }
+  return out;
 }
 
 /**
@@ -199,7 +251,31 @@ export type OutboundRecipient =
 export function resolveOutboundRecipient(
   contactPhone: string,
   isEvolution: boolean,
+  extras?: { lid?: string | null; username?: string | null },
 ): OutboundRecipient {
+  if (isEvolution) {
+    const username = extras?.username
+      ? canonicalizeWhatsAppUsername(extras.username)
+      : '';
+    if (username && isWhatsAppUsername(username)) {
+      return {
+        ok: true,
+        variants: [username],
+        baseline: canonicalContactKey(contactPhone) || `user:${username}`,
+        isHandle: true,
+      };
+    }
+    const lidDigits = (extras?.lid ?? '').replace(/\D/g, '');
+    if (lidDigits) {
+      return {
+        ok: true,
+        variants: [`${lidDigits}@lid`],
+        baseline: canonicalContactKey(contactPhone) || `lid:${lidDigits}`,
+        isHandle: true,
+      };
+    }
+  }
+
   if (isWhatsAppHandleKey(contactPhone)) {
     if (!isEvolution) {
       return {

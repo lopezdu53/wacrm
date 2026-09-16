@@ -75,6 +75,7 @@ vi.mock('@/lib/flows/admin-client', () => ({
           state.filters[col] = val;
           return builder;
         },
+        neq: () => builder,
         is: (col: string, val: unknown) => {
           state.filters[col] = val;
           return builder;
@@ -287,6 +288,29 @@ describe('recordInboundMessage', () => {
     expect(h.findExistingContact.mock.calls.some((c) => c[2] === '14')).toBe(
       false,
     );
+  });
+
+  it('looks up LID and phone aliases so inbound and outbound share a contact', async () => {
+    h.findExistingContact.mockImplementation(
+      async (_db: unknown, _acct: string, phone: string) => {
+        if (phone === '573131423412' || phone === 'lid:66244327888465593') {
+          return { id: 'contact-seb', name: 'Sebastian', phone: '573131423412' };
+        }
+        return null;
+      },
+    );
+    await recordInboundMessage({
+      ...BASE,
+      senderPhone: 'lid:66244327888465593',
+      identityAliases: ['lid:66244327888465593', '573131423412'],
+      whatsappLid: '66244327888465593',
+      contactName: 'Sebastian',
+    });
+    const keys = h.findExistingContact.mock.calls.map((c) => c[2]);
+    expect(keys).toEqual(
+      expect.arrayContaining(['lid:66244327888465593', '573131423412']),
+    );
+    expect(h.inserts.some((row) => row.table === 'messages')).toBe(true);
   });
 });
 

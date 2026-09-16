@@ -2,25 +2,37 @@ import { describe, expect, it } from 'vitest';
 
 import {
   contactKeyToRemoteJid,
+  peerLookupKeys,
   resolveEvolutionPeer,
   resolveOutboundRecipient,
   toEvolutionRecipient,
 } from './peer-identity';
 
 describe('resolveEvolutionPeer', () => {
-  it('prefers a real phone on remoteJidAlt over a LID', () => {
+  it('uses the chat JID (LID), not the alt phone, as the contact key', () => {
     expect(
       resolveEvolutionPeer({
         key: {
-          remoteJid: '123456789012345@lid',
-          remoteJidAlt: '573001112233@s.whatsapp.net',
+          remoteJid: '66244327888465593@lid',
+          remoteJidAlt: '573131423412@s.whatsapp.net',
         },
       }),
     ).toEqual({
-      contactKey: '573001112233',
-      phone: '573001112233',
-      lid: '123456789012345',
+      contactKey: 'lid:66244327888465593',
+      phone: '573131423412',
+      lid: '66244327888465593',
       username: null,
+    });
+  });
+
+  it('treats a 16+ digit @s.whatsapp.net id as a LID, not a phone', () => {
+    expect(
+      resolveEvolutionPeer({
+        key: { remoteJid: '66244327888465593@s.whatsapp.net' },
+      }),
+    ).toMatchObject({
+      contactKey: 'lid:66244327888465593',
+      lid: '66244327888465593',
     });
   });
 
@@ -87,6 +99,23 @@ describe('resolveEvolutionPeer', () => {
     });
     expect(a?.contactKey).not.toBe(b?.contactKey);
   });
+
+  it('looks up both the LID and the PN so inbound and fromMe match', () => {
+    const peer = resolveEvolutionPeer({
+      key: {
+        remoteJid: '66244327888465593@lid',
+        remoteJidAlt: '573131423412@s.whatsapp.net',
+        remoteJidUsername: 'sebastianac01',
+      },
+    });
+    expect(peerLookupKeys(peer!)).toEqual(
+      expect.arrayContaining([
+        'user:sebastianac01',
+        'lid:66244327888465593',
+        '573131423412',
+      ]),
+    );
+  });
 });
 
 describe('toEvolutionRecipient', () => {
@@ -135,5 +164,17 @@ describe('resolveOutboundRecipient', () => {
       expect(r.variants).toEqual(['573001112233']);
       expect(r.isHandle).toBe(false);
     }
+  });
+
+  it('sends Evolution replies to the LID when the contact has one', () => {
+    const r = resolveOutboundRecipient('573131423412', true, {
+      lid: '66244327888465593',
+    });
+    expect(r).toEqual({
+      ok: true,
+      variants: ['66244327888465593@lid'],
+      baseline: '573131423412',
+      isHandle: true,
+    });
   });
 });

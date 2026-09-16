@@ -12,7 +12,15 @@
 
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { canonicalContactKey } from '@/lib/whatsapp/phone-utils';
-import { findExistingContact, isUniqueViolation } from '@/lib/contacts/dedupe';
+import {
+  findExistingContact,
+  isUniqueViolation,
+  type ExistingContact,
+} from '@/lib/contacts/dedupe';
+import {
+  mergePeerContacts,
+  pickSurvivorContact,
+} from '@/lib/contacts/merge-peer';
 import { runAutomationsForTrigger } from '@/lib/automations/engine';
 import { dispatchInboundToFlows } from '@/lib/flows/engine';
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply';
@@ -42,6 +50,8 @@ interface ContactRow {
   id: string;
   name: string;
   phone: string;
+  whatsapp_lid?: string | null;
+  whatsapp_username?: string | null;
   [key: string]: unknown;
 }
 
@@ -50,36 +60,73 @@ interface ContactOutcome {
   wasCreated: boolean;
 }
 
+export interface FindOrCreateContactOptions {
+  aliases?: string[];
+  lid?: string | null;
+  username?: string | null;
+}
+
 /** Find an account's contact by phone (shared dedupe), or create it. */
 export async function findOrCreateContact(
   accountId: string,
   configOwnerUserId: string,
   phone: string,
   name: string,
+  options: FindOrCreateContactOptions = {},
 ): Promise<ContactOutcome | null> {
   const key = canonicalContactKey(phone);
   if (!key) return null;
 
-  const existing = await findExistingContact(supabaseAdmin(), accountId, key);
+  const lookupKeys = [key, ...(options.aliases ?? [])].filter(Boolean);
+  const matches: ExistingContact[] = [];
+  const seen = new Set<string>();
+  for (const lookup of lookupKeys) {
+    const hit = await findExistingContact(supabaseAdmin(), accountId, lookup);
+    if (hit && !seen.has(hit.id)) {
+      seen.add(hit.id);
+      matches.push(hit);
+    }
+  }
 
-  if (existing) {
-    if (name && name !== existing.name) {
+  if (matches.length > 0) {
+    let existing = pickSurvivorContact(matches, key);
+    const losers = matches.filter((c) => c.id !== existing.id);
+    if (losers.length > 0) {
+      existing = await mergePeerContacts(supabaseAdmin(), existing, losers);
+    }
+
+    const patch: Record<string, unknown> = {
+      updated_at: new Date().toISOString(),
+    };
+    if (name && name !== existing.name) patch.name = name;
+    if (options.lid && !existing.whatsapp_lid) patch.whatsapp_lid = options.lid;
+    if (options.username && !existing.whatsapp_username) {
+      patch.whatsapp_username = options.username;
+    }
+    if (Object.keys(patch).length > 1) {
       await supabaseAdmin()
         .from('contacts')
-        .update({ name, updated_at: new Date().toISOString() })
+        .update(patch)
         .eq('id', existing.id);
     }
-    return { contact: existing as ContactRow, wasCreated: false };
+    return {
+      contact: { ...existing, ...patch } as ContactRow,
+      wasCreated: false,
+    };
   }
+
+  const insertRow: Record<string, unknown> = {
+    account_id: accountId,
+    user_id: configOwnerUserId,
+    phone: key,
+    name: name || key,
+  };
+  if (options.lid) insertRow.whatsapp_lid = options.lid;
+  if (options.username) insertRow.whatsapp_username = options.username;
 
   const { data: newContact, error } = await supabaseAdmin()
     .from('contacts')
-    .insert({
-      account_id: accountId,
-      user_id: configOwnerUserId,
-      phone: key,
-      name: name || key,
-    })
+    .insert(insertRow)
     .select()
     .single();
 
@@ -254,6 +301,10 @@ export interface RecordInboundArgs {
   configOwnerUserId: string;
   /** Sender phone in any format; normalised internally. */
   senderPhone: string;
+  /** Extra identity keys (LID, @username, PN) so PN outbound and LID inbound match. */
+  identityAliases?: string[];
+  whatsappLid?: string | null;
+  whatsappUsername?: string | null;
   /** Display name from the provider (pushName), if any. */
   contactName: string;
   /** Plain text body / caption. Null for media with no caption. */
@@ -349,6 +400,11 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
     configOwnerUserId,
     senderPhone,
     contactName,
+    {
+      aliases: args.identityAliases,
+      lid: args.whatsappLid,
+      username: args.whatsappUsername,
+    },
   );
   if (!contactOutcome) return;
   const contactRecord = contactOutcome.contact;

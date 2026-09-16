@@ -45,6 +45,7 @@ import {
 import { decrypt, encrypt, isLegacyFormat } from '@/lib/whatsapp/encryption';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import {
+  canonicalContactKey,
   isRecipientNotAllowedError,
 } from '@/lib/whatsapp/phone-utils';
 import type { MessageTemplate } from '@/types';
@@ -268,7 +269,18 @@ export async function sendMessageToConversation(
   }
 
   const isEvolution = config.provider === 'evolution';
-  const outbound = resolveOutboundRecipient(contact.phone, isEvolution);
+  const outbound = resolveOutboundRecipient(contact.phone, isEvolution, {
+    lid:
+      (contact.whatsapp_lid as string | null | undefined) ??
+      (canonicalContactKey(contact.phone).startsWith('lid:')
+        ? canonicalContactKey(contact.phone).slice(4)
+        : null),
+    username:
+      (contact.whatsapp_username as string | null | undefined) ??
+      (canonicalContactKey(contact.phone).startsWith('user:')
+        ? canonicalContactKey(contact.phone).slice(5)
+        : null),
+  });
   if (!outbound.ok) {
     throw new SendMessageError('bad_request', outbound.error, 400);
   }

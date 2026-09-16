@@ -10,7 +10,7 @@
 
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { recordInboundMessage } from '@/lib/whatsapp/inbound-core';
-import { resolveEvolutionPeer } from '@/lib/whatsapp/peer-identity';
+import { resolveEvolutionPeer, peerLookupKeys } from '@/lib/whatsapp/peer-identity';
 import { formatWhatsAppAddress } from '@/lib/whatsapp/phone-utils';
 import { vcardsToText } from '@/lib/whatsapp/vcard';
 
@@ -340,6 +340,9 @@ export async function processEvolutionItem(
       accountId: config.account_id,
       configOwnerUserId: config.user_id,
       senderPhone: peer.contactKey,
+      identityAliases: peerLookupKeys(peer),
+      whatsappLid: peer.lid,
+      whatsappUsername: peer.username,
       contactName: outbound ? '' : (item.pushName ?? fallbackName),
       contentText:
         parsed.text ??

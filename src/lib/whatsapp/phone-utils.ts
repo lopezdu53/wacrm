@@ -31,10 +31,15 @@ export function isWhatsAppUsername(value: string): boolean {
   return USERNAME_BODY.test(u) && /[A-Za-z]/.test(u)
 }
 
+/** LID ids are longer than any E.164 number (max 15 digits). */
+export function isWhatsAppLidDigits(value: string): boolean {
+  return /^\d{16,}$/.test(value.trim())
+}
+
 /**
  * True when `contacts.phone` is a WhatsApp @username or LID key, not
  * an E.164 number. Stored as `user:{name}`, `lid:{id}`, `@name`, a
- * bare username, or `{id}@lid`.
+ * bare username, `{id}@lid`, or a raw 16+ digit LID.
  */
 export function isWhatsAppHandleKey(phone: string | null | undefined): boolean {
   if (!phone || typeof phone !== 'string') return false
@@ -42,7 +47,9 @@ export function isWhatsAppHandleKey(phone: string | null | undefined): boolean {
   if (!t) return false
   if (/^user:/i.test(t) || /^lid:/i.test(t)) return true
   if (/@lid$/i.test(t)) return true
+  if (isWhatsAppLidDigits(t.replace(/\D/g, '')) && !/[A-Za-z]/.test(t)) return true
   const userPart = t.includes('@') ? t.slice(0, t.indexOf('@')) : t.replace(/^@/, '')
+  if (isWhatsAppLidDigits(userPart)) return true
   return isWhatsAppUsername(userPart)
 }
 
@@ -73,10 +80,12 @@ export function canonicalContactKey(phone: string | null | undefined): string {
     const user = t.slice(0, t.indexOf('@')).trim()
     if (isWhatsAppUsername(user)) return `user:${canonicalizeWhatsAppUsername(user)}`
     const digits = user.replace(/\D/g, '')
-    return digits
+    return isWhatsAppLidDigits(digits) ? `lid:${digits}` : digits
   }
 
-  return t.replace(/\D/g, '')
+  const digits = t.replace(/\D/g, '')
+  if (isWhatsAppLidDigits(digits)) return `lid:${digits}`
+  return digits
 }
 
 /** Exact-match aliases for looking up a handle contact (legacy rows too). */
