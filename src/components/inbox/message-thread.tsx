@@ -41,14 +41,10 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
-  DropdownMenuLabel,
   DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { ContactSidebar } from "./contact-sidebar";
 import { MessageBubble } from "./message-bubble";
 import { MessageActions } from "./message-actions";
@@ -196,6 +192,7 @@ export function MessageThread({
   const scrollRef = useRef<HTMLDivElement>(null);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
   const [contactSheetOpen, setContactSheetOpen] = useState(false);
+  const [toolsOpen, setToolsOpen] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   // Followers — teammates watching this thread (migration 041).
   const [followerIds, setFollowerIds] = useState<string[]>([]);
@@ -1267,116 +1264,14 @@ export function MessageThread({
           </DropdownMenu>
         </div>
 
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            aria-label={t("chatTools")}
-            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-foreground hover:bg-muted lg:hidden"
-          >
-            <MoreVertical className="h-5 w-5" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56 border-border bg-popover">
-            <DropdownMenuItem onClick={() => setContactSheetOpen(true)}>
-              <User className="h-4 w-4" />
-              {t("contactDetails")}
-            </DropdownMenuItem>
-            <DropdownMenuSeparator className="bg-border" />
-            <DropdownMenuLabel>{t("status")}</DropdownMenuLabel>
-            {STATUS_OPTIONS.map((opt) => (
-              <DropdownMenuItem
-                key={opt.value}
-                onClick={() => handleStatusChange(opt.value)}
-                className={cn("text-sm", opt.color)}
-              >
-                {t(`status${opt.label}`)}
-                {currentStatus?.value === opt.value && (
-                  <Check className="ml-auto h-3 w-3" />
-                )}
-              </DropdownMenuItem>
-            ))}
-            <DropdownMenuSeparator className="bg-border" />
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <UserPlus className="h-4 w-4" />
-                {assignLabel}
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="border-border bg-popover">
-                {profiles.length === 0 ? (
-                  <DropdownMenuItem disabled className="text-sm text-muted-foreground">
-                    {t("noTeammates")}
-                  </DropdownMenuItem>
-                ) : (
-                  profiles.map((p) => {
-                    const isSelected = p.user_id === assignedAgentId;
-                    return (
-                      <DropdownMenuItem
-                        key={p.id}
-                        onClick={() => handleAssignChange(p.user_id)}
-                      >
-                        <span className="flex-1">
-                          {p.full_name}
-                          {p.user_id === user?.id ? t("me") : ""}
-                        </span>
-                        {isSelected && <Check className="ml-2 h-3 w-3" />}
-                      </DropdownMenuItem>
-                    );
-                  })
-                )}
-                {assignedAgentId && (
-                  <DropdownMenuItem
-                    onClick={() => handleAssignChange(null)}
-                    className="text-muted-foreground"
-                  >
-                    {t("unassign")}
-                  </DropdownMenuItem>
-                )}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-            <DropdownMenuSub>
-              <DropdownMenuSubTrigger>
-                <Users className="h-4 w-4" />
-                {t("followers")}
-              </DropdownMenuSubTrigger>
-              <DropdownMenuSubContent className="border-border bg-popover">
-                {profiles.length === 0 ? (
-                  <DropdownMenuItem disabled className="text-sm text-muted-foreground">
-                    {t("noTeammates")}
-                  </DropdownMenuItem>
-                ) : (
-                  profiles.map((p) => {
-                    const isFollowing = followerIds.includes(p.user_id);
-                    return (
-                      <DropdownMenuItem
-                        key={p.id}
-                        onSelect={(e) => {
-                          e.preventDefault();
-                          void toggleFollower(p.user_id);
-                        }}
-                      >
-                        <span className="flex-1">
-                          {p.full_name}
-                          {p.user_id === user?.id ? t("me") : ""}
-                        </span>
-                        {isFollowing && <Check className="ml-2 h-3 w-3" />}
-                      </DropdownMenuItem>
-                    );
-                  })
-                )}
-              </DropdownMenuSubContent>
-            </DropdownMenuSub>
-            {onRefresh && (
-              <DropdownMenuItem onClick={handleRefreshClick}>
-                <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
-                {t("refresh")}
-              </DropdownMenuItem>
-            )}
-            {noSessionWindow && (
-              <DropdownMenuItem onClick={handleSyncClick} disabled={isSyncing}>
-                <DownloadCloud className="h-4 w-4" />
-                {t("syncWhatsApp")}
-              </DropdownMenuItem>
-            )}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <button
+          type="button"
+          onClick={() => setToolsOpen(true)}
+          aria-label={t("chatTools")}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-foreground hover:bg-muted lg:hidden"
+        >
+          <MoreVertical className="h-5 w-5" />
+        </button>
       </div>
 
       {/* Messages Area */}
@@ -1503,6 +1398,163 @@ export function MessageThread({
         replyTo={replyTo}
         onClearReply={() => setReplyTo(null)}
       />
+
+      <Sheet open={toolsOpen} onOpenChange={setToolsOpen}>
+        <SheetContent
+          side="bottom"
+          className="max-h-[85vh] gap-0 overflow-y-auto rounded-t-2xl p-0"
+        >
+          <SheetHeader className="border-b border-border px-4 py-3">
+            <SheetTitle className="text-left">{displayName}</SheetTitle>
+          </SheetHeader>
+          <div className="space-y-4 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <section>
+              <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <UserPlus className="h-3.5 w-3.5" />
+                {t("assign")}
+              </h3>
+              <div className="flex flex-col rounded-lg border border-border">
+                {profiles.length === 0 ? (
+                  <p className="px-3 py-2 text-sm text-muted-foreground">
+                    {t("noTeammates")}
+                  </p>
+                ) : (
+                  profiles.map((p) => {
+                    const isSelected = p.user_id === assignedAgentId;
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => handleAssignChange(p.user_id)}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-muted",
+                          isSelected ? "text-primary" : "text-foreground",
+                        )}
+                      >
+                        <span className="flex-1">
+                          {p.full_name}
+                          {p.user_id === user?.id ? t("me") : ""}
+                        </span>
+                        {isSelected && <Check className="h-4 w-4" />}
+                      </button>
+                    );
+                  })
+                )}
+                {assignedAgentId && (
+                  <button
+                    type="button"
+                    onClick={() => handleAssignChange(null)}
+                    className="border-t border-border px-3 py-2.5 text-left text-sm text-muted-foreground hover:bg-muted"
+                  >
+                    {t("unassign")}
+                  </button>
+                )}
+              </div>
+            </section>
+
+            <section>
+              <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                <Users className="h-3.5 w-3.5" />
+                {t("followers")}
+              </h3>
+              <div className="flex flex-col rounded-lg border border-border">
+                {profiles.length === 0 ? (
+                  <p className="px-3 py-2 text-sm text-muted-foreground">
+                    {t("noTeammates")}
+                  </p>
+                ) : (
+                  profiles.map((p) => {
+                    const isFollowing = followerIds.includes(p.user_id);
+                    return (
+                      <button
+                        key={p.id}
+                        type="button"
+                        onClick={() => void toggleFollower(p.user_id)}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-2.5 text-left text-sm hover:bg-muted",
+                          isFollowing ? "text-primary" : "text-foreground",
+                        )}
+                      >
+                        <span className="flex-1">
+                          {p.full_name}
+                          {p.user_id === user?.id ? t("me") : ""}
+                        </span>
+                        {isFollowing && <Check className="h-4 w-4" />}
+                      </button>
+                    );
+                  })
+                )}
+              </div>
+            </section>
+
+            <section>
+              <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                {t("status")}
+              </h3>
+              <div className="flex gap-2">
+                {STATUS_OPTIONS.map((opt) => (
+                  <button
+                    key={opt.value}
+                    type="button"
+                    onClick={() => handleStatusChange(opt.value)}
+                    className={cn(
+                      "flex-1 rounded-lg border px-2 py-2 text-xs font-medium",
+                      currentStatus?.value === opt.value
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border text-muted-foreground hover:bg-muted",
+                    )}
+                  >
+                    {t(`status${opt.label}`)}
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <div className="flex flex-col gap-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setToolsOpen(false);
+                  setContactSheetOpen(true);
+                }}
+                className="flex items-center gap-2 rounded-lg px-2 py-2.5 text-sm text-foreground hover:bg-muted"
+              >
+                <User className="h-4 w-4" />
+                {t("contactDetails")}
+              </button>
+              {onRefresh && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleRefreshClick();
+                    setToolsOpen(false);
+                  }}
+                  className="flex items-center gap-2 rounded-lg px-2 py-2.5 text-sm text-foreground hover:bg-muted"
+                >
+                  <RefreshCw
+                    className={cn("h-4 w-4", isRefreshing && "animate-spin")}
+                  />
+                  {t("refresh")}
+                </button>
+              )}
+              {noSessionWindow && (
+                <button
+                  type="button"
+                  disabled={isSyncing}
+                  onClick={() => {
+                    void handleSyncClick();
+                    setToolsOpen(false);
+                  }}
+                  className="flex items-center gap-2 rounded-lg px-2 py-2.5 text-sm text-foreground hover:bg-muted disabled:opacity-50"
+                >
+                  <DownloadCloud className="h-4 w-4" />
+                  {t("syncWhatsApp")}
+                </button>
+              )}
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
 
       <Sheet open={contactSheetOpen} onOpenChange={setContactSheetOpen}>
         <SheetContent
