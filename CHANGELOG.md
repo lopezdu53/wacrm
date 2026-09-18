@@ -9,6 +9,21 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.9] — 2026-09-18
+
+Stops the dashboard from dying with Next.js "This page couldn't load"
+after the 0.8.8 bottom tabs. A Base UI Dialog/Sheet in the shell (and
+another always-mounted one on the thread) could throw and replace the
+whole signed-in app on web and phone.
+
+No new migration. Redeploy.
+
+### Fixed
+
+- **Dashboard white-out.** Perfil and the inbox ⋮ menu now use a plain
+  bottom drawer instead of Base UI Sheet. The tab bar is isolated so it
+  cannot take down the page. `usePathname()` is null-safe.
+
 ## [0.8.8] — 2026-09-18
 
 Replaces the phone hamburger with a WhatsApp Business-style bottom bar

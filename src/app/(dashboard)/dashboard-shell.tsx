@@ -6,6 +6,7 @@ import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
+import { SoftErrorBoundary } from "@/components/layout/soft-error-boundary";
 import { DashboardNavContext } from "@/components/layout/dashboard-nav-context";
 import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
 import { PwaBootstrap } from "@/components/pwa/pwa-bootstrap";
@@ -18,7 +19,7 @@ import { cn } from "@/lib/utils";
 function DashboardShellInner({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const isInbox = pathname === "/inbox";
   const isInternalChat = pathname.startsWith("/internal-chat");
   const hideMobileHeader = isInbox || isInternalChat;
@@ -68,7 +69,9 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
             {children}
           </main>
         </div>
-        <MobileTabBar hidden={mobileChatOpen} />
+        <SoftErrorBoundary>
+          <MobileTabBar hidden={mobileChatOpen} />
+        </SoftErrorBoundary>
       </div>
     </DashboardNavContext.Provider>
   );
