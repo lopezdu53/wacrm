@@ -30,6 +30,7 @@ import {
   type EvolutionPeer,
   type EvolutionPeerSource,
 } from '@/lib/whatsapp/peer-identity';
+import { exclusiveLinkedKeys } from '@/lib/whatsapp/peer-link';
 import {
   canonicalContactKey,
   formatWhatsAppAddress,
@@ -259,7 +260,6 @@ export async function repairMixedEvolutionConversations(
   for (const chat of chats.slice(0, 40)) {
     const source = chatRowToPeerSource(chat);
     const peer = resolveEvolutionPeer(source);
-    if (peer) chatPeers.push(peer);
     const remoteJid = chat.remoteJid || chat.id;
     if (!remoteJid) continue;
     const batch = await fetchEvolutionMessages({
@@ -268,8 +268,20 @@ export async function repairMixedEvolutionConversations(
       limit: 80,
       timeoutMs: 4000,
     });
-    for (const item of batch) {
-      items.push(attachChatAliases(item, source));
+    const attached = batch.map((item) => attachChatAliases(item, source));
+    items.push(...attached);
+    if (peer) {
+      const extras = exclusiveLinkedKeys(peer, attached);
+      const linked: EvolutionPeer = { ...peer };
+      for (const key of extras) {
+        if (key.startsWith('lid:') && !linked.lid) linked.lid = key.slice(4);
+        else if (key.startsWith('user:') && !linked.username) {
+          linked.username = key.slice(5);
+        } else if (!key.startsWith('lid:') && !key.startsWith('user:') && !linked.phone) {
+          linked.phone = key;
+        }
+      }
+      chatPeers.push(linked);
     }
   }
 

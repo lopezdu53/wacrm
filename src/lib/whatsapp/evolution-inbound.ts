@@ -10,9 +10,17 @@
 
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { recordInboundMessage, findOrCreateContact } from '@/lib/whatsapp/inbound-core';
-import { resolveEvolutionPeer, peerLookupKeys } from '@/lib/whatsapp/peer-identity';
+import { resolveEvolutionPeer, peerLookupKeys, type EvolutionPeer } from '@/lib/whatsapp/peer-identity';
 import { formatWhatsAppAddress } from '@/lib/whatsapp/phone-utils';
 import { vcardsToText } from '@/lib/whatsapp/vcard';
+import { findContactsMatchingKeys } from '@/lib/contacts/dedupe';
+import {
+  exclusiveLinkedKeys,
+  findExclusiveAliasByMessageIds,
+  needsHistoryLink,
+  remoteJidsForHistory,
+} from '@/lib/whatsapp/peer-link';
+import { fetchEvolutionMessages, type EvolutionHistoryItem } from '@/lib/whatsapp/evolution-api';
 
 export const CONTENT_TYPE_BY_MEDIA = {
   imageMessage: 'image',
@@ -343,13 +351,21 @@ export async function processEvolutionItem(
 
     const fallbackName = formatWhatsAppAddress(peer.contactKey) || peer.contactKey;
 
+    const historyKeys = await extraKeysFromOwnChatHistory(config, peer);
+    let lid = peer.lid;
+    let username = peer.username;
+    for (const key of historyKeys) {
+      if (key.startsWith('lid:') && !lid) lid = key.slice(4);
+      else if (key.startsWith('user:') && !username) username = key.slice(5);
+    }
+
     await recordInboundMessage({
       accountId: config.account_id,
       configOwnerUserId: config.user_id,
       senderPhone: peer.contactKey,
-      identityAliases: peerLookupKeys(peer),
-      whatsappLid: peer.lid,
-      whatsappUsername: peer.username,
+      identityAliases: [...peerLookupKeys(peer), ...historyKeys],
+      whatsappLid: lid,
+      whatsappUsername: username,
       contactName: outbound ? '' : (item.pushName ?? fallbackName),
       contentText:
         parsed.text ??
@@ -389,4 +405,61 @@ export async function linkEvolutionPeerContact(
       username: peer.username,
     },
   );
+}
+
+/**
+ * Look up the other half of this WhatsApp identity from THIS chat's
+ * Evolution history only. Returns at most one phone or one handle.
+ */
+async function extraKeysFromOwnChatHistory(
+  config: EvoInboundConfig,
+  peer: EvolutionPeer,
+): Promise<string[]> {
+  try {
+    const existing = await findContactsMatchingKeys(
+      supabaseAdmin(),
+      config.account_id,
+      peerLookupKeys(peer),
+    );
+    if (!needsHistoryLink(peer, existing)) return [];
+    if (
+      !config.evolution_base_url ||
+      !config.evolution_api_key ||
+      !config.evolution_instance
+    ) {
+      return [];
+    }
+
+    const auth = {
+      baseUrl: config.evolution_base_url,
+      apiKey: config.evolution_api_key,
+      instance: config.evolution_instance,
+    };
+
+    const items: EvolutionHistoryItem[] = [];
+    for (const remoteJid of remoteJidsForHistory(peer)) {
+      const batch = await fetchEvolutionMessages({
+        ...auth,
+        remoteJid,
+        limit: 30,
+        timeoutMs: 4000,
+      });
+      items.push(...batch);
+      if (items.length >= 30) break;
+    }
+
+    const fromItems = exclusiveLinkedKeys(peer, items);
+    if (fromItems.length > 0) return fromItems;
+
+    return findExclusiveAliasByMessageIds(
+      supabaseAdmin(),
+      config.account_id,
+      config.id,
+      peer,
+      items,
+    );
+  } catch (err) {
+    console.warn('[evolution-inbound] own-chat history link failed:', err);
+    return [];
+  }
 }
