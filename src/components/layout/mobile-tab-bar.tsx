@@ -13,7 +13,6 @@ import { useInternalUnread } from "@/hooks/use-internal-unread";
 import {
   APP_NAV_ITEMS,
   MOBILE_TAB_HREFS,
-  RESTRICTED_NAV_HREFS,
   SETTINGS_NAV_ITEM,
 } from "@/components/layout/nav-items";
 import {
