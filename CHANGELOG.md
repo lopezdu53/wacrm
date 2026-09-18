@@ -9,6 +9,29 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.6] — 2026-09-18
+
+Replies typed in the official WhatsApp app no longer rename the customer
+to the linked business account, and no longer leave that person in two
+inbox windows. Agent `fromMe` events ignore `pushName` (that string is
+"Envasadoras Colombia", not "AL"). The missing LID or phone is fetched
+from Evolution (`fetchLid` / a JID-scoped `findContacts`) so the pair
+joins on that message, without waiting for matching display names.
+
+No new migration. Redeploy, then send or receive one message in a split
+thread. The next *customer* inbound restores the WhatsApp name if a
+previous reply already overwrote it.
+
+### Fixed
+
+- **fromMe rename.** Official-app replies were stored with the instance
+  `pushName`, so "AL" became "Envasadoras Colombia" and the name-twin
+  join stopped matching. Outbound no longer renames; contact upserts
+  and mixed-chat repair also ignore fromMe names.
+- **Split after a WhatsApp-app reply.** LID ↔ phone is resolved from
+  Evolution identity APIs (never from a full findContacts dump, which
+  some builds return unfiltered).
+
 ## [0.8.5] — 2026-09-18
 
 Stops split LID/phone windows from sitting apart for minutes before they

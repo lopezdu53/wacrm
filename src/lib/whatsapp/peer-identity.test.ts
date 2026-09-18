@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   contactKeyToRemoteJid,
+  complementaryIdentityKeys,
   peerLookupKeys,
   resolveEvolutionPeer,
   resolveOutboundRecipient,
@@ -226,5 +227,35 @@ describe('resolveOutboundRecipient', () => {
       baseline: '573131423412',
       isHandle: true,
     });
+  });
+});
+
+describe('complementaryIdentityKeys', () => {
+  it('keeps the LID for a phone-only fromMe and ignores the phone itself', () => {
+    expect(
+      complementaryIdentityKeys(
+        {
+          contactKey: '573106650491',
+          phone: '573106650491',
+          lid: null,
+          username: null,
+        },
+        ['573106650491', 'lid:6611235915522259'],
+      ),
+    ).toEqual(['lid:6611235915522259']);
+  });
+
+  it('refuses a grab-bag of other people from findContacts', () => {
+    expect(
+      complementaryIdentityKeys(
+        {
+          contactKey: 'lid:6611235915522259',
+          phone: null,
+          lid: '6611235915522259',
+          username: null,
+        },
+        ['573106650491', '573131423412', 'lid:66244327888465593'],
+      ),
+    ).toEqual([]);
   });
 });
