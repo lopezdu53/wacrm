@@ -354,9 +354,9 @@ export async function processEvolutionItem(
     const historyKeys = await extraKeysFromOwnChatHistory(config, peer);
     let lid = peer.lid;
     let username = peer.username;
-    for (const key of historyKeys) {
-      if (key.startsWith('lid:') && !lid) lid = key.slice(4);
-      else if (key.startsWith('user:') && !username) username = key.slice(5);
+    for (const extra of historyKeys) {
+      if (extra.startsWith('lid:') && !lid) lid = extra.slice(4);
+      else if (extra.startsWith('user:') && !username) username = extra.slice(5);
     }
 
     await recordInboundMessage({
@@ -366,7 +366,7 @@ export async function processEvolutionItem(
       identityAliases: [...peerLookupKeys(peer), ...historyKeys],
       whatsappLid: lid,
       whatsappUsername: username,
-      contactName: outbound ? '' : (item.pushName ?? fallbackName),
+      contactName: (item.pushName ?? '').trim() || (outbound ? '' : fallbackName),
       contentText:
         parsed.text ??
         (parsed.contentType === 'document' ? (parsed.fileName ?? null) : null),

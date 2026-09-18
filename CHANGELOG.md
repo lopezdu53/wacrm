@@ -9,6 +9,25 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.5] — 2026-09-18
+
+Stops split LID/phone windows from sitting apart for minutes before they
+join. The message is stored first; the slow Evolution repair no longer
+blocks the webhook. A LID chat and a phone chat that share the same
+WhatsApp name (and nobody else does) join on that inbound, including
+agent `fromMe` events that carry `pushName`.
+
+No new migration. Redeploy, then send/receive one message in a split
+thread — they should land in the same conversation immediately.
+
+### Fixed
+
+- **Delayed merge.** Repair was running *before* recording the message
+  and could take several minutes (findChats + per-chat history). The
+  inbox showed two "AL" chats, then fused them later. Inbound now
+  records immediately and joins a unique complementary name pair
+  (handle + E.164) on the spot.
+
 ## [0.8.4] — 2026-09-18
 
 Joins a person's LID window with their phone window without collapsing
