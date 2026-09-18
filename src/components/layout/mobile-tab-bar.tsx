@@ -63,12 +63,14 @@ export function MobileTabBar({ hidden = false }: MobileTabBarProps) {
       <nav
         aria-label={t("mobileTabs")}
         className={cn(
-          "fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card/95 backdrop-blur-md lg:hidden",
+          // Solid fill — no backdrop-blur. On Android WebView / PWA the
+          // blur + translucent card painted this as an empty black bar.
+          "fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card-2 text-card-foreground lg:hidden",
           "pb-[env(safe-area-inset-bottom)]",
           hidden && "hidden",
         )}
       >
-        <ul className="grid h-14 grid-cols-4">
+        <ul className="grid h-16 grid-cols-4">
           <TabLink
             href="/inbox"
             label={t("tabChats")}
@@ -97,11 +99,11 @@ export function MobileTabBar({ hidden = false }: MobileTabBarProps) {
               aria-expanded={profileOpen}
               aria-haspopup="dialog"
               className={cn(
-                "flex h-full w-full flex-col items-center justify-center gap-0.5 text-[11px] font-medium",
-                profileActive ? "text-primary" : "text-muted-foreground",
+                "flex h-full w-full flex-col items-center justify-center gap-1 text-[11px] font-medium",
+                profileActive ? "text-primary" : "text-foreground/70",
               )}
             >
-              <User className="h-5 w-5" />
+              <User className="h-6 w-6" />
               {t("tabProfile")}
             </button>
           </li>
@@ -196,12 +198,12 @@ function TabLink({
         href={href}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "relative flex h-full flex-col items-center justify-center gap-0.5 text-[11px] font-medium",
-          active ? "text-primary" : "text-muted-foreground",
+          "relative flex h-full flex-col items-center justify-center gap-1 text-[11px] font-medium",
+          active ? "text-primary" : "text-foreground/70",
         )}
       >
         <span className="relative">
-          <Icon className="h-5 w-5" />
+          <Icon className="h-6 w-6" />
           {badge > 0 && (
             <span className="absolute -right-2.5 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
               {badge > 9 ? "9+" : badge}
