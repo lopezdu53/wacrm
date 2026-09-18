@@ -120,7 +120,7 @@ export function resolveEvolutionPeer(
   const chat = parseJid(key.remoteJid);
   if (chat?.kind === 'group') return null;
 
-  const jids = collectJidCandidates(item as unknown as Record<string, unknown>);
+  const jids = collectJidCandidates(item);
 
   let phone: string | null = null;
   let lid: string | null = chat?.kind === 'lid' ? chat.user : null;
@@ -165,43 +165,44 @@ export function resolveEvolutionPeer(
   return { contactKey, phone, lid, username };
 }
 
-const JID_SKIP_KEYS = new Set([
-  'message',
-  'base64',
-  'mediaBase64',
-  'messageTimestamp',
-  'pushName',
-]);
-
-function collectJidCandidates(item: Record<string, unknown>): string[] {
+/**
+ * Only envelope identity fields. Walking the whole payload picked up
+ * quoted participants and leftover history JIDs, then merged those
+ * people into one contact.
+ */
+function collectJidCandidates(item: EvolutionPeerSource): string[] {
+  const key = item.key ?? {};
+  const values = [
+    key.remoteJid,
+    key.remoteJidAlt,
+    key.previousRemoteJid,
+    key.senderPn,
+    key.senderLid,
+    key.participant,
+    key.participantAlt,
+    key.participantPn,
+    key.participantLid,
+    key.remoteJidUsername
+      ? `${key.remoteJidUsername}@s.whatsapp.net`
+      : undefined,
+    key.participantUsername
+      ? `${key.participantUsername}@s.whatsapp.net`
+      : undefined,
+    item.senderPn,
+    item.senderLid,
+    item.remoteJidAlt,
+    item.previousRemoteJid,
+    item.lid ? `${item.lid}@lid` : undefined,
+  ];
   const out: string[] = [];
   const seen = new Set<string>();
-  const add = (value: unknown) => {
-    if (typeof value !== 'string') return;
+  for (const value of values) {
+    if (typeof value !== 'string') continue;
     const t = value.trim();
-    if (!t || seen.has(t) || t.length > 128) return;
+    if (!t || seen.has(t) || t.length > 128) continue;
     seen.add(t);
     out.push(t);
-  };
-
-  const walk = (value: unknown, depth: number) => {
-    if (depth > 4 || out.length > 40) return;
-    if (typeof value === 'string') {
-      add(value);
-      return;
-    }
-    if (Array.isArray(value)) {
-      for (const entry of value) walk(entry, depth + 1);
-      return;
-    }
-    if (!value || typeof value !== 'object') return;
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      if (JID_SKIP_KEYS.has(k)) continue;
-      walk(v, depth + 1);
-    }
-  };
-
-  walk(item, 0);
+  }
   return out;
 }
 

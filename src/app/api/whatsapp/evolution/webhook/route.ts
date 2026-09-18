@@ -8,6 +8,7 @@ import {
   linkEvolutionPeerContact,
   type UpsertData,
 } from '@/lib/whatsapp/evolution-inbound';
+import { repairMixedEvolutionConversationsOnce } from '@/lib/whatsapp/repair-mixed-conversations';
 
 /**
  * Evolution API inbound webhook. Evolution POSTs a Baileys-shaped event
@@ -92,6 +93,7 @@ export async function POST(request: Request) {
     for (const row of contacts) {
       await linkEvolutionPeerContact(inboundCfg, contactRowToUpsert(row));
     }
+    await repairMixedEvolutionConversationsOnce(inboundCfg);
     return NextResponse.json({ received: true });
   }
 
@@ -102,6 +104,8 @@ export async function POST(request: Request) {
       : raw
         ? [raw as UpsertData]
         : [];
+
+  await repairMixedEvolutionConversationsOnce(inboundCfg);
 
   for (const item of items) {
     await processEvolutionItem(inboundCfg, item);

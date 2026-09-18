@@ -9,6 +9,26 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.3] — 2026-09-18
+
+Unmixes the inbox thread that swallowed every WhatsApp @username / LID
+chat after 0.8.2 tried to join LID inbound with phone outbound.
+
+No new migration. Redeploy so the Evolution webhook can split the
+collapsed conversation on first inbound (or tap **Sync** on that chat).
+
+### Fixed
+
+- **Collapsed @username inbox.** Linking LID chats by Evolution history
+  and quoted message ids, then merging every matching contact onto one
+  E.164 row, put Mao, Sebastian, `@1E4NDRA`, `@yel_cac`, and the rest
+  into a single conversation. Inbound now merges only a proven 1:1 pair
+  (at most one phone, one LID, one @username, all listed on *this*
+  payload). A leftover `whatsapp_lid` stamp on someone else's contact is
+  ignored. On webhook and Evolution sync the CRM asks Evolution which
+  `message_id` belongs to which remoteJid and moves those messages back
+  to per-person threads.
+
 ## [0.8.2] — 2026-08-23
 
 Hardens security, multi-number routing, and the Odoo connector. Adds an

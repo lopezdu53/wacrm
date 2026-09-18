@@ -10,17 +10,9 @@
 
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { recordInboundMessage, findOrCreateContact } from '@/lib/whatsapp/inbound-core';
-import { resolveEvolutionPeer, peerLookupKeys, contactKeyToRemoteJid, type EvolutionPeer } from '@/lib/whatsapp/peer-identity';
-import { formatWhatsAppAddress, isWhatsAppHandleKey } from '@/lib/whatsapp/phone-utils';
+import { resolveEvolutionPeer, peerLookupKeys } from '@/lib/whatsapp/peer-identity';
+import { formatWhatsAppAddress } from '@/lib/whatsapp/phone-utils';
 import { vcardsToText } from '@/lib/whatsapp/vcard';
-import { findContactsMatchingKeys } from '@/lib/contacts/dedupe';
-import {
-  findContactKeysByMessageIds,
-  historyMessageIds,
-  needsHistoryLink,
-  remoteJidsForHistory,
-} from '@/lib/whatsapp/peer-link';
-import { fetchEvolutionMessages, type EvolutionHistoryItem } from '@/lib/whatsapp/evolution-api';
 
 export const CONTENT_TYPE_BY_MEDIA = {
   imageMessage: 'image',
@@ -351,17 +343,11 @@ export async function processEvolutionItem(
 
     const fallbackName = formatWhatsAppAddress(peer.contactKey) || peer.contactKey;
 
-    const historyKeys = await extraKeysFromEvolutionHistory(
-      config,
-      peer,
-      item.key?.id,
-    );
-
     await recordInboundMessage({
       accountId: config.account_id,
       configOwnerUserId: config.user_id,
       senderPhone: peer.contactKey,
-      identityAliases: [...peerLookupKeys(peer), ...historyKeys],
+      identityAliases: peerLookupKeys(peer),
       whatsappLid: peer.lid,
       whatsappUsername: peer.username,
       contactName: outbound ? '' : (item.pushName ?? fallbackName),
@@ -403,92 +389,4 @@ export async function linkEvolutionPeerContact(
       username: peer.username,
     },
   );
-}
-
-async function extraKeysFromEvolutionHistory(
-  config: EvoInboundConfig,
-  peer: EvolutionPeer,
-  inboundMessageId?: string,
-): Promise<string[]> {
-  try {
-    const existing = await findContactsMatchingKeys(
-      supabaseAdmin(),
-      config.account_id,
-      peerLookupKeys(peer),
-    );
-    if (!needsHistoryLink(peer, existing)) return [];
-    if (
-      !config.evolution_base_url ||
-      !config.evolution_api_key ||
-      !config.evolution_instance
-    ) {
-      return [];
-    }
-
-    const auth = {
-      baseUrl: config.evolution_base_url,
-      apiKey: config.evolution_api_key,
-      instance: config.evolution_instance,
-    };
-
-    const items: EvolutionHistoryItem[] = [];
-    for (const remoteJid of remoteJidsForHistory(peer)) {
-      const batch = await fetchEvolutionMessages({
-        ...auth,
-        remoteJid,
-        limit: 30,
-        timeoutMs: 5000,
-      });
-      items.push(...batch);
-      if (items.length >= 30) break;
-    }
-    const ids = historyMessageIds(items);
-    const fromLidHistory = await findContactKeysByMessageIds(
-      supabaseAdmin(),
-      config.account_id,
-      config.id,
-      ids,
-    );
-    if (fromLidHistory.length > 0) return fromLidHistory;
-
-    if (!inboundMessageId) return [];
-
-    const { data: recent } = await supabaseAdmin()
-      .from('conversations')
-      .select('contact_id, contacts!inner(phone)')
-      .eq('account_id', config.account_id)
-      .eq('whatsapp_config_id', config.id)
-      .order('last_message_at', { ascending: false })
-      .limit(4);
-
-    const phones = [
-      ...new Set(
-        (recent ?? [])
-          .map((row) => {
-            const contact = row.contacts as { phone?: string } | { phone?: string }[] | null;
-            const phone = Array.isArray(contact) ? contact[0]?.phone : contact?.phone;
-            return phone ?? '';
-          })
-          .filter((phone) => phone && !isWhatsAppHandleKey(phone)),
-      ),
-    ];
-
-    const hits = await Promise.all(
-      phones.map(async (phone) => {
-        const jid = contactKeyToRemoteJid(phone);
-        if (!jid) return null;
-        const hist = await fetchEvolutionMessages({
-          ...auth,
-          remoteJid: jid,
-          limit: 25,
-          timeoutMs: 4000,
-        });
-        return historyMessageIds(hist).includes(inboundMessageId) ? phone : null;
-      }),
-    );
-    return hits.filter((phone): phone is string => Boolean(phone));
-  } catch (err) {
-    console.warn('[evolution-inbound] history link failed:', err);
-    return [];
-  }
 }
