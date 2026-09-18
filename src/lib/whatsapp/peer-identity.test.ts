@@ -148,6 +148,24 @@ describe('resolveEvolutionPeer', () => {
       ]),
     );
   });
+
+  it('does not treat a quoted participant as the chat peer', () => {
+    const peer = resolveEvolutionPeer({
+      key: { remoteJid: '66244327888465593@lid' },
+      // quoted-message JIDs used to be walked as identity aliases
+      ...{
+        message: {
+          extendedTextMessage: {
+            contextInfo: { participant: '573000000000@s.whatsapp.net' },
+          },
+        },
+      },
+    });
+    expect(peer).toMatchObject({
+      contactKey: 'lid:66244327888465593',
+      phone: null,
+    });
+  });
 });
 
 describe('toEvolutionRecipient', () => {

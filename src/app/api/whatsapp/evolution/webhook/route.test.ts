@@ -50,6 +50,10 @@ vi.mock('@/lib/whatsapp/evolution-inbound', () => ({
   linkEvolutionPeerContact: h.linkEvolutionPeerContact,
 }))
 
+vi.mock('@/lib/whatsapp/repair-mixed-conversations', () => ({
+  repairMixedEvolutionConversationsOnce: vi.fn(async () => null),
+}))
+
 const { POST } = await import('./route')
 
 function post(body: unknown, headers?: Record<string, string>) {
