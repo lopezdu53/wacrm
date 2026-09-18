@@ -29,6 +29,17 @@ describe("mobile tab destinations", () => {
   });
 });
 
+describe("dashboard shell tab placement", () => {
+  it("keeps the phone tabs in the column instead of reserving a fixed hole", () => {
+    const src = readFileSync(
+      resolve(process.cwd(), "src/app/(dashboard)/dashboard-shell.tsx"),
+      "utf8",
+    );
+    expect(src).not.toMatch(/max-lg:pb-\[calc\(4rem/);
+    expect(src).toMatch(/MobileTabBar/);
+  });
+});
+
 describe("mobile tab bar", () => {
   it("does not import Base UI Sheet (that crashed the signed-in app)", () => {
     const src = readFileSync(
@@ -37,6 +48,8 @@ describe("mobile tab bar", () => {
     );
     expect(src).not.toMatch(/from \"@\/components\/ui\/sheet\"/);
     expect(src).not.toMatch(/backdrop-blur-/);
+    expect(src).not.toMatch(/fixed inset-x-0/);
+    expect(src).toMatch(/shrink-0/);
     expect(src).toMatch(/BottomDrawer/);
     expect(src).toMatch(/tabChats/);
   });

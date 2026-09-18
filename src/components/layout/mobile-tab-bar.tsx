@@ -63,9 +63,10 @@ export function MobileTabBar({ hidden = false }: MobileTabBarProps) {
       <nav
         aria-label={t("mobileTabs")}
         className={cn(
-          // Solid fill — no backdrop-blur. On Android WebView / PWA the
-          // blur + translucent card painted this as an empty black bar.
-          "fixed inset-x-0 bottom-0 z-40 border-t border-border bg-card-2 text-card-foreground lg:hidden",
+          // In the dashboard column — not position:fixed. A fixed bar
+          // inside the h-dvh overflow-hidden shell is clipped on phone
+          // WebViews, leaving only a reserved black strip.
+          "shrink-0 border-t border-border bg-secondary text-foreground lg:hidden",
           "pb-[env(safe-area-inset-bottom)]",
           hidden && "hidden",
         )}
