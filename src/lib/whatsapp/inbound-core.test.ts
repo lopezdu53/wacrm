@@ -86,6 +86,7 @@ vi.mock('@/lib/flows/admin-client', () => ({
           return builder;
         },
         in: () => builder,
+        ilike: () => builder,
         order: () => builder,
         limit: () => builder,
         maybeSingle: () => {

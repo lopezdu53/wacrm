@@ -19,8 +19,11 @@ import {
 } from '@/lib/contacts/dedupe';
 import {
   isContactOnPayload,
+  lidFromContact,
   mergePeerContacts,
+  pickComplementaryNameTwin,
   selectMergeableLosers,
+  usernameFromContact,
 } from '@/lib/contacts/merge-peer';
 import { runAutomationsForTrigger } from '@/lib/automations/engine';
 import { dispatchInboundToFlows } from '@/lib/flows/engine';
@@ -94,11 +97,41 @@ export async function findOrCreateContact(
     }
   }
 
+  if (name.trim()) {
+    const needle = name.trim();
+    const { data: named } = await supabaseAdmin()
+      .from('contacts')
+      .select('*')
+      .eq('account_id', accountId)
+      .ilike('name', needle.replace(/[\\%_]/g, ''));
+    const twin = pickComplementaryNameTwin(
+      key,
+      needle,
+      (named ?? []) as ExistingContact[],
+    );
+    if (twin && !seen.has(twin.id)) {
+      seen.add(twin.id);
+      matches.push(twin);
+      lookupKeys.push(twin.phone);
+    }
+  }
+
+  const mergeLid =
+    options.lid ||
+    (key.startsWith('lid:') ? key.slice(4) : '') ||
+    matches.map(lidFromContact).find(Boolean) ||
+    null;
+  const mergeUsername =
+    options.username ||
+    (key.startsWith('user:') ? key.slice(5) : '') ||
+    matches.map(usernameFromContact).find(Boolean) ||
+    null;
+
   if (matches.length > 0) {
     const picked = selectMergeableLosers(matches, key, {
       aliases: lookupKeys,
-      lid: options.lid,
-      username: options.username,
+      lid: mergeLid,
+      username: mergeUsername,
     });
     let existing = picked.survivor;
     if (picked.losers.length > 0) {
@@ -113,9 +146,9 @@ export async function findOrCreateContact(
       updated_at: new Date().toISOString(),
     };
     if (name && name !== existing.name) patch.name = name;
-    if (options.lid && !existing.whatsapp_lid) patch.whatsapp_lid = options.lid;
-    if (options.username && !existing.whatsapp_username) {
-      patch.whatsapp_username = options.username;
+    if (mergeLid && !existing.whatsapp_lid) patch.whatsapp_lid = mergeLid;
+    if (mergeUsername && !existing.whatsapp_username) {
+      patch.whatsapp_username = mergeUsername;
     }
     if (Object.keys(patch).length > 1) {
       await supabaseAdmin()
