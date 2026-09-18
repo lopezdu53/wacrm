@@ -10,7 +10,12 @@
 
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { recordInboundMessage, findOrCreateContact } from '@/lib/whatsapp/inbound-core';
-import { resolveEvolutionPeer, peerLookupKeys, type EvolutionPeer } from '@/lib/whatsapp/peer-identity';
+import {
+  complementaryIdentityKeys,
+  peerLookupKeys,
+  resolveEvolutionPeer,
+  type EvolutionPeer,
+} from '@/lib/whatsapp/peer-identity';
 import { formatWhatsAppAddress } from '@/lib/whatsapp/phone-utils';
 import { vcardsToText } from '@/lib/whatsapp/vcard';
 import { findContactsMatchingKeys } from '@/lib/contacts/dedupe';
@@ -20,7 +25,7 @@ import {
   needsHistoryLink,
   remoteJidsForHistory,
 } from '@/lib/whatsapp/peer-link';
-import { fetchEvolutionMessages, type EvolutionHistoryItem } from '@/lib/whatsapp/evolution-api';
+import { fetchEvolutionMessages, fetchEvolutionIdentityAliases, type EvolutionHistoryItem } from '@/lib/whatsapp/evolution-api';
 
 export const CONTENT_TYPE_BY_MEDIA = {
   imageMessage: 'image',
@@ -366,7 +371,9 @@ export async function processEvolutionItem(
       identityAliases: [...peerLookupKeys(peer), ...historyKeys],
       whatsappLid: lid,
       whatsappUsername: username,
-      contactName: (item.pushName ?? '').trim() || (outbound ? '' : fallbackName),
+      contactName: outbound
+        ? ''
+        : (item.pushName ?? '').trim() || fallbackName,
       contentText:
         parsed.text ??
         (parsed.contentType === 'document' ? (parsed.fileName ?? null) : null),
@@ -403,6 +410,9 @@ export async function linkEvolutionPeerContact(
       aliases: peerLookupKeys(peer),
       lid: peer.lid,
       username: peer.username,
+      // Contact upserts often carry the instance / verified name, not
+      // the customer. Never overwrite AL with "Envasadoras Colombia".
+      allowRename: false,
     },
   );
 }
@@ -435,6 +445,16 @@ async function extraKeysFromOwnChatHistory(
       apiKey: config.evolution_api_key,
       instance: config.evolution_instance,
     };
+
+    const fromIdentity = complementaryIdentityKeys(
+      peer,
+      await fetchEvolutionIdentityAliases({
+        ...auth,
+        peer,
+        timeoutMs: 2500,
+      }),
+    );
+    if (fromIdentity.length > 0) return fromIdentity;
 
     const items: EvolutionHistoryItem[] = [];
     for (const remoteJid of remoteJidsForHistory(peer)) {

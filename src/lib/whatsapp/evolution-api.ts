@@ -15,7 +15,14 @@
  * bodies here need adjusting.
  */
 
-import { toEvolutionRecipient } from '@/lib/whatsapp/peer-identity';
+import {
+  complementaryIdentityKeys,
+  contactKeyToRemoteJid,
+  peerLookupKeys,
+  resolveEvolutionPeer,
+  toEvolutionRecipient,
+  type EvolutionPeer,
+} from '@/lib/whatsapp/peer-identity';
 
 export interface EvolutionAuth {
   /** Base URL of the Evolution server, no trailing slash (validated). */
@@ -526,6 +533,183 @@ export async function fetchEvolutionChats({
   } catch {
     return [];
   }
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+export function rowsFromEvolutionJson(json: unknown): Record<string, unknown>[] {
+  if (!json) return [];
+  if (typeof json === 'string' && json.trim()) {
+    const value = json.trim();
+    return value.endsWith('@lid') || value.includes('@')
+      ? [{ id: value, lid: value }]
+      : [{ wuid: value, number: value }];
+  }
+  if (Array.isArray(json)) {
+    return json.flatMap((row) => rowsFromEvolutionJson(row));
+  }
+  if (typeof json !== 'object') return [];
+  const obj = json as Record<string, unknown>;
+  for (const key of ['contacts', 'data', 'records', 'response']) {
+    const nested = obj[key];
+    if (Array.isArray(nested) || (nested && typeof nested === 'object')) {
+      const inner = rowsFromEvolutionJson(nested);
+      if (inner.length > 0) return inner;
+    }
+  }
+  return [obj];
+}
+
+function identityFieldsFromRow(row: Record<string, unknown>): string[] {
+  const nested =
+    row.key && typeof row.key === 'object' && !Array.isArray(row.key)
+      ? (row.key as Record<string, unknown>)
+      : {};
+  const fields = [
+    row.id,
+    row.remoteJid,
+    row.wuid,
+    row.lid,
+    row.senderLid,
+    row.remoteJidAlt,
+    row.phoneNumber,
+    row.pn,
+    row.number,
+    row.senderPn,
+    row.remoteJidUsername,
+    nested.remoteJid,
+    nested.remoteJidAlt,
+    nested.senderPn,
+    nested.senderLid,
+    nested.remoteJidUsername,
+  ];
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const field of fields) {
+    const value = asString(field);
+    if (!value || seen.has(value)) continue;
+    seen.add(value);
+    out.push(value);
+  }
+  return out;
+}
+
+function peerFromIdentityFields(fields: string[]): EvolutionPeer | null {
+  if (fields.length === 0) return null;
+  const lid = fields.find((value) => {
+    if (value.toLowerCase().includes('@lid')) return true;
+    const digits = value.replace(/\D/g, '');
+    return digits.length >= 16 && /^\d+$/.test(digits);
+  });
+  const phone = fields.find((value) => {
+    const digits = value.replace(/\D/g, '');
+    return /^\d{8,15}$/.test(digits);
+  });
+  return resolveEvolutionPeer({
+    key: {
+      remoteJid: fields[0],
+      remoteJidAlt: fields[1],
+      senderPn: phone,
+      senderLid: lid,
+      previousRemoteJid: fields[2],
+    },
+    lid,
+    senderPn: phone,
+    senderLid: lid,
+    remoteJidAlt: phone || fields[1],
+  });
+}
+
+function rowMatchesRequestedJid(
+  row: Record<string, unknown>,
+  requested: string,
+): boolean {
+  const wanted = resolveEvolutionPeer({ key: { remoteJid: requested } });
+  if (!wanted) return false;
+  const own = new Set(peerLookupKeys(wanted));
+  const peer = peerFromIdentityFields(identityFieldsFromRow(row));
+  if (!peer) return false;
+  return peerLookupKeys(peer).some((key) => own.has(key));
+}
+
+/** Pull LID / phone / @username keys out of fetchLid or findContacts JSON. */
+export function identityAliasesFromEvolutionRows(
+  rows: Record<string, unknown>[],
+): string[] {
+  const keys = new Set<string>();
+  for (const row of rows) {
+    const peer = peerFromIdentityFields(identityFieldsFromRow(row));
+    if (!peer) continue;
+    for (const key of peerLookupKeys(peer)) keys.add(key);
+  }
+  return [...keys];
+}
+
+/**
+ * Ask Evolution for the other half of this identity (PN ↔ LID) without
+ * scanning every chat. Used on fromMe / LID inbound when the webhook
+ * omitted remoteJidAlt. Best-effort: [] on any failure. findContacts is
+ * filtered to the requested JID — some Evolution builds return every
+ * contact, which must not become merge aliases.
+ */
+export async function fetchEvolutionIdentityAliases({
+  baseUrl,
+  apiKey,
+  instance,
+  peer,
+  timeoutMs = 2500,
+}: EvolutionAuth & { peer: EvolutionPeer; timeoutMs?: number }): Promise<
+  string[]
+> {
+  const collected = new Set<string>();
+
+  const post = async (
+    path: string,
+    body: Record<string, unknown>,
+    requestedJid?: string,
+  ) => {
+    const url = `${normalizeBaseUrl(baseUrl)}${path}/${encodeURIComponent(instance)}`;
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: authHeaders(apiKey),
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!response.ok) return;
+    const rows = rowsFromEvolutionJson(await response.json());
+    const scoped = requestedJid
+      ? rows.filter((row) => rowMatchesRequestedJid(row, requestedJid))
+      : rows;
+    if (requestedJid && scoped.length !== 1) return;
+    for (const key of identityAliasesFromEvolutionRows(scoped)) {
+      collected.add(key);
+    }
+  };
+
+  const complementary = () =>
+    complementaryIdentityKeys(peer, collected);
+
+  try {
+    if (peer.phone) {
+      await post('/chat/fetchLid', { number: peer.phone });
+      const linked = complementary();
+      if (linked.length > 0) return linked;
+    }
+    for (const jid of [
+      contactKeyToRemoteJid(peer.contactKey),
+      peer.lid ? `${peer.lid}@lid` : null,
+      peer.phone ? `${peer.phone}@s.whatsapp.net` : null,
+    ].filter((value): value is string => Boolean(value))) {
+      await post('/chat/findContacts', { where: { id: jid } }, jid);
+      const linked = complementary();
+      if (linked.length > 0) return linked;
+    }
+  } catch {
+    return complementary();
+  }
+  return complementary();
 }
 
 /**

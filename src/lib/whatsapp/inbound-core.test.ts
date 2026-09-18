@@ -141,6 +141,11 @@ vi.mock('@/lib/flows/admin-client', () => ({
             );
           }
           if (table === 'contacts' && state.op === 'update') {
+            h.updates.push({
+              table,
+              payload: state.payload ?? {},
+              id: state.filters.id as string | undefined,
+            });
             return Promise.resolve({ error: null }).then(onFulfilled, onRejected);
           }
           return Promise.resolve({ data: null, error: null }).then(
@@ -311,6 +316,32 @@ describe('recordInboundMessage', () => {
     expect(h.findExistingContact.mock.calls.some((c) => c[2] === '14')).toBe(
       false,
     );
+  });
+
+  it('does not rename the customer when an agent fromMe carries the account pushName', async () => {
+    h.findExistingContact.mockImplementation(
+      async (_db: unknown, _acct: string, phone: string) => {
+        if (phone === '573106650491' || phone === 'lid:6611235915522259') {
+          return {
+            id: 'contact-al',
+            name: 'AL',
+            phone: 'lid:6611235915522259',
+          };
+        }
+        return null;
+      },
+    );
+    await recordInboundMessage({
+      ...BASE,
+      senderPhone: '573106650491',
+      identityAliases: ['573106650491', 'lid:6611235915522259'],
+      whatsappLid: '6611235915522259',
+      contactName: 'Envasadoras Colombia',
+      outbound: true,
+      messageId: 'wamid-fromme',
+    });
+    const contactUpdates = h.updates.filter((row) => row.table === 'contacts');
+    expect(contactUpdates.some((row) => row.payload.name)).toBe(false);
   });
 
   it('looks up LID and phone aliases so inbound and outbound share a contact', async () => {

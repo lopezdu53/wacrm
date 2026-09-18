@@ -236,6 +236,39 @@ export function peerLookupKeys(peer: EvolutionPeer): string[] {
 }
 
 /**
+ * Keep only the missing half of this identity (at most one phone, one
+ * LID, one @username). A grab-bag of Evolution contacts — findContacts
+ * sometimes returns every row — must not become merge aliases.
+ */
+export function complementaryIdentityKeys(
+  peer: EvolutionPeer,
+  keys: Iterable<string>,
+): string[] {
+  const own = new Set(peerLookupKeys(peer));
+  const phones: string[] = [];
+  const lids: string[] = [];
+  const users: string[] = [];
+  const seen = new Set<string>();
+
+  for (const raw of keys) {
+    const key = canonicalContactKey(raw);
+    if (!key || own.has(key) || seen.has(key)) continue;
+    seen.add(key);
+    if (key.startsWith('user:')) users.push(key);
+    else if (key.startsWith('lid:') || isWhatsAppHandleKey(key)) lids.push(key);
+    else phones.push(key);
+  }
+
+  if (phones.length > 1 || lids.length > 1 || users.length > 1) return [];
+
+  const out: string[] = [];
+  if (!peer.phone && phones.length === 1) out.push(phones[0]);
+  if (!peer.lid && lids.length === 1) out.push(lids[0]);
+  if (!peer.username && users.length === 1) out.push(users[0]);
+  return out;
+}
+
+/**
  * Value Evolution's `number` field expects: digits, `{lid}@lid`, or
  * a bare @username. Never strip letters out of a username.
  */

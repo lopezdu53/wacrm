@@ -69,6 +69,12 @@ export interface FindOrCreateContactOptions {
   aliases?: string[];
   lid?: string | null;
   username?: string | null;
+  /**
+   * When false, do not rename the contact and do not join by display
+   * name. Agent fromMe events send the *instance* pushName (the
+   * business account), which must not overwrite the customer.
+   */
+  allowRename?: boolean;
 }
 
 /** Find an account's contact by phone (shared dedupe), or create it. */
@@ -97,7 +103,7 @@ export async function findOrCreateContact(
     }
   }
 
-  if (name.trim()) {
+  if (name.trim() && options.allowRename !== false) {
     const needle = name.trim();
     const { data: named } = await supabaseAdmin()
       .from('contacts')
@@ -145,7 +151,13 @@ export async function findOrCreateContact(
     const patch: Record<string, unknown> = {
       updated_at: new Date().toISOString(),
     };
-    if (name && name !== existing.name) patch.name = name;
+    if (
+      options.allowRename !== false &&
+      name &&
+      name !== existing.name
+    ) {
+      patch.name = name;
+    }
     if (mergeLid && !existing.whatsapp_lid) patch.whatsapp_lid = mergeLid;
     if (mergeUsername && !existing.whatsapp_username) {
       patch.whatsapp_username = mergeUsername;
@@ -477,6 +489,7 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
       aliases: args.identityAliases ?? [],
       lid: args.whatsappLid,
       username: args.whatsappUsername,
+      allowRename: !outbound,
     },
   );
   if (!contactOutcome) return;
