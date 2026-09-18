@@ -44,7 +44,8 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { BottomDrawer } from "@/components/layout/bottom-drawer";
 import { ContactSidebar } from "./contact-sidebar";
 import { MessageBubble } from "./message-bubble";
 import { MessageActions } from "./message-actions";
@@ -1399,14 +1400,11 @@ export function MessageThread({
         onClearReply={() => setReplyTo(null)}
       />
 
-      <Sheet open={toolsOpen} onOpenChange={setToolsOpen}>
-        <SheetContent
-          side="bottom"
-          className="max-h-[85vh] gap-0 overflow-y-auto rounded-t-2xl p-0"
-        >
-          <SheetHeader className="border-b border-border px-4 py-3">
-            <SheetTitle className="text-left">{displayName}</SheetTitle>
-          </SheetHeader>
+      <BottomDrawer
+        open={toolsOpen}
+        onClose={() => setToolsOpen(false)}
+        title={displayName}
+      >
           <div className="space-y-4 p-4 pb-[max(1rem,env(safe-area-inset-bottom))]">
             <section>
               <h3 className="mb-2 flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
@@ -1553,22 +1551,23 @@ export function MessageThread({
               )}
             </div>
           </div>
-        </SheetContent>
-      </Sheet>
+      </BottomDrawer>
 
-      <Sheet open={contactSheetOpen} onOpenChange={setContactSheetOpen}>
-        <SheetContent
-          side="right"
-          className="w-full max-w-none gap-0 p-0 sm:max-w-sm"
-        >
-          <SheetTitle className="sr-only">{t("contactDetails")}</SheetTitle>
-          <ContactSidebar
-            contact={contact}
-            conversationId={conversation.id}
-            className="w-full border-l-0"
-          />
-        </SheetContent>
-      </Sheet>
+      {contactSheetOpen ? (
+        <Sheet open onOpenChange={setContactSheetOpen}>
+          <SheetContent
+            side="right"
+            className="w-full max-w-none gap-0 p-0 sm:max-w-sm"
+          >
+            <SheetTitle className="sr-only">{t("contactDetails")}</SheetTitle>
+            <ContactSidebar
+              contact={contact}
+              conversationId={conversation.id}
+              className="w-full border-l-0"
+            />
+          </SheetContent>
+        </Sheet>
+      ) : null}
 
       <TemplatePicker
         open={templateModalOpen}

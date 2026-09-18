@@ -20,12 +20,7 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@/components/ui/avatar";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { BottomDrawer } from "@/components/layout/bottom-drawer";
 
 interface MobileTabBarProps {
   hidden?: boolean;
@@ -38,7 +33,7 @@ interface MobileTabBarProps {
  */
 export function MobileTabBar({ hidden = false }: MobileTabBarProps) {
   const t = useTranslations("Sidebar");
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const { profile, accountRole, signOut } = useAuth();
   const totalUnread = useTotalUnread();
   const unreadNotifications = useUnreadNotifications();
@@ -56,8 +51,7 @@ export function MobileTabBar({ hidden = false }: MobileTabBarProps) {
   const inboxActive = pathname === "/inbox" || pathname.startsWith("/inbox/");
   const internalActive = pathname.startsWith("/internal-chat");
   const notiActive = pathname.startsWith("/notifications");
-  const profileActive =
-    profileOpen || pathname.startsWith("/settings");
+  const profileActive = profileOpen || pathname.startsWith("/settings");
 
   const initial =
     profile?.full_name?.charAt(0)?.toUpperCase() ??
@@ -81,7 +75,6 @@ export function MobileTabBar({ hidden = false }: MobileTabBarProps) {
             active={inboxActive}
             icon={MessageSquare}
             badge={totalUnread > 0 && !inboxActive ? totalUnread : 0}
-            badgeLabel={t("unreadConversations", { count: totalUnread })}
           />
           <TabLink
             href="/internal-chat"
@@ -89,7 +82,6 @@ export function MobileTabBar({ hidden = false }: MobileTabBarProps) {
             active={internalActive}
             icon={MessagesSquare}
             badge={internalUnread}
-            badgeLabel={t("unreadInternal", { count: internalUnread })}
           />
           <TabLink
             href="/notifications"
@@ -97,7 +89,6 @@ export function MobileTabBar({ hidden = false }: MobileTabBarProps) {
             active={notiActive}
             icon={Bell}
             badge={unreadNotifications}
-            badgeLabel={t("unreadNotifications", { count: unreadNotifications })}
           />
           <li>
             <button
@@ -117,73 +108,71 @@ export function MobileTabBar({ hidden = false }: MobileTabBarProps) {
         </ul>
       </nav>
 
-      <Sheet open={profileOpen} onOpenChange={setProfileOpen}>
-        <SheetContent
-          side="bottom"
-          className="max-h-[85vh] gap-0 overflow-y-auto rounded-t-2xl p-0"
-        >
-          <SheetHeader className="border-b border-border px-4 py-3">
-            <SheetTitle className="flex items-center gap-3 text-left">
-              <Avatar className="size-10">
-                {profile?.avatar_url ? (
-                  <AvatarImage
-                    src={profile.avatar_url}
-                    alt={profile.full_name ?? t("defaultAvatar")}
-                  />
-                ) : null}
-                <AvatarFallback className="bg-primary/10 text-sm font-medium text-primary">
-                  {initial}
-                </AvatarFallback>
-              </Avatar>
-              <span className="min-w-0">
-                <span className="block truncate text-base font-semibold">
-                  {profile?.full_name ?? t("defaultUser")}
-                </span>
-                <span className="block truncate text-xs font-normal text-muted-foreground">
-                  {profile?.email ?? ""}
-                </span>
+      <BottomDrawer
+        open={profileOpen}
+        onClose={() => setProfileOpen(false)}
+        title={
+          <span className="flex items-center gap-3">
+            <Avatar className="size-10">
+              {profile?.avatar_url ? (
+                <AvatarImage
+                  src={profile.avatar_url}
+                  alt={profile.full_name ?? t("defaultAvatar")}
+                />
+              ) : null}
+              <AvatarFallback className="bg-primary/10 text-sm font-medium text-primary">
+                {initial}
+              </AvatarFallback>
+            </Avatar>
+            <span className="min-w-0">
+              <span className="block truncate text-base font-semibold">
+                {profile?.full_name ?? t("defaultUser")}
               </span>
-            </SheetTitle>
-          </SheetHeader>
-          <ul className="flex flex-col p-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-            <li>
+              <span className="block truncate text-xs font-normal text-muted-foreground">
+                {profile?.email ?? ""}
+              </span>
+            </span>
+          </span>
+        }
+      >
+        <ul className="flex flex-col p-2 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+          <li>
+            <Link
+              href="/settings?tab=profile"
+              onClick={() => setProfileOpen(false)}
+              className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              <User className="h-4 w-4 text-muted-foreground" />
+              {t("menuProfile")}
+            </Link>
+          </li>
+          {extraItems.map((item) => (
+            <li key={item.href}>
               <Link
-                href="/settings?tab=profile"
+                href={item.href}
                 onClick={() => setProfileOpen(false)}
                 className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-foreground hover:bg-muted"
               >
-                <User className="h-4 w-4 text-muted-foreground" />
-                {t("menuProfile")}
+                <item.icon className="h-4 w-4 text-muted-foreground" />
+                {t(item.labelKey as string)}
               </Link>
             </li>
-            {extraItems.map((item) => (
-              <li key={item.href}>
-                <Link
-                  href={item.href}
-                  onClick={() => setProfileOpen(false)}
-                  className="flex items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-foreground hover:bg-muted"
-                >
-                  <item.icon className="h-4 w-4 text-muted-foreground" />
-                  {t(item.labelKey as string)}
-                </Link>
-              </li>
-            ))}
-            <li>
-              <button
-                type="button"
-                onClick={() => {
-                  setProfileOpen(false);
-                  void signOut();
-                }}
-                className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-foreground hover:bg-muted"
-              >
-                <LogOut className="h-4 w-4 text-muted-foreground" />
-                {t("menuSignOut")}
-              </button>
-            </li>
-          </ul>
-        </SheetContent>
-      </Sheet>
+          ))}
+          <li>
+            <button
+              type="button"
+              onClick={() => {
+                setProfileOpen(false);
+                void signOut();
+              }}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-3 text-sm font-medium text-foreground hover:bg-muted"
+            >
+              <LogOut className="h-4 w-4 text-muted-foreground" />
+              {t("menuSignOut")}
+            </button>
+          </li>
+        </ul>
+      </BottomDrawer>
     </>
   );
 }
@@ -194,14 +183,12 @@ function TabLink({
   active,
   icon: Icon,
   badge,
-  badgeLabel,
 }: {
   href: string;
   label: string;
   active: boolean;
   icon: typeof MessageSquare;
   badge: number;
-  badgeLabel: string;
 }) {
   return (
     <li>
@@ -216,10 +203,7 @@ function TabLink({
         <span className="relative">
           <Icon className="h-5 w-5" />
           {badge > 0 && (
-            <span
-              aria-label={badgeLabel}
-              className="absolute -right-2.5 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground"
-            >
+            <span className="absolute -right-2.5 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
               {badge > 9 ? "9+" : badge}
             </span>
           )}
