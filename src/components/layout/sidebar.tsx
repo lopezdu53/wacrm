@@ -204,6 +204,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           open ? "translate-x-0" : "-translate-x-full",
           // Desktop: static, always visible — reset all the mobile framing.
           "lg:static lg:z-0 lg:w-60 lg:translate-x-0 lg:transition-none",
+          "max-lg:pt-[env(safe-area-inset-top)]",
         )}
         aria-label="Primary"
       >

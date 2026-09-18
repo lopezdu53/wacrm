@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useTranslations } from "next-intl";
 import { useAuth } from "@/hooks/use-auth";
 import { LogOut, Menu, Settings as SettingsIcon, User } from "lucide-react";
 import {
@@ -17,6 +18,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ModeToggle } from "@/components/layout/mode-toggle";
+import { cn } from "@/lib/utils";
 
 const pageTitles: Record<string, string> = {
   "/dashboard": "dashboard",
@@ -42,11 +44,10 @@ interface HeaderProps {
   /** Wired to the shell's drawer state. Used only on mobile — the
    *  hamburger button is hidden on lg+. */
   onOpenSidebar?: () => void;
+  className?: string;
 }
 
-import { useTranslations } from "next-intl";
-
-export function Header({ onOpenSidebar }: HeaderProps) {
+export function Header({ onOpenSidebar, className }: HeaderProps) {
   const t = useTranslations("Header");
   const pathname = usePathname();
   const { profile, signOut } = useAuth();
@@ -58,7 +59,12 @@ export function Header({ onOpenSidebar }: HeaderProps) {
     "U";
 
   return (
-    <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-4 lg:px-6">
+    <header
+      className={cn(
+        "flex h-14 shrink-0 items-center justify-between gap-3 border-b border-border bg-background px-4 lg:px-6",
+        className,
+      )}
+    >
       <div className="flex min-w-0 items-center gap-2">
         {/* Hamburger — mobile only. 44×44 hit target per Apple HIG. */}
         <button

@@ -37,6 +37,7 @@ interface ContactSidebarProps {
   contact: Contact | null;
   /** Active conversation, linked onto a deal created from the chat. */
   conversationId?: string | null;
+  className?: string;
 }
 
 interface PipelineOption {
@@ -45,7 +46,7 @@ interface PipelineOption {
   stages: { id: string; name: string; position: number }[];
 }
 
-export function ContactSidebar({ contact, conversationId }: ContactSidebarProps) {
+export function ContactSidebar({ contact, conversationId, className }: ContactSidebarProps) {
   const tSidebar = useTranslations("Inbox.sidebar");
   const tThread = useTranslations("Inbox.messageThread");
 
@@ -237,7 +238,7 @@ export function ContactSidebar({ contact, conversationId }: ContactSidebarProps)
 
   if (!contact) {
     return (
-      <div className="flex h-full w-70 items-center justify-center border-l border-border bg-card">
+      <div className={cn("flex h-full w-70 items-center justify-center border-l border-border bg-card", className)}>
         <p className="text-sm text-muted-foreground">{tThread("selectConversation")}</p>
       </div>
     );
@@ -247,7 +248,7 @@ export function ContactSidebar({ contact, conversationId }: ContactSidebarProps)
   const initials = displayName.replace(/^@/, "").charAt(0).toUpperCase();
 
   return (
-    <div className="flex h-full w-70 flex-col border-l border-border bg-card">
+    <div className={cn("flex h-full w-70 flex-col border-l border-border bg-card", className)}>
       <ScrollArea className="flex-1">
         <div className="p-4">
           {/* Contact Info */}
