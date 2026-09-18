@@ -17,6 +17,7 @@ import { toast } from "sonner";
 import { WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { conversationHasNoSessionWindow } from "@/lib/inbox/session-window";
+import { useDashboardNav } from "@/components/layout/dashboard-nav-context";
 
 // Remembers the agent's show/hide choice for the desktop contact panel
 // across reloads and sessions (device-scoped, like the theme prefs).
@@ -566,6 +567,12 @@ export default function InboxPage() {
   // it back to the list. On lg+ both panes render side-by-side as
   // before, unchanged.
   const hasActiveConv = !!activeConversation;
+
+  const { setMobileChatOpen } = useDashboardNav();
+  useEffect(() => {
+    setMobileChatOpen(hasActiveConv);
+    return () => setMobileChatOpen(false);
+  }, [hasActiveConv, setMobileChatOpen]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">

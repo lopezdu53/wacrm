@@ -11,7 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatWhatsAppAddress } from "@/lib/whatsapp/phone-utils";
 import type { Conversation, ConversationStatus, Tag } from "@/types";
-import { Search, ChevronDown, X, MessageSquare, Menu } from "lucide-react";
+import { Search, ChevronDown, X, MessageSquare } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
@@ -23,7 +23,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { useDashboardNav } from "@/components/layout/dashboard-nav-context";
 
 interface ConversationListProps {
   activeConversationId: string | null;
@@ -57,8 +56,7 @@ export function ConversationList({
   resyncToken = 0,
 }: ConversationListProps) {
   const t = useTranslations("Inbox.conversationList");
-  const tHeader = useTranslations("Header");
-  const { openSidebar } = useDashboardNav();
+  const tNav = useTranslations("Sidebar");
   
   const FILTER_OPTIONS: { label: string; value: InboxFilter }[] = useMemo(() => [
     { label: t("filterAll"), value: "all" },
@@ -294,20 +292,12 @@ export function ConversationList({
     // w-full on mobile so the list occupies the whole viewport when it's
     // the single pane showing; fixed 320px on desktop where it shares the
     // row with the thread + contact sidebar.
-    <div className="flex h-full w-full flex-col border-r border-border bg-card pb-[env(safe-area-inset-bottom)] lg:w-80 lg:pb-0">
+    <div className="flex h-full w-full flex-col border-r border-border bg-card lg:w-80">
       {/* Phone chrome — WhatsApp Business list header. Hidden on lg+
           because the dashboard header is already visible there. */}
-      <div className="flex items-center gap-1 px-2 pb-1 pt-[max(0.5rem,env(safe-area-inset-top))] lg:hidden">
-        <button
-          type="button"
-          onClick={openSidebar}
-          aria-label={tHeader("openMenu")}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-foreground hover:bg-muted"
-        >
-          <Menu className="h-6 w-6" />
-        </button>
+      <div className="flex items-center px-4 pb-1 pt-[max(0.5rem,env(safe-area-inset-top))] lg:hidden">
         <h1 className="truncate text-xl font-semibold text-foreground">
-          {tHeader("inbox")}
+          {tNav("tabChats")}
         </h1>
       </div>
 

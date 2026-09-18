@@ -16,6 +16,7 @@ import { NewChannelDialog } from "@/components/internal-chat/new-channel-dialog"
 import { channelLabel, type InternalChannel } from "@/lib/internal-chat/types";
 import { createClient } from "@/lib/supabase/client";
 import { useTranslations } from "next-intl";
+import { useDashboardNav } from "@/components/layout/dashboard-nav-context";
 
 export default function InternalChatPage() {
   const t = useTranslations("InternalChat");
@@ -62,6 +63,11 @@ export default function InternalChatPage() {
   }, [refresh]);
 
   const active = channels.find((c) => c.id === activeId) ?? null;
+  const { setMobileChatOpen } = useDashboardNav();
+  useEffect(() => {
+    setMobileChatOpen(Boolean(active));
+    return () => setMobileChatOpen(false);
+  }, [active, setMobileChatOpen]);
   const visible = tab === "unread" ? channels.filter((c) => c.unread_count > 0) : channels;
   const totalUnread = channels.filter((c) => c.unread_count > 0).length;
 
@@ -71,15 +77,15 @@ export default function InternalChatPage() {
   }
 
   return (
-    <div className="flex h-[calc(100vh-8rem)] overflow-hidden rounded-lg border border-border">
+    <div className="flex h-full overflow-hidden max-lg:border-0 lg:rounded-lg lg:border lg:border-border">
       {/* Channel list */}
       <div
         className={cn(
-          "flex w-full flex-col border-r border-border sm:w-80 sm:shrink-0",
-          active ? "hidden sm:flex" : "flex",
+          "flex w-full flex-col border-r border-border lg:w-80 lg:shrink-0",
+          active ? "hidden lg:flex" : "flex",
         )}
       >
-        <div className="flex items-center justify-between gap-2 border-b border-border p-3">
+        <div className="flex items-center justify-between gap-2 border-b border-border p-3 max-lg:pt-[max(0.75rem,env(safe-area-inset-top))]">
           <h1 className="text-sm font-semibold text-foreground">{t("title")}</h1>
           <button
             type="button"
@@ -198,14 +204,14 @@ export default function InternalChatPage() {
       </div>
 
       {/* Thread */}
-      <div className={cn("flex-1", active ? "flex" : "hidden sm:flex")}>
+      <div className={cn("flex-1", active ? "flex" : "hidden lg:flex")}>
         {active && currentUserId ? (
           <div className="flex w-full flex-col">
             {/* Mobile back button */}
             <button
               type="button"
               onClick={() => setActiveId(null)}
-              className="border-b border-border px-4 py-2 text-left text-xs text-primary sm:hidden"
+              className="border-b border-border px-4 py-2 text-left text-xs text-primary max-lg:pt-[max(0.5rem,env(safe-area-inset-top))] lg:hidden"
             >
               ← {t("back")}
             </button>
@@ -218,7 +224,7 @@ export default function InternalChatPage() {
             </div>
           </div>
         ) : (
-          <div className="hidden flex-1 items-center justify-center sm:flex">
+          <div className="hidden flex-1 items-center justify-center lg:flex">
             <div className="flex flex-col items-center gap-2 text-center">
               <MessagesSquare className="size-10 text-muted-foreground" />
               <p className="text-sm text-muted-foreground">{t("selectAChat")}</p>

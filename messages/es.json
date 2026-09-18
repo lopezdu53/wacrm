@@ -40,7 +40,12 @@
     "defaultAvatar": "Avatar",
     "menuProfile": "Perfil",
     "menuSettings": "Configuración",
-    "menuSignOut": "Cerrar sesión"
+    "menuSignOut": "Cerrar sesión",
+    "mobileTabs": "Navegación principal",
+    "tabChats": "Chats",
+    "tabInternal": "Interno",
+    "tabNoti": "Noti",
+    "tabProfile": "Perfil"
   },
   "InternalChat": {
     "title": "Chat interno",

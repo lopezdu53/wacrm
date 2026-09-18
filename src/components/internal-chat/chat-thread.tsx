@@ -198,7 +198,7 @@ export function ChatThread({ channel, currentUserId, onActivity }: ChatThreadPro
       </div>
 
       {/* Composer */}
-      <div className="shrink-0 border-t border-border p-3">
+      <div className="shrink-0 border-t border-border p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <div className="flex items-end gap-2">
           <textarea
             value={text}

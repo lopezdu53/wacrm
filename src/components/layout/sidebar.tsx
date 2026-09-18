@@ -2,31 +2,20 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import { useTotalUnread } from "@/hooks/use-total-unread";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import { useInternalUnread } from "@/hooks/use-internal-unread";
 import {
-  Bell,
-  Bot,
   Crown,
-  GitBranch,
-  LayoutDashboard,
   LogOut,
   MessageSquare,
-  MessagesSquare,
-  Radio,
   Settings,
   Shield,
   User,
   UserCog,
-  Users,
   UsersRound,
-  Workflow,
-  X,
-  Zap,
 } from "lucide-react";
 import type { AccountRole } from "@/lib/auth/roles";
 
@@ -80,54 +69,15 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 
-interface NavItem {
-  href: string;
-  labelKey: string;
-  icon: typeof LayoutDashboard;
-  /**
-   * When true, the nav row renders a small "Beta" chip after the label.
-   * Purely informational — doesn't affect routing or access.
-   */
-  beta?: boolean;
-}
-
-const navItems: NavItem[] = [
-  { href: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard },
-  { href: "/inbox", labelKey: "inbox", icon: MessageSquare },
-  { href: "/internal-chat", labelKey: "internalChat", icon: MessagesSquare },
-  { href: "/notifications", labelKey: "notifications", icon: Bell },
-  { href: "/contacts", labelKey: "contacts", icon: Users },
-  { href: "/pipelines", labelKey: "pipelines", icon: GitBranch },
-  { href: "/broadcasts", labelKey: "broadcasts", icon: Radio },
-  { href: "/automations", labelKey: "automations", icon: Zap },
-  { href: "/flows", labelKey: "flows", icon: Workflow, beta: true },
-  { href: "/agents", labelKey: "aiAgents", icon: Bot },
-];
-
-const bottomNavItems = [
-  { href: "/settings", labelKey: "settings", icon: Settings },
-];
-
-// Main-nav entries an agent/viewer may see. They get the day-to-day
-// surfaces only — inbox, internal chat, notifications — not the
-// account-wide tools (contacts, pipelines, broadcasts, …). Owners and
-// admins see everything. Settings stays visible for all (its own rail
-// restricts which sections a limited role can open).
-const RESTRICTED_NAV_HREFS = new Set([
-  "/inbox",
-  "/internal-chat",
-  "/notifications",
-]);
-
-interface SidebarProps {
-  /** Controlled on mobile by the Header's hamburger button. Ignored on lg+. */
-  open?: boolean;
-  onClose?: () => void;
-}
+import {
+  APP_NAV_ITEMS,
+  RESTRICTED_NAV_HREFS,
+  SETTINGS_NAV_ITEM,
+} from "@/components/layout/nav-items";
 
 import { useTranslations } from "next-intl";
 
-export function Sidebar({ open = false, onClose }: SidebarProps) {
+export function Sidebar() {
   const t = useTranslations("Sidebar");
   const pathname = usePathname();
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
@@ -140,8 +90,8 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
   const restrictedNav =
     accountRole === "agent" || accountRole === "viewer";
   const visibleNavItems = restrictedNav
-    ? navItems.filter((item) => RESTRICTED_NAV_HREFS.has(item.href))
-    : navItems;
+    ? APP_NAV_ITEMS.filter((item) => RESTRICTED_NAV_HREFS.has(item.href))
+    : APP_NAV_ITEMS;
   // Only surface the account-name strip when it actually carries
   // information. A solo user's personal account is named after them
   // (the 017 signup trigger seeds it from `full_name`), so showing it
@@ -155,61 +105,11 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
     !!account?.name &&
     account.name !== profile?.full_name;
 
-  // Close the drawer when route changes — users opened it to navigate,
-  // so once they pick a destination the drawer should get out of the way.
-  useEffect(() => {
-    onClose?.();
-    // Only pathname drives this — onClose identity doesn't need to re-run it.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [pathname]);
-
-  // Lock body scroll and allow Escape to close while the drawer is open on
-  // mobile. No-ops on desktop because the sidebar isn't positioned there.
-  useEffect(() => {
-    if (!open) return;
-    const prev = document.body.style.overflow;
-    document.body.style.overflow = "hidden";
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose?.();
-    };
-    window.addEventListener("keydown", onKey);
-    return () => {
-      document.body.style.overflow = prev;
-      window.removeEventListener("keydown", onKey);
-    };
-  }, [open, onClose]);
-
   return (
-    <>
-      {/* Backdrop — only exists on mobile and only when open. Clicking
-          it closes the drawer. Hidden from lg+ since the sidebar is
-          part of the main flex row there. */}
-      <button
-        type="button"
-        aria-label={t("closeMenu")}
-        onClick={onClose}
-        className={cn(
-          "fixed inset-0 z-30 bg-background/70 backdrop-blur-sm transition-opacity lg:hidden",
-          open
-            ? "pointer-events-auto opacity-100"
-            : "pointer-events-none opacity-0",
-        )}
-      />
-
-      <aside
-        className={cn(
-          // Mobile: fixed drawer that slides in from the left.
-          "fixed inset-y-0 left-0 z-40 flex h-full w-64 flex-col border-r border-border bg-card",
-          "transition-transform duration-200 ease-out will-change-transform",
-          open ? "translate-x-0" : "-translate-x-full",
-          // Desktop: static, always visible — reset all the mobile framing.
-          "lg:static lg:z-0 lg:w-60 lg:translate-x-0 lg:transition-none",
-          "max-lg:pt-[env(safe-area-inset-top)]",
-        )}
-        aria-label="Primary"
-      >
-        {/* Logo row. On mobile we put a close button here; on desktop the
-            close button is hidden since the sidebar is always-visible. */}
+    <aside
+      className="hidden h-full w-60 shrink-0 flex-col border-r border-border bg-card lg:flex"
+      aria-label="Primary"
+    >
         <div className="flex h-14 shrink-0 items-center justify-between gap-2 border-b border-border px-4">
           <Link href="/dashboard" className="flex items-center gap-2">
             <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary text-primary-foreground">
@@ -219,14 +119,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
               {t("title")}
             </span>
           </Link>
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label={t("closeMenu")}
-            className="flex h-9 w-9 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
-          >
-            <X className="h-5 w-5" />
-          </button>
         </div>
 
         {/* Main navigation */}
@@ -306,7 +198,7 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
           <div className="my-4 border-t border-border" />
 
           <ul className="flex flex-col gap-1">
-            {bottomNavItems.map((item) => {
+            { [SETTINGS_NAV_ITEM].map((item) => {
               const isActive = pathname.startsWith(item.href);
               return (
                 <li key={item.href}>
@@ -399,7 +291,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 render={
                   <Link
                     href="/settings?tab=profile"
-                    onClick={onClose}
                     className="text-popover-foreground focus:bg-accent focus:text-accent-foreground"
                   />
                 }
@@ -411,7 +302,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
                 render={
                   <Link
                     href="/settings?tab=whatsapp"
-                    onClick={onClose}
                     className="text-popover-foreground focus:bg-accent focus:text-accent-foreground"
                   />
                 }
@@ -430,7 +320,6 @@ export function Sidebar({ open = false, onClose }: SidebarProps) {
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
-      </aside>
-    </>
+    </aside>
   );
 }
