@@ -82,9 +82,11 @@ installable phone PWA with lock-screen alerts for new WhatsApp messages.
   landed in one thread. Agent replies also landed on the PN
   (`573131423412`) while customer replies landed on the LID
   (`662…@lid`) — one WhatsApp chat, two inbox windows. Identity now
-  follows the chat JID (not the alt phone); PN/LID/@username are
-  stored as aliases and merged into one contact + conversation.
-  Replies go to `{lid}@lid` or the @username. Migrations 049–050.
+  prefers @username then LID then phone; PN/LID/@username are stored as
+  aliases and merged into one contact + conversation. When Evolution
+  omits the mapping (Mao Vargas / `@edwinvargas21`), inbound looks up
+  quoted and history message ids on the same number so the two windows
+  collapse. Replies go to `{lid}@lid` or the @username. Migrations 049–050.
 - **Evolution 24h template gate.** Mixed Meta+Evolution accounts no
   longer lock Evolution threads behind a template after 24 hours. The
   window is per conversation (Meta only).

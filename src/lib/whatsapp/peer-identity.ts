@@ -36,16 +36,24 @@ export interface EvolutionPeerSource {
   key?: {
     remoteJid?: string;
     remoteJidAlt?: string;
+    previousRemoteJid?: string;
     senderPn?: string;
+    senderLid?: string;
     participant?: string;
     participantAlt?: string;
+    participantPn?: string;
+    participantLid?: string;
     remoteJidUsername?: string;
     participantUsername?: string;
+    addressingMode?: string;
     fromMe?: boolean;
     id?: string;
   };
   senderPn?: string;
+  senderLid?: string;
   remoteJidAlt?: string;
+  previousRemoteJid?: string;
+  lid?: string;
   pushName?: string;
 }
 
@@ -100,12 +108,10 @@ function usernameFromField(value: string | undefined | null): string | null {
 /**
  * Identify the 1:1 peer on an Evolution/Baileys upsert.
  *
- * The *chat* JID (`remoteJid`) is the identity. `remoteJidAlt` / `senderPn`
- * are the other addressing mode (PN vs LID) — collecting them as aliases
- * is required so inbound LID and outbound PN land on one contact, but
- * they must not *replace* the chat JID. Preferring the alt phone was
- * splitting Sebastian's replies (`662…@lid`) from agent sends
- * (`573131423412`).
+ * Collect every LID / phone / @username on the payload as aliases so
+ * inbound LID and outbound PN merge into one contact. Canonical key
+ * prefers @username, then LID, then E.164 — a fromMe send addressed to
+ * the phone still has to land on the LID chat the customer replies in.
  */
 export function resolveEvolutionPeer(
   item: EvolutionPeerSource,
@@ -114,15 +120,7 @@ export function resolveEvolutionPeer(
   const chat = parseJid(key.remoteJid);
   if (chat?.kind === 'group') return null;
 
-  const jids = [
-    key.remoteJid,
-    key.remoteJidAlt,
-    key.senderPn,
-    item.senderPn,
-    item.remoteJidAlt,
-    key.participant,
-    key.participantAlt,
-  ];
+  const jids = collectJidCandidates(item as unknown as Record<string, unknown>);
 
   let phone: string | null = null;
   let lid: string | null = chat?.kind === 'lid' ? chat.user : null;
@@ -145,27 +143,66 @@ export function resolveEvolutionPeer(
   if (!username && chat?.kind === 'username') username = chat.user;
   if (!phone && chat?.kind === 'phone') phone = chat.user;
 
-  // Chat JID first. Username overlays a LID chat so @sebastianac01
-  // stays one person even when some events omit the LID.
+  // Username, then LID, then phone. A fromMe echo addressed to the
+  // E.164 still has to land on the LID/@username contact the customer
+  // replies on — chat-JID-first kept agent greens on the phone window.
   let contactKey = '';
-  if (username && chat?.kind !== 'phone') {
-    contactKey = `user:${username}`;
-  } else if (chat?.kind === 'lid' || (!chat && lid && !phone)) {
-    contactKey = `lid:${lid ?? chat?.user ?? ''}`;
-  } else if (chat?.kind === 'username') {
-    contactKey = `user:${chat.user}`;
-  } else if (chat?.kind === 'phone') {
-    contactKey = chat.user;
-  } else if (username) {
+  if (username) {
     contactKey = `user:${username}`;
   } else if (lid) {
     contactKey = `lid:${lid}`;
   } else if (phone) {
     contactKey = phone;
+  } else if (chat?.kind === 'username') {
+    contactKey = `user:${chat.user}`;
+  } else if (chat?.kind === 'lid') {
+    contactKey = `lid:${chat.user}`;
+  } else if (chat?.kind === 'phone') {
+    contactKey = chat.user;
   }
 
   if (!contactKey) return null;
   return { contactKey, phone, lid, username };
+}
+
+const JID_SKIP_KEYS = new Set([
+  'message',
+  'base64',
+  'mediaBase64',
+  'messageTimestamp',
+  'pushName',
+]);
+
+function collectJidCandidates(item: Record<string, unknown>): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  const add = (value: unknown) => {
+    if (typeof value !== 'string') return;
+    const t = value.trim();
+    if (!t || seen.has(t) || t.length > 128) return;
+    seen.add(t);
+    out.push(t);
+  };
+
+  const walk = (value: unknown, depth: number) => {
+    if (depth > 4 || out.length > 40) return;
+    if (typeof value === 'string') {
+      add(value);
+      return;
+    }
+    if (Array.isArray(value)) {
+      for (const entry of value) walk(entry, depth + 1);
+      return;
+    }
+    if (!value || typeof value !== 'object') return;
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      if (JID_SKIP_KEYS.has(k)) continue;
+      walk(v, depth + 1);
+    }
+  };
+
+  walk(item, 0);
+  return out;
 }
 
 /** Every stored key that might already identify this peer. */

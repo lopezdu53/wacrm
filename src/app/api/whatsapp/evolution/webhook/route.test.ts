@@ -19,6 +19,7 @@ const h = vi.hoisted(() => {
   })
   return {
     processEvolutionItem: vi.fn(async () => 'recorded'),
+    linkEvolutionPeerContact: vi.fn(async () => undefined),
     decrypt: vi.fn((enc: string) =>
       enc === 'enc-good' ? 'plain-secret' : 'other',
     ),
@@ -46,6 +47,7 @@ vi.mock('@/lib/whatsapp/encryption', () => ({
 
 vi.mock('@/lib/whatsapp/evolution-inbound', () => ({
   processEvolutionItem,
+  linkEvolutionPeerContact: h.linkEvolutionPeerContact,
 }))
 
 const { POST } = await import('./route')

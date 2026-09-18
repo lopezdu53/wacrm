@@ -21,6 +21,7 @@ import {
   mergePeerContacts,
   pickSurvivorContact,
 } from '@/lib/contacts/merge-peer';
+import { findContactKeysByMessageIds } from '@/lib/whatsapp/peer-link';
 import { runAutomationsForTrigger } from '@/lib/automations/engine';
 import { dispatchInboundToFlows } from '@/lib/flows/engine';
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply';
@@ -396,13 +397,20 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
   if (!senderPhone) return;
   const contentType = normalizeInboundContentType(args.contentType);
 
+  const extraKeys = await findContactKeysByMessageIds(
+    supabaseAdmin(),
+    accountId,
+    whatsappConfigId,
+    [messageId, args.replyToMetaMessageId ?? ''],
+  );
+
   const contactOutcome = await findOrCreateContact(
     accountId,
     configOwnerUserId,
     senderPhone,
     contactName,
     {
-      aliases: args.identityAliases,
+      aliases: [...(args.identityAliases ?? []), ...extraKeys],
       lid: args.whatsappLid,
       username: args.whatsappUsername,
     },

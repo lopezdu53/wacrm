@@ -136,7 +136,7 @@ export async function createEvolutionInstance({
         apikey: apiKey,
         'x-api-key': apiKey,
       },
-      events: ['MESSAGES_UPSERT'],
+      events: ['MESSAGES_UPSERT', 'CONTACTS_UPSERT', 'CONTACTS_UPDATE'],
     };
   }
 
@@ -182,7 +182,7 @@ export async function setEvolutionWebhook({
         apikey: apiKey,
         'x-api-key': apiKey,
       },
-      events: ['MESSAGES_UPSERT'],
+      events: ['MESSAGES_UPSERT', 'CONTACTS_UPSERT', 'CONTACTS_UPDATE'],
     },
   };
   const response = await fetch(url, {
@@ -434,7 +434,8 @@ export async function fetchEvolutionMessages({
   instance,
   remoteJid,
   limit = 50,
-}: EvolutionAuth & { remoteJid: string; limit?: number }): Promise<
+  timeoutMs = 8000,
+}: EvolutionAuth & { remoteJid: string; limit?: number; timeoutMs?: number }): Promise<
   EvolutionHistoryItem[]
 > {
   const url = `${normalizeBaseUrl(baseUrl)}/chat/findMessages/${encodeURIComponent(instance)}`;
@@ -443,6 +444,7 @@ export async function fetchEvolutionMessages({
       method: 'POST',
       headers: authHeaders(apiKey),
       body: JSON.stringify({ where: { key: { remoteJid } }, limit, page: 1 }),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) return [];
     const json: unknown = await response.json();

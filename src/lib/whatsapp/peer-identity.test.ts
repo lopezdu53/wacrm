@@ -100,6 +100,38 @@ describe('resolveEvolutionPeer', () => {
     expect(a?.contactKey).not.toBe(b?.contactKey);
   });
 
+  it('uses the LID as the contact key even when fromMe is addressed to the phone', () => {
+    expect(
+      resolveEvolutionPeer({
+        key: {
+          remoteJid: '573023582969@s.whatsapp.net',
+          remoteJidAlt: '6611235915522259@lid',
+          fromMe: true,
+        },
+      }),
+    ).toEqual({
+      contactKey: 'lid:6611235915522259',
+      phone: '573023582969',
+      lid: '6611235915522259',
+      username: null,
+    });
+  });
+
+  it('reads senderLid / previousRemoteJid when Evolution rewrote remoteJid', () => {
+    const peer = resolveEvolutionPeer({
+      key: {
+        remoteJid: '573023582969@s.whatsapp.net',
+        senderLid: '6611235915522259@lid',
+      },
+      previousRemoteJid: '6611235915522259@lid',
+    });
+    expect(peer).toMatchObject({
+      contactKey: 'lid:6611235915522259',
+      phone: '573023582969',
+      lid: '6611235915522259',
+    });
+  });
+
   it('looks up both the LID and the PN so inbound and fromMe match', () => {
     const peer = resolveEvolutionPeer({
       key: {

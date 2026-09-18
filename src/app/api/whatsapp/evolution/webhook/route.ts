@@ -5,6 +5,7 @@ import { secretsMatch } from '@/lib/auth/secret-compare';
 import { verifyEvolutionApiKey } from '@/lib/whatsapp/evolution-api';
 import {
   processEvolutionItem,
+  linkEvolutionPeerContact,
   type UpsertData,
 } from '@/lib/whatsapp/evolution-inbound';
 
@@ -38,10 +39,12 @@ export async function POST(request: Request) {
 
   const event = (body.event || '').toLowerCase().replace(/_/g, '.');
   const hasUpsertShape = looksLikeUpsert(body.data);
-  if (event && event !== 'messages.upsert' && !hasUpsertShape) {
+  const isContactEvent =
+    event === 'contacts.upsert' || event === 'contacts.update';
+  if (event && event !== 'messages.upsert' && !hasUpsertShape && !isContactEvent) {
     return NextResponse.json({ ignored: true });
   }
-  if (event !== 'messages.upsert' && !hasUpsertShape) {
+  if (event !== 'messages.upsert' && !hasUpsertShape && !isContactEvent) {
     return NextResponse.json({ ignored: true });
   }
 
@@ -70,6 +73,28 @@ export async function POST(request: Request) {
   }
 
   const raw = body.data;
+  const inboundCfg = {
+    id: config.id as string,
+    account_id: config.account_id as string,
+    user_id: config.user_id as string,
+    evolution_base_url: (config.evolution_base_url as string | null) ?? null,
+    evolution_api_key: decryptedKey(config),
+    evolution_instance:
+      (config.evolution_instance as string | null) || instance,
+  };
+
+  if (isContactEvent) {
+    const contacts = Array.isArray(raw)
+      ? raw
+      : raw
+        ? [raw]
+        : [];
+    for (const row of contacts) {
+      await linkEvolutionPeerContact(inboundCfg, contactRowToUpsert(row));
+    }
+    return NextResponse.json({ received: true });
+  }
+
   const items: UpsertData[] = Array.isArray(raw)
     ? raw
     : raw && 'messages' in raw && Array.isArray(raw.messages)
@@ -79,14 +104,7 @@ export async function POST(request: Request) {
         : [];
 
   for (const item of items) {
-    await processEvolutionItem(
-      {
-        id: config.id as string,
-        account_id: config.account_id as string,
-        user_id: config.user_id as string,
-      },
-      item,
-    );
+    await processEvolutionItem(inboundCfg, item);
   }
 
   return NextResponse.json({ received: true });
@@ -177,4 +195,39 @@ async function isPresentedKeyAllowed(
   }
 
   return false;
+}
+
+function decryptedKey(config: { evolution_api_key: unknown }): string | null {
+  const enc = typeof config.evolution_api_key === 'string' ? config.evolution_api_key : '';
+  if (!enc) return null;
+  try {
+    return decrypt(enc);
+  } catch {
+    return null;
+  }
+}
+
+function asString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value.trim() : undefined;
+}
+
+function contactRowToUpsert(row: unknown): UpsertData {
+  const r = row && typeof row === 'object' ? (row as Record<string, unknown>) : {};
+  const key =
+    r.key && typeof r.key === 'object' ? (r.key as Record<string, unknown>) : {};
+  return {
+    key: {
+      remoteJid: asString(key.remoteJid) ?? asString(r.remoteJid) ?? asString(r.id),
+      remoteJidAlt:
+        asString(key.remoteJidAlt) ?? asString(r.remoteJidAlt) ?? asString(r.lid),
+      senderPn: asString(key.senderPn) ?? asString(r.senderPn),
+      senderLid: asString(key.senderLid) ?? asString(r.senderLid),
+      remoteJidUsername:
+        asString(key.remoteJidUsername) ?? asString(r.remoteJidUsername),
+    },
+    pushName: asString(r.pushName) ?? asString(r.name) ?? asString(r.notify),
+    senderPn: asString(r.senderPn),
+    remoteJidAlt: asString(r.remoteJidAlt) ?? asString(r.lid),
+    senderLid: asString(r.senderLid),
+  };
 }

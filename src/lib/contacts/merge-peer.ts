@@ -2,7 +2,10 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 
 import type { ExistingContact } from '@/lib/contacts/dedupe';
 import { isUniqueViolation } from '@/lib/contacts/dedupe';
-import { canonicalContactKey } from '@/lib/whatsapp/phone-utils';
+import {
+  canonicalContactKey,
+  isWhatsAppHandleKey,
+} from '@/lib/whatsapp/phone-utils';
 
 /**
  * When a LID inbound and a PN outbound are the same WhatsApp person,
@@ -21,19 +24,87 @@ export async function mergePeerContacts(
     await repointContactChildren(db, survivor.id, loser.id);
     await db.from('contacts').delete().eq('id', loser.id);
   }
-  return survivor;
+  await stampMergedIdentity(db, survivor, losers);
+  const { data: refreshed } = await db
+    .from('contacts')
+    .select('*')
+    .eq('id', survivor.id)
+    .maybeSingle();
+  return (refreshed as ExistingContact | null) ?? survivor;
 }
 
 export function pickSurvivorContact(
   contacts: ExistingContact[],
   preferredKey: string,
 ): ExistingContact {
+  const e164 = contacts.find((c) => {
+    const key = canonicalContactKey(c.phone);
+    return Boolean(key) && !isWhatsAppHandleKey(key);
+  });
+  if (e164) return e164;
+
   const preferred = canonicalContactKey(preferredKey);
   const byKey = contacts.find(
     (c) => canonicalContactKey(c.phone) === preferred,
   );
   if (byKey) return byKey;
   return contacts[0];
+}
+
+function nameLooksLikeId(name: string | null | undefined, phone: string): boolean {
+  const n = (name ?? '').trim();
+  if (!n) return true;
+  if (n === phone) return true;
+  if (/^\d{8,}$/.test(n)) return true;
+  if (/^lid:/i.test(n) || /^user:/i.test(n)) return true;
+  return false;
+}
+
+async function stampMergedIdentity(
+  db: SupabaseClient,
+  survivor: ExistingContact,
+  losers: ExistingContact[],
+): Promise<void> {
+  const patch: Record<string, unknown> = {};
+  let name = (survivor.name as string | null | undefined) ?? '';
+  let lid =
+    (survivor.whatsapp_lid as string | null | undefined) ??
+    (canonicalContactKey(survivor.phone).startsWith('lid:')
+      ? canonicalContactKey(survivor.phone).slice(4)
+      : '');
+  let username =
+    (survivor.whatsapp_username as string | null | undefined) ??
+    (canonicalContactKey(survivor.phone).startsWith('user:')
+      ? canonicalContactKey(survivor.phone).slice(5)
+      : '');
+
+  for (const loser of losers) {
+    if (
+      nameLooksLikeId(name, survivor.phone) &&
+      loser.name &&
+      !nameLooksLikeId(loser.name, loser.phone)
+    ) {
+      name = loser.name;
+    }
+    const loserKey = canonicalContactKey(loser.phone);
+    const loserLid =
+      (loser.whatsapp_lid as string | null | undefined) ||
+      (loserKey.startsWith('lid:') ? loserKey.slice(4) : '');
+    const loserUser =
+      (loser.whatsapp_username as string | null | undefined) ||
+      (loserKey.startsWith('user:') ? loserKey.slice(5) : '');
+    if (!lid && loserLid) lid = loserLid;
+    if (!username && loserUser) username = loserUser;
+  }
+
+  if (name && name !== survivor.name) patch.name = name;
+  if (lid && lid !== survivor.whatsapp_lid) patch.whatsapp_lid = lid;
+  if (username && username !== survivor.whatsapp_username) {
+    patch.whatsapp_username = username;
+  }
+  if (Object.keys(patch).length === 0) return;
+  patch.updated_at = new Date().toISOString();
+  await db.from('contacts').update(patch).eq('id', survivor.id);
 }
 
 async function mergeConversationsOntoSurvivor(

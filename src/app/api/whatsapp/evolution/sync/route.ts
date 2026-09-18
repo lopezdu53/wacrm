@@ -108,6 +108,9 @@ export async function POST(request: Request) {
       id: config.id as string,
       account_id: config.account_id as string,
       user_id: config.user_id as string,
+      evolution_base_url: config.evolution_base_url as string,
+      evolution_api_key: auth.apiKey,
+      evolution_instance: auth.instance,
     };
 
     let recorded = 0;
