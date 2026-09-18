@@ -30,12 +30,12 @@ describe("mobile tab destinations", () => {
 });
 
 describe("dashboard shell tab placement", () => {
-  it("keeps the phone tabs in the column instead of reserving a fixed hole", () => {
+  it("keeps a fallback strip if the live tab bar throws", () => {
     const src = readFileSync(
       resolve(process.cwd(), "src/app/(dashboard)/dashboard-shell.tsx"),
       "utf8",
     );
-    expect(src).not.toMatch(/max-lg:pb-\[calc\(4rem/);
+    expect(src).toMatch(/MobileTabBarFallback/);
     expect(src).toMatch(/MobileTabBar/);
   });
 });
@@ -48,10 +48,19 @@ describe("mobile tab bar", () => {
     );
     expect(src).not.toMatch(/from \"@\/components\/ui\/sheet\"/);
     expect(src).not.toMatch(/backdrop-blur-/);
-    expect(src).not.toMatch(/fixed inset-x-0/);
-    expect(src).toMatch(/shrink-0/);
+    expect(src).toMatch(/BodyPortal/);
+    expect(src).toMatch(/fixed inset-x-0/);
     expect(src).toMatch(/BottomDrawer/);
     expect(src).toMatch(/tabChats/);
+  });
+
+  it("portals the strip to document.body so overflow-hidden cannot clip it", () => {
+    const src = readFileSync(
+      resolve(process.cwd(), "src/components/layout/body-portal.tsx"),
+      "utf8",
+    );
+    expect(src).toMatch(/createPortal/);
+    expect(src).toMatch(/document\.body/);
   });
 });
 

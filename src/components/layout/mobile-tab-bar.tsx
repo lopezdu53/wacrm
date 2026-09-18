@@ -20,16 +20,25 @@ import {
   AvatarFallback,
   AvatarImage,
 } from "@/components/ui/avatar";
+import { BodyPortal } from "@/components/layout/body-portal";
 import { BottomDrawer } from "@/components/layout/bottom-drawer";
 
 interface MobileTabBarProps {
   hidden?: boolean;
 }
 
+const TAB_BAR_HEIGHT =
+  "h-[calc(4rem+env(safe-area-inset-bottom,0px))]";
+
 /**
  * WhatsApp Business-style bottom tabs on phones. The four destinations
  * the user asked for: Chats, Interno, Noti, Perfil. Everything else
  * (settings, pipelines, sign out) lives under Perfil.
+ *
+ * The visible strip is portaled to document.body. A fixed bar inside
+ * the dashboard's h-dvh overflow-hidden shell is clipped on phone
+ * WebViews — that produced a black hole (#50) and then no menu at all
+ * (#51). Body-fixed chrome sits on the visual viewport.
  */
 export function MobileTabBar({ hidden = false }: MobileTabBarProps) {
   const t = useTranslations("Sidebar");
@@ -60,56 +69,58 @@ export function MobileTabBar({ hidden = false }: MobileTabBarProps) {
 
   return (
     <>
-      <nav
-        aria-label={t("mobileTabs")}
-        className={cn(
-          // In the dashboard column — not position:fixed. A fixed bar
-          // inside the h-dvh overflow-hidden shell is clipped on phone
-          // WebViews, leaving only a reserved black strip.
-          "shrink-0 border-t border-border bg-secondary text-foreground lg:hidden",
-          "pb-[env(safe-area-inset-bottom)]",
-          hidden && "hidden",
-        )}
-      >
-        <ul className="grid h-16 grid-cols-4">
-          <TabLink
-            href="/inbox"
-            label={t("tabChats")}
-            active={inboxActive}
-            icon={MessageSquare}
-            badge={totalUnread > 0 && !inboxActive ? totalUnread : 0}
-          />
-          <TabLink
-            href="/internal-chat"
-            label={t("tabInternal")}
-            active={internalActive}
-            icon={MessagesSquare}
-            badge={internalUnread}
-          />
-          <TabLink
-            href="/notifications"
-            label={t("tabNoti")}
-            active={notiActive}
-            icon={Bell}
-            badge={unreadNotifications}
-          />
-          <li>
-            <button
-              type="button"
-              onClick={() => setProfileOpen(true)}
-              aria-expanded={profileOpen}
-              aria-haspopup="dialog"
-              className={cn(
-                "flex h-full w-full flex-col items-center justify-center gap-1 text-[11px] font-medium",
-                profileActive ? "text-primary" : "text-foreground/70",
-              )}
-            >
-              <User className="h-6 w-6" />
-              {t("tabProfile")}
-            </button>
-          </li>
-        </ul>
-      </nav>
+      <TabBarSpacer hidden={hidden} />
+      {!hidden && (
+        <BodyPortal>
+          <nav
+            data-mobile-tab-bar=""
+            aria-label={t("mobileTabs")}
+            className={cn(
+              "fixed inset-x-0 bottom-0 z-40 hidden w-full flex-col border-t border-border bg-secondary text-foreground max-lg:flex",
+              "pb-[env(safe-area-inset-bottom,0px)]",
+            )}
+          >
+            <ul className="grid h-16 grid-cols-4">
+              <TabLink
+                href="/inbox"
+                label={t("tabChats")}
+                active={inboxActive}
+                icon={MessageSquare}
+                badge={totalUnread > 0 && !inboxActive ? totalUnread : 0}
+              />
+              <TabLink
+                href="/internal-chat"
+                label={t("tabInternal")}
+                active={internalActive}
+                icon={MessagesSquare}
+                badge={internalUnread}
+              />
+              <TabLink
+                href="/notifications"
+                label={t("tabNoti")}
+                active={notiActive}
+                icon={Bell}
+                badge={unreadNotifications}
+              />
+              <li>
+                <button
+                  type="button"
+                  onClick={() => setProfileOpen(true)}
+                  aria-expanded={profileOpen}
+                  aria-haspopup="dialog"
+                  className={cn(
+                    "flex h-full w-full flex-col items-center justify-center gap-1 text-[11px] font-medium",
+                    profileActive ? "text-primary" : "text-foreground/70",
+                  )}
+                >
+                  <User className="h-6 w-6" />
+                  {t("tabProfile")}
+                </button>
+              </li>
+            </ul>
+          </nav>
+        </BodyPortal>
+      )}
 
       <BottomDrawer
         open={profileOpen}
@@ -177,6 +188,73 @@ export function MobileTabBar({ hidden = false }: MobileTabBarProps) {
         </ul>
       </BottomDrawer>
     </>
+  );
+}
+
+/**
+ * Hook-free strip so SoftErrorBoundary can still show the four tabs
+ * if the live bar throws (i18n / unread / auth).
+ */
+export function MobileTabBarFallback({ hidden = false }: MobileTabBarProps) {
+  if (hidden) return null;
+
+  return (
+    <>
+      <TabBarSpacer hidden={false} />
+      <BodyPortal>
+        <nav
+          data-mobile-tab-bar=""
+          aria-label="Navegación principal"
+          className={cn(
+            "fixed inset-x-0 bottom-0 z-40 hidden w-full flex-col border-t border-border bg-secondary text-foreground max-lg:flex",
+            "pb-[env(safe-area-inset-bottom,0px)]",
+          )}
+        >
+          <ul className="grid h-16 grid-cols-4">
+            <TabLink
+              href="/inbox"
+              label="Chats"
+              active={false}
+              icon={MessageSquare}
+              badge={0}
+            />
+            <TabLink
+              href="/internal-chat"
+              label="Interno"
+              active={false}
+              icon={MessagesSquare}
+              badge={0}
+            />
+            <TabLink
+              href="/notifications"
+              label="Noti"
+              active={false}
+              icon={Bell}
+              badge={0}
+            />
+            <li>
+              <Link
+                href="/settings"
+                className="flex h-full w-full flex-col items-center justify-center gap-1 text-[11px] font-medium text-foreground/70"
+              >
+                <User className="h-6 w-6" />
+                Perfil
+              </Link>
+            </li>
+          </ul>
+        </nav>
+      </BodyPortal>
+    </>
+  );
+}
+
+function TabBarSpacer({ hidden }: { hidden: boolean }) {
+  if (hidden) return null;
+  return (
+    <div
+      aria-hidden
+      className={cn("pointer-events-none shrink-0 lg:hidden", TAB_BAR_HEIGHT)}
+    />
   );
 }
 
