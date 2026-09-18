@@ -9,6 +9,27 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.7] — 2026-09-18
+
+Makes the phone inbox feel like WhatsApp Business: full-screen chats,
+a back/avatar/name header, and a round composer — without dropping
+wacrm tools (status, assign, followers, tags, deals, notes). Those
+live in the ⋮ menu and in the contact sheet (tap the name).
+
+No new migration. Redeploy and open the inbox on a phone.
+
+### Changed
+
+- **Full-screen chat on mobile.** The dashboard title bar hides while
+  you are in `/inbox` on a phone. The list has its own hamburger;
+  the thread has a back arrow.
+- **WhatsApp-like thread chrome.** Larger avatars, round send button,
+  safe-area padding, and the keyboard resizes the chat instead of
+  covering the composer.
+- **CRM tools stay.** Status, assign, followers, refresh, and sync
+  are in the thread ⋮ menu. Tags, deals, and notes open from the
+  contact name.
+
 ## [0.8.6] — 2026-09-18
 
 Replies typed in the official WhatsApp app no longer rename the customer

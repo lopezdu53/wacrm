@@ -31,6 +31,8 @@ import {
   PanelRightClose,
   StickyNote,
   Users,
+  MoreVertical,
+  User,
 } from "lucide-react";
 import { format, isToday, isYesterday, differenceInHours } from "date-fns";
 import { useTranslations } from "next-intl";
@@ -39,10 +41,15 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { Sheet, SheetContent, SheetTitle } from "@/components/ui/sheet";
+import { ContactSidebar } from "./contact-sidebar";
 import { MessageBubble } from "./message-bubble";
 import { MessageActions } from "./message-actions";
 import {
@@ -188,6 +195,7 @@ export function MessageThread({
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
+  const [contactSheetOpen, setContactSheetOpen] = useState(false);
   const [profiles, setProfiles] = useState<Profile[]>([]);
   // Followers — teammates watching this thread (migration 041).
   const [followerIds, setFollowerIds] = useState<string[]>([]);
@@ -1020,39 +1028,46 @@ export function MessageThread({
     // root shrink lets the bubbles' break-words / max-w caps apply.
     // Issue #257.
     <div className={cn("flex min-w-0 flex-1 flex-col", DOODLE_BG_CLASSES)}>
-      {/* Header — solid card surface sits on top of the doodle so the
-          name/avatar/dropdowns stay legible. */}
-      <div className="flex items-center justify-between gap-2 border-b border-border bg-card px-3 py-3 sm:px-4">
-        <div className="flex min-w-0 items-center gap-2 sm:gap-3">
-          {/* Back-to-list button — mobile only. Hidden on lg+ where the
-              conversation list is always visible next to the thread. */}
+      {/* Header — WhatsApp Business chat chrome on phones (back, avatar,
+          name, overflow with CRM tools). Desktop keeps the full toolbar. */}
+      <div className="flex items-center justify-between gap-1 border-b border-border bg-card px-1 py-1.5 max-lg:pt-[max(0.35rem,env(safe-area-inset-top))] sm:gap-2 sm:px-4 sm:py-3">
+        <div className="flex min-w-0 flex-1 items-center gap-0.5 sm:gap-2">
           {onBack && (
             <button
               type="button"
               onClick={onBack}
               aria-label={t("backToConversations")}
-              className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground lg:hidden"
+              className="flex h-11 w-11 flex-shrink-0 items-center justify-center rounded-full text-foreground hover:bg-muted lg:hidden"
             >
               <ArrowLeft className="h-5 w-5" />
             </button>
           )}
-          <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
-            {displayName.charAt(0).toUpperCase()}
-          </div>
-          <div className="min-w-0">
-            <h2 className="truncate text-sm font-semibold text-foreground">{displayName}</h2>
-            <p className="truncate text-xs text-muted-foreground">
-              {formatWhatsAppAddress(contact.phone)}
-            </p>
-          </div>
-          {/* Session timer badge — hidden on the narrowest phones so
-              the name + back arrow keep their room. Suppressed entirely
-              on Evolution (no 24h window). */}
+          <button
+            type="button"
+            onClick={() => {
+              if (window.matchMedia("(max-width: 1023px)").matches) {
+                setContactSheetOpen(true);
+              }
+            }}
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-muted/50 lg:pointer-events-none lg:cursor-default lg:hover:bg-transparent"
+          >
+            <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground lg:h-9 lg:w-9">
+              {displayName.replace(/^@/, "").charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <h2 className="truncate text-[16px] font-semibold leading-tight text-foreground lg:text-sm">
+                {displayName}
+              </h2>
+              <p className="truncate text-xs text-muted-foreground">
+                {formatWhatsAppAddress(contact.phone)}
+              </p>
+            </div>
+          </button>
           {!noSessionWindow && (
             <Badge
               variant="outline"
               className={cn(
-                "ml-1 hidden gap-1 border-border text-[10px] sm:inline-flex sm:ml-2",
+                "ml-1 hidden gap-1 border-border text-[10px] lg:inline-flex",
                 sessionInfo.expired ? "text-red-400" : "text-primary"
               )}
             >
@@ -1062,12 +1077,7 @@ export function MessageThread({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
-          {/* Contact-panel toggle — desktop only. The contact sidebar
-              eats a chunk of horizontal width that crowds the thread on
-              smaller laptops; this lets agents reclaim it when they just
-              want to read and reply. Hidden on mobile, where the sidebar
-              never renders as a permanent panel anyway. Issue #258. */}
+        <div className="hidden items-center gap-2 lg:flex">
           {onToggleContactPanel && (
             <button
               type="button"
@@ -1078,7 +1088,7 @@ export function MessageThread({
               title={contactPanelOpen ? t("hideContact") : t("showContact")}
               aria-pressed={contactPanelOpen}
               className={cn(
-                "hidden h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground lg:inline-flex",
+                "inline-flex h-7 w-7 items-center justify-center rounded-md transition-colors hover:bg-muted hover:text-foreground",
                 contactPanelOpen ? "text-primary" : "text-muted-foreground",
               )}
             >
@@ -1090,11 +1100,6 @@ export function MessageThread({
             </button>
           )}
 
-          {/* Manual refresh — forces a refetch of the messages + the
-              conversation list (the parent bumps its resyncToken). Useful
-              when realtime missed an event or the agent just wants to be
-              sure nothing's stale. Only rendered when the parent wires
-              up `onRefresh`. */}
           {onRefresh && (
             <button
               type="button"
@@ -1102,9 +1107,7 @@ export function MessageThread({
               disabled={isRefreshing}
               aria-label={t("refreshConversation")}
               title={t("refresh")}
-              className={cn(
-                "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60",
-              )}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
             >
               <RefreshCw
                 className={cn("h-3.5 w-3.5", isRefreshing && "animate-spin")}
@@ -1112,8 +1115,6 @@ export function MessageThread({
             </button>
           )}
 
-          {/* Evolution-only: pull recent history from Evolution and
-              backfill any messages the webhook missed. */}
           {noSessionWindow && (
             <button
               type="button"
@@ -1121,9 +1122,7 @@ export function MessageThread({
               disabled={isSyncing}
               aria-label={t("syncWhatsApp")}
               title={t("syncWhatsApp")}
-              className={cn(
-                "inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60",
-              )}
+              className="inline-flex h-7 w-7 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
             >
               <DownloadCloud
                 className={cn("h-3.5 w-3.5", isSyncing && "animate-pulse")}
@@ -1131,7 +1130,6 @@ export function MessageThread({
             </button>
           )}
 
-          {/* Status dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger className={cn(
                   "inline-flex items-center justify-center h-7 gap-1 px-2 text-xs rounded-md hover:bg-muted",
@@ -1156,7 +1154,6 @@ export function MessageThread({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Assign dropdown */}
           <DropdownMenu>
             <DropdownMenuTrigger
               className={cn(
@@ -1221,7 +1218,6 @@ export function MessageThread({
             </DropdownMenuContent>
           </DropdownMenu>
 
-          {/* Followers dropdown — teammates watching this thread. */}
           <DropdownMenu>
             <DropdownMenuTrigger
               className={cn(
@@ -1270,10 +1266,121 @@ export function MessageThread({
             </DropdownMenuContent>
           </DropdownMenu>
         </div>
+
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            aria-label={t("chatTools")}
+            className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-foreground hover:bg-muted lg:hidden"
+          >
+            <MoreVertical className="h-5 w-5" />
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56 border-border bg-popover">
+            <DropdownMenuItem onClick={() => setContactSheetOpen(true)}>
+              <User className="h-4 w-4" />
+              {t("contactDetails")}
+            </DropdownMenuItem>
+            <DropdownMenuSeparator className="bg-border" />
+            <DropdownMenuLabel>{t("status")}</DropdownMenuLabel>
+            {STATUS_OPTIONS.map((opt) => (
+              <DropdownMenuItem
+                key={opt.value}
+                onClick={() => handleStatusChange(opt.value)}
+                className={cn("text-sm", opt.color)}
+              >
+                {t(`status${opt.label}`)}
+                {currentStatus?.value === opt.value && (
+                  <Check className="ml-auto h-3 w-3" />
+                )}
+              </DropdownMenuItem>
+            ))}
+            <DropdownMenuSeparator className="bg-border" />
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <UserPlus className="h-4 w-4" />
+                {assignLabel}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="border-border bg-popover">
+                {profiles.length === 0 ? (
+                  <DropdownMenuItem disabled className="text-sm text-muted-foreground">
+                    {t("noTeammates")}
+                  </DropdownMenuItem>
+                ) : (
+                  profiles.map((p) => {
+                    const isSelected = p.user_id === assignedAgentId;
+                    return (
+                      <DropdownMenuItem
+                        key={p.id}
+                        onClick={() => handleAssignChange(p.user_id)}
+                      >
+                        <span className="flex-1">
+                          {p.full_name}
+                          {p.user_id === user?.id ? t("me") : ""}
+                        </span>
+                        {isSelected && <Check className="ml-2 h-3 w-3" />}
+                      </DropdownMenuItem>
+                    );
+                  })
+                )}
+                {assignedAgentId && (
+                  <DropdownMenuItem
+                    onClick={() => handleAssignChange(null)}
+                    className="text-muted-foreground"
+                  >
+                    {t("unassign")}
+                  </DropdownMenuItem>
+                )}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            <DropdownMenuSub>
+              <DropdownMenuSubTrigger>
+                <Users className="h-4 w-4" />
+                {t("followers")}
+              </DropdownMenuSubTrigger>
+              <DropdownMenuSubContent className="border-border bg-popover">
+                {profiles.length === 0 ? (
+                  <DropdownMenuItem disabled className="text-sm text-muted-foreground">
+                    {t("noTeammates")}
+                  </DropdownMenuItem>
+                ) : (
+                  profiles.map((p) => {
+                    const isFollowing = followerIds.includes(p.user_id);
+                    return (
+                      <DropdownMenuItem
+                        key={p.id}
+                        onSelect={(e) => {
+                          e.preventDefault();
+                          void toggleFollower(p.user_id);
+                        }}
+                      >
+                        <span className="flex-1">
+                          {p.full_name}
+                          {p.user_id === user?.id ? t("me") : ""}
+                        </span>
+                        {isFollowing && <Check className="ml-2 h-3 w-3" />}
+                      </DropdownMenuItem>
+                    );
+                  })
+                )}
+              </DropdownMenuSubContent>
+            </DropdownMenuSub>
+            {onRefresh && (
+              <DropdownMenuItem onClick={handleRefreshClick}>
+                <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
+                {t("refresh")}
+              </DropdownMenuItem>
+            )}
+            {noSessionWindow && (
+              <DropdownMenuItem onClick={handleSyncClick} disabled={isSyncing}>
+                <DownloadCloud className="h-4 w-4" />
+                {t("syncWhatsApp")}
+              </DropdownMenuItem>
+            )}
+          </DropdownMenuContent>
+        </DropdownMenu>
       </div>
 
       {/* Messages Area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 lg:px-4 lg:py-4">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -1396,6 +1503,20 @@ export function MessageThread({
         replyTo={replyTo}
         onClearReply={() => setReplyTo(null)}
       />
+
+      <Sheet open={contactSheetOpen} onOpenChange={setContactSheetOpen}>
+        <SheetContent
+          side="right"
+          className="w-full max-w-none gap-0 p-0 sm:max-w-sm"
+        >
+          <SheetTitle className="sr-only">{t("contactDetails")}</SheetTitle>
+          <ContactSidebar
+            contact={contact}
+            conversationId={conversation.id}
+            className="w-full border-l-0"
+          />
+        </SheetContent>
+      </Sheet>
 
       <TemplatePicker
         open={templateModalOpen}

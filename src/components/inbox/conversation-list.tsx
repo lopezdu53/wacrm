@@ -11,7 +11,7 @@ import {
 import { cn } from "@/lib/utils";
 import { formatWhatsAppAddress } from "@/lib/whatsapp/phone-utils";
 import type { Conversation, ConversationStatus, Tag } from "@/types";
-import { Search, ChevronDown, X, MessageSquare } from "lucide-react";
+import { Search, ChevronDown, X, MessageSquare, Menu } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useTranslations } from "next-intl";
 import { Input } from "@/components/ui/input";
@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { useDashboardNav } from "@/components/layout/dashboard-nav-context";
 
 interface ConversationListProps {
   activeConversationId: string | null;
@@ -56,6 +57,8 @@ export function ConversationList({
   resyncToken = 0,
 }: ConversationListProps) {
   const t = useTranslations("Inbox.conversationList");
+  const tHeader = useTranslations("Header");
+  const { openSidebar } = useDashboardNav();
   
   const FILTER_OPTIONS: { label: string; value: InboxFilter }[] = useMemo(() => [
     { label: t("filterAll"), value: "all" },
@@ -291,9 +294,25 @@ export function ConversationList({
     // w-full on mobile so the list occupies the whole viewport when it's
     // the single pane showing; fixed 320px on desktop where it shares the
     // row with the thread + contact sidebar.
-    <div className="flex h-full w-full flex-col border-r border-border bg-card lg:w-80">
+    <div className="flex h-full w-full flex-col border-r border-border bg-card pb-[env(safe-area-inset-bottom)] lg:w-80 lg:pb-0">
+      {/* Phone chrome — WhatsApp Business list header. Hidden on lg+
+          because the dashboard header is already visible there. */}
+      <div className="flex items-center gap-1 px-2 pb-1 pt-[max(0.5rem,env(safe-area-inset-top))] lg:hidden">
+        <button
+          type="button"
+          onClick={openSidebar}
+          aria-label={tHeader("openMenu")}
+          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-full text-foreground hover:bg-muted"
+        >
+          <Menu className="h-6 w-6" />
+        </button>
+        <h1 className="truncate text-xl font-semibold text-foreground">
+          {tHeader("inbox")}
+        </h1>
+      </div>
+
       {/* Search + Filter */}
-      <div className="space-y-2 border-b border-border p-3">
+      <div className="space-y-2 border-b border-border px-3 pb-3 pt-2 lg:p-3">
         {/* Per-number selector — only when the account has >1 channel. */}
         {channels.length > 1 && (
           <DropdownMenu>
@@ -348,11 +367,11 @@ export function ConversationList({
             value={search}
             onChange={handleSearchChange}
             placeholder={t("searchPlaceholder")}
-            className="border-border bg-muted pl-9 text-sm text-foreground placeholder-muted-foreground focus:border-primary/50"
+            className="h-11 rounded-full border-border bg-muted pl-9 text-sm text-foreground placeholder-muted-foreground focus:border-primary/50 lg:h-9 lg:rounded-md"
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-1">
+        <div className="flex flex-nowrap items-center gap-1 overflow-x-auto pb-0.5 lg:flex-wrap">
           {/* Assignment filter — My inbox / Unassigned / All. */}
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -602,17 +621,17 @@ function ConversationItem({
     <button
       onClick={handleClick}
       className={cn(
-        "flex w-full items-start gap-3 px-3 py-3 text-left transition-colors hover:bg-muted/50",
-        isActive && "border-l-2 border-primary bg-muted/70"
+        "flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/50 lg:items-start lg:py-3",
+        isActive && "bg-muted/70 lg:border-l-2 lg:border-primary"
       )}
     >
       {/* Avatar */}
-      <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground">
+      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted text-base font-medium text-foreground lg:h-10 lg:w-10 lg:text-sm">
         {contact?.avatar_url ? (
           <img
             src={contact.avatar_url}
             alt={displayName}
-            className="h-10 w-10 rounded-full object-cover"
+            className="h-12 w-12 rounded-full object-cover lg:h-10 lg:w-10"
           />
         ) : (
           initials
@@ -622,18 +641,27 @@ function ConversationItem({
       {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-sm font-medium text-foreground">
+          <span className="truncate text-[15px] font-medium text-foreground lg:text-sm">
             {displayName}
           </span>
-          <span className="shrink-0 text-[10px] text-muted-foreground">{timeAgo}</span>
+          <span
+            className={cn(
+              "shrink-0 text-[11px] lg:text-[10px]",
+              conversation.unread_count > 0
+                ? "font-medium text-primary"
+                : "text-muted-foreground",
+            )}
+          >
+            {timeAgo}
+          </span>
         </div>
         <div className="mt-0.5 flex items-center justify-between gap-2">
-          <p className="truncate text-xs text-muted-foreground">
+          <p className="truncate text-[13px] text-muted-foreground lg:text-xs">
             {conversation.last_message_text || t("noMessagesYet")}
           </p>
           <div className="flex shrink-0 items-center gap-1.5">
             {conversation.unread_count > 0 && (
-              <span className="flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-bold text-primary-foreground">
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-primary-foreground lg:h-4 lg:min-w-4 lg:px-1 lg:text-[10px]">
                 {conversation.unread_count}
               </span>
             )}
