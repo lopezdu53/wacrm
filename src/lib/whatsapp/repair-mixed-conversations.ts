@@ -130,7 +130,11 @@ export function assignMessagesToPeers(
     if (!peer) continue;
     collectedPeers.push(peer);
     const list = byId.get(id) ?? [];
-    list.push({ peer, pushName: item.pushName ?? '' });
+    list.push({
+      peer,
+      // fromMe pushName is the linked WhatsApp account, not the customer.
+      pushName: item.key?.fromMe ? '' : (item.pushName ?? ''),
+    });
     byId.set(id, list);
   }
 

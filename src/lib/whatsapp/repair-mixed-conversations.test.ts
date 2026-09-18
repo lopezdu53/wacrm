@@ -22,6 +22,7 @@ describe('assignMessagesToPeers', () => {
           remoteJidAlt: '6611235915522259@lid',
           fromMe: true,
         },
+        pushName: 'Envasadoras Colombia',
       },
       {
         key: { id: 'seb-in', remoteJid: '66244327888465593@lid' },
@@ -44,6 +45,8 @@ describe('assignMessagesToPeers', () => {
     expect(assigned.get('mao-in')?.peer.contactKey).not.toBe(
       assigned.get('seb-in')?.peer.contactKey,
     );
+    expect(assigned.get('mao-out')?.pushName).toBe('');
+    expect(assigned.get('mao-in')?.pushName).toBe('Mao Vargas');
   });
 
   it('drops a provider id that appears on two unrelated phones', () => {
