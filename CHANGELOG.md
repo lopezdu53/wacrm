@@ -9,6 +9,23 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.4] — 2026-09-18
+
+Joins a person's LID window with their phone window without collapsing
+every @username chat into one thread.
+
+No new migration. Redeploy, then send or receive one message in a split
+chat (or tap **Sync**).
+
+### Fixed
+
+- **Split LID / phone windows for the same person.** After 0.8.3 stopped
+  the giant merge, customer greys stayed on `@lid` and agent greens on
+  `+57…`. Inbound now reads *this chat's* Evolution history and links
+  only when that history names exactly one other identity. History that
+  lists several phones is ignored. Existing 1:1 merge guards stay in
+  place.
+
 ## [0.8.3] — 2026-09-18
 
 Unmixes the inbox thread that swallowed every WhatsApp @username / LID
