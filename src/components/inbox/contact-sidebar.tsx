@@ -238,7 +238,7 @@ export function ContactSidebar({ contact, conversationId, className }: ContactSi
 
   if (!contact) {
     return (
-      <div className={cn("flex h-full w-70 items-center justify-center border-l border-border bg-card", className)}>
+      <div className={cn("flex h-full items-center justify-center border-l border-border bg-card", className ?? "w-70")}>
         <p className="text-sm text-muted-foreground">{tThread("selectConversation")}</p>
       </div>
     );
@@ -248,7 +248,7 @@ export function ContactSidebar({ contact, conversationId, className }: ContactSi
   const initials = displayName.replace(/^@/, "").charAt(0).toUpperCase();
 
   return (
-    <div className={cn("flex h-full w-70 flex-col border-l border-border bg-card", className)}>
+    <div className={cn("flex h-full flex-col border-l border-border bg-card", className ?? "w-70")}>
       <ScrollArea className="flex-1">
         <div className="p-4">
           {/* Contact Info */}

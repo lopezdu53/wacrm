@@ -1049,7 +1049,7 @@ export function MessageThread({
                 setContactSheetOpen(true);
               }
             }}
-            className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-muted/50 lg:cursor-default lg:hover:bg-transparent"
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-md px-1 py-1 text-left hover:bg-muted/50 lg:pointer-events-none lg:cursor-default lg:hover:bg-transparent"
           >
             <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full bg-muted text-sm font-medium text-foreground lg:h-9 lg:w-9">
               {displayName.replace(/^@/, "").charAt(0).toUpperCase()}
