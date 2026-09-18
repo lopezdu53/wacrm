@@ -5,7 +5,10 @@ import { usePathname, useRouter } from "next/navigation";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
-import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
+import {
+  MobileTabBar,
+  MobileTabBarFallback,
+} from "@/components/layout/mobile-tab-bar";
 import { SoftErrorBoundary } from "@/components/layout/soft-error-boundary";
 import { DashboardNavContext } from "@/components/layout/dashboard-nav-context";
 import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
@@ -66,7 +69,9 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
           >
             {children}
           </main>
-          <SoftErrorBoundary>
+          <SoftErrorBoundary
+            fallback={<MobileTabBarFallback hidden={mobileChatOpen} />}
+          >
             <MobileTabBar hidden={mobileChatOpen} />
           </SoftErrorBoundary>
         </div>

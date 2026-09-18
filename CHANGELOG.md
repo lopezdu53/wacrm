@@ -9,6 +9,22 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.12] — 2026-09-18
+
+Pins the phone tabs to `document.body`. Putting them in the dashboard
+column (#51) removed the black hole but also hid Chats / Interno /
+Noti / Perfil — `h-dvh overflow-hidden` still clipped the in-flow
+strip below the visual viewport.
+
+No new migration. Redeploy.
+
+### Fixed
+
+- **Missing bottom menu.** The four tabs are `position:fixed` on
+  `document.body` (outside the overflow shell) with a spacer so the
+  list does not sit under them. If the live bar throws, a static
+  fallback still shows the four destinations.
+
 ## [0.8.11] — 2026-09-18
 
 Puts the phone tabs in the dashboard column instead of `position:fixed`.
