@@ -9,6 +9,19 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.10] — 2026-09-18
+
+Makes the phone bottom tabs look like tabs instead of a black strip.
+`backdrop-blur` + a translucent card on Android/PWA painted the bar
+solid black and hid Chats / Interno / Noti / Perfil.
+
+No new migration. Redeploy.
+
+### Fixed
+
+- **Black bottom bar.** The tab bar is now an opaque surface with
+  visible icons and labels. Safe-area padding uses the same color.
+
 ## [0.8.9] — 2026-09-18
 
 Stops the dashboard from dying with Next.js "This page couldn't load"

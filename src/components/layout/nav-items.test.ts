@@ -36,7 +36,9 @@ describe("mobile tab bar", () => {
       "utf8",
     );
     expect(src).not.toMatch(/from \"@\/components\/ui\/sheet\"/);
+    expect(src).not.toMatch(/backdrop-blur-/);
     expect(src).toMatch(/BottomDrawer/);
+    expect(src).toMatch(/tabChats/);
   });
 });
 
