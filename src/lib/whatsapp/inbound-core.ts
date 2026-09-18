@@ -26,6 +26,7 @@ import { dispatchInboundToFlows } from '@/lib/flows/engine';
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply';
 import { dispatchInboundToQualify } from '@/lib/ai/qualify';
 import { dispatchWebhookEvent } from '@/lib/webhooks/deliver';
+import { notifyNewInboundMessage } from '@/lib/pwa/notify-new-message';
 
 /** Content types the `messages.content_type` CHECK constraint allows. */
 const ALLOWED_CONTENT_TYPES = new Set([
@@ -578,4 +579,22 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
     content_type: contentType,
     text: contentText,
   });
+
+  // Home-screen PWA + in-app bell. Fire-and-forget so a push-service
+  // timeout cannot stall the webhook ack.
+  const assignedAgentId =
+    typeof conversation.assigned_agent_id === 'string'
+      ? conversation.assigned_agent_id
+      : null;
+  notifyNewInboundMessage({
+    accountId,
+    conversationId: conversation.id,
+    contactId: contactRecord.id,
+    contactName: contactRecord.name || contactRecord.phone || 'WhatsApp',
+    contentText,
+    contentType,
+    assignedAgentId,
+  }).catch((err) =>
+    console.error('[inbound-core] new-message notify failed:', err),
+  );
 }

@@ -11,14 +11,28 @@ and polish.
 
 ## [0.8.2] — 2026-08-23
 
-Hardens security, multi-number routing, and the Odoo connector.
+Hardens security, multi-number routing, and the Odoo connector. Adds an
+installable phone PWA with lock-screen alerts for new WhatsApp messages.
 
 > **Migration required:** apply `046_message_id_conversation_unique.sql`,
 > `047_conversation_channel_unique_again.sql`,
 > `048_conversation_channel_no_cross_number.sql`,
-> `049_whatsapp_username_lid_contact_keys.sql`, and
-> `050_whatsapp_lid_username_aliases.sql`. Also upgrade
+> `049_whatsapp_username_lid_contact_keys.sql`,
+> `050_whatsapp_lid_username_aliases.sql`, and
+> `051_push_subscriptions_new_message.sql`. Also upgrade
 > the Odoo module to **19.0.1.13.0**.
+
+### Added
+
+- **Installable phone app (PWA).** Settings → Phone app: Android Chrome
+  **Install app**, iPhone Safari **Add to Home Screen**. Manifest,
+  home-screen icons, and a push-only service worker (`/sw.js`). After
+  HTTPS deploy, wrap the same origin as an APK with PWABuilder; iOS
+  cannot sideload an IPA (see `docs/mobile.md`).
+- **New-message notifications.** Inbound WhatsApp messages create an
+  in-app `new_message` row and a Web Push to the assignee (or unassigned
+  agents) and conversation followers. Requires `VAPID_PUBLIC_KEY` /
+  `VAPID_PRIVATE_KEY` and migration 051.
 
 ### Security
 
@@ -90,7 +104,8 @@ Hardens security, multi-number routing, and the Odoo connector.
 
 ### Docs
 
-- EasyPanel guide lists all 48 migrations and documents Evolution.
+- EasyPanel guide lists all 51 migrations and documents Evolution.
+- Phone PWA install + Web Push: [`docs/mobile.md`](docs/mobile.md).
 - Public API scope table includes `deals:read` and `sso:login`.
 
 ## [0.8.1] — 2026-07-10

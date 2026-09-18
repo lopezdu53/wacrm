@@ -7,6 +7,7 @@ const h = vi.hoisted(() => ({
   dispatchInboundToAiReply: vi.fn(async () => undefined),
   dispatchInboundToQualify: vi.fn(async () => undefined),
   dispatchWebhookEvent: vi.fn(async () => undefined),
+  notifyNewInboundMessage: vi.fn(async () => undefined),
   inserts: [] as { table: string; payload: Record<string, unknown> }[],
   updates: [] as { table: string; payload: Record<string, unknown>; id?: string }[],
   messageLookups: [] as Record<string, unknown>[],
@@ -39,6 +40,10 @@ vi.mock('@/lib/ai/auto-reply', () => ({
 
 vi.mock('@/lib/ai/qualify', () => ({
   dispatchInboundToQualify: h.dispatchInboundToQualify,
+}));
+
+vi.mock('@/lib/pwa/notify-new-message', () => ({
+  notifyNewInboundMessage: h.notifyNewInboundMessage,
 }));
 
 vi.mock('@/lib/webhooks/deliver', () => ({
@@ -178,6 +183,7 @@ beforeEach(() => {
   h.dispatchInboundToAiReply.mockClear();
   h.dispatchInboundToQualify.mockClear();
   h.dispatchWebhookEvent.mockClear();
+  h.notifyNewInboundMessage.mockClear();
   h.inserts = [];
   h.updates = [];
   h.messageLookups = [];
@@ -267,6 +273,22 @@ describe('recordInboundMessage', () => {
         contactId: 'contact-1',
       }),
     );
+  });
+
+  it('notifies the phone app after a customer message, not a fromMe echo', async () => {
+    await recordInboundMessage(BASE);
+    expect(h.notifyNewInboundMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        accountId: 'acct-1',
+        conversationId: 'conv-1',
+        contactId: 'contact-1',
+        contentText: 'hello',
+      }),
+    );
+
+    h.notifyNewInboundMessage.mockClear();
+    await recordInboundMessage({ ...BASE, outbound: true, messageId: 'wamid-out' });
+    expect(h.notifyNewInboundMessage).not.toHaveBeenCalled();
   });
 
   it('keeps WhatsApp @username keys instead of stripping them to digits', async () => {

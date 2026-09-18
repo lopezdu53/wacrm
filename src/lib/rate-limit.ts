@@ -170,6 +170,10 @@ export const RATE_LIMITS = {
    *  capping a stampede; excess inbounds simply don't get an auto-reply
    *  (they still land in the inbox for a human). */
   aiAutoReplyAccount: { limit: 30, windowMs: 60_000 },
+  /** Web Push subscribe/unsubscribe from Settings → Mobile. 20/min
+   *  is far above a human tapping Enable; bounds a script looping
+   *  device-endpoint upserts. */
+  pushSubscribe: { limit: 20, windowMs: 60_000 },
 } as const;
 
 /** Test-only helper. Clears the in-memory state so unit tests don't

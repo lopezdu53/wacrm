@@ -218,6 +218,11 @@ export function SettingsOverview({
       loading: false,
       subtitle: t('appearance', { mode: cap(mode), theme: themeName }),
     },
+    {
+      section: 'mobile',
+      loading: false,
+      subtitle: t('mobileApp'),
+    },
   ];
 
   return (

@@ -33,7 +33,7 @@ There are two ways to build the app on Easypanel:
 - A Supabase project — see [`Supabase setup`](https://wacrm.tech/docs/supabase-setup).
   You need its **Project URL**, **anon key**, and **service-role key**.
 - The SQL migrations in [`supabase/migrations/`](../supabase/migrations)
-  (currently **050_*.sql** — apply every file in order) applied to that
+  (currently **051_*.sql** — apply every file in order) applied to that
   project (via the Supabase CLI `supabase db push`, or by pasting them
   into the SQL editor in order).
 - A Meta for Developers app with the WhatsApp product added — see
@@ -115,6 +115,7 @@ In the service's **Environment** tab, add the following.
 | `ALLOWED_INVITE_HOSTS` | allow-list of hostnames for invite links (bare/multi-tenant deploys) |
 | `WHATSAPP_TEMPLATES_DRY_RUN` | `true` in dev/CI to skip real Meta template submission |
 | `AI_REQUEST_TIMEOUT_MS`, `AI_CONTEXT_MESSAGE_LIMIT` | tune the AI reply assistant |
+| `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT` | Web Push for the phone PWA (see [`docs/mobile.md`](./mobile.md)) |
 
 The AI assistant is **bring-your-own-key** per account (pasted in the UI,
 stored encrypted) — there is no global AI provider env var.
