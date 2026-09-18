@@ -79,7 +79,7 @@ import { useTranslations } from "next-intl";
 
 export function Sidebar() {
   const t = useTranslations("Sidebar");
-  const pathname = usePathname();
+  const pathname = usePathname() ?? "";
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
   const totalUnread = useTotalUnread();
   const unreadNotifications = useUnreadNotifications();

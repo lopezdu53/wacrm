@@ -29,7 +29,27 @@ describe("mobile tab destinations", () => {
   });
 });
 
+describe("mobile tab bar", () => {
+  it("does not import Base UI Sheet (that crashed the signed-in app)", () => {
+    const src = readFileSync(
+      resolve(process.cwd(), "src/components/layout/mobile-tab-bar.tsx"),
+      "utf8",
+    );
+    expect(src).not.toMatch(/from \"@\/components\/ui\/sheet\"/);
+    expect(src).toMatch(/BottomDrawer/);
+  });
+});
+
 describe("inbox thread overflow menu", () => {
+  it("does not mount a Base UI Sheet for the ⋮ tools (that crashed the app)", () => {
+    const src = readFileSync(
+      resolve(process.cwd(), "src/components/inbox/message-thread.tsx"),
+      "utf8",
+    );
+    expect(src).toMatch(/BottomDrawer/);
+    expect(src).toMatch(/toolsOpen/);
+  });
+
   it("does not nest DropdownMenuSub (that crashed the phone PWA)", () => {
     const src = readFileSync(
       resolve(process.cwd(), "src/components/inbox/message-thread.tsx"),
