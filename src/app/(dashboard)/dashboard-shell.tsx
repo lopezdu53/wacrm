@@ -63,7 +63,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
                   ? "overflow-hidden max-lg:p-0 p-4 sm:p-6"
                   : "overflow-y-auto p-4 sm:p-6",
               !mobileChatOpen &&
-                "max-lg:pb-[calc(3.5rem+env(safe-area-inset-bottom))]",
+                "max-lg:pb-[calc(4rem+env(safe-area-inset-bottom))]",
             )}
           >
             {children}
