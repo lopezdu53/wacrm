@@ -15,6 +15,8 @@
  * bodies here need adjusting.
  */
 
+import { toEvolutionRecipient } from '@/lib/whatsapp/peer-identity';
+
 export interface EvolutionAuth {
   /** Base URL of the Evolution server, no trailing slash (validated). */
   baseUrl: string;
@@ -130,7 +132,11 @@ export async function createEvolutionInstance({
       url: webhookUrl,
       byEvents: false,
       base64: true,
-      events: ['MESSAGES_UPSERT'],
+      headers: {
+        apikey: apiKey,
+        'x-api-key': apiKey,
+      },
+      events: ['MESSAGES_UPSERT', 'CONTACTS_UPSERT', 'CONTACTS_UPDATE'],
     };
   }
 
@@ -168,7 +174,15 @@ export async function setEvolutionWebhook({
       url: webhookUrl,
       byEvents: false,
       base64: true,
-      events: ['MESSAGES_UPSERT'],
+      // So inbound POSTs carry a key we can check. Evolution's JSON
+      // body often sends the *instance* token, which may differ from
+      // the global key stored in wacrm — the header uses the key we
+      // actually saved.
+      headers: {
+        apikey: apiKey,
+        'x-api-key': apiKey,
+      },
+      events: ['MESSAGES_UPSERT', 'CONTACTS_UPSERT', 'CONTACTS_UPDATE'],
     },
   };
   const response = await fetch(url, {
@@ -216,6 +230,28 @@ export async function getEvolutionState({
     state?: string;
   };
   return normalizeState(data.instance?.state ?? data.state);
+}
+
+/**
+ * True when `apiKey` is accepted by this Evolution server for `instance`.
+ * Used by the inbound webhook: Evolution's payload `apikey` is often the
+ * per-instance token, while wacrm stored the global manager key.
+ */
+export async function verifyEvolutionApiKey({
+  baseUrl,
+  apiKey,
+  instance,
+}: EvolutionAuth): Promise<boolean> {
+  const url = `${normalizeBaseUrl(baseUrl)}/instance/connectionState/${encodeURIComponent(instance)}`;
+  try {
+    const response = await fetch(url, {
+      headers: authHeaders(apiKey),
+      signal: AbortSignal.timeout(5000),
+    });
+    return response.status !== 401 && response.status !== 403;
+  } catch {
+    return false;
+  }
 }
 
 /**
@@ -282,9 +318,9 @@ export async function logoutEvolutionInstance({
 // Sending
 // ============================================================
 
-/** Evolution accepts the bare national+country number (no leading +). */
+/** Evolution accepts E.164 digits, a bare @username, or `{lid}@lid`. */
 export function toEvolutionNumber(e164OrDigits: string): string {
-  return e164OrDigits.replace(/[^\d]/g, '');
+  return toEvolutionRecipient(e164OrDigits);
 }
 
 function extractMessageId(data: unknown): string {
@@ -398,7 +434,8 @@ export async function fetchEvolutionMessages({
   instance,
   remoteJid,
   limit = 50,
-}: EvolutionAuth & { remoteJid: string; limit?: number }): Promise<
+  timeoutMs = 8000,
+}: EvolutionAuth & { remoteJid: string; limit?: number; timeoutMs?: number }): Promise<
   EvolutionHistoryItem[]
 > {
   const url = `${normalizeBaseUrl(baseUrl)}/chat/findMessages/${encodeURIComponent(instance)}`;
@@ -407,6 +444,7 @@ export async function fetchEvolutionMessages({
       method: 'POST',
       headers: authHeaders(apiKey),
       body: JSON.stringify({ where: { key: { remoteJid } }, limit, page: 1 }),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) return [];
     const json: unknown = await response.json();

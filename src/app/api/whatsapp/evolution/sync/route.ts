@@ -12,9 +12,10 @@
 
 import { NextResponse } from 'next/server';
 
-import { getCurrentAccount, toErrorResponse } from '@/lib/auth/account';
+import { requireRole, toErrorResponse } from '@/lib/auth/account';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { decrypt } from '@/lib/whatsapp/encryption';
+import { contactKeyToRemoteJid } from '@/lib/whatsapp/peer-identity';
 import {
   fetchEvolutionMessages,
   fetchEvolutionMediaBase64,
@@ -27,7 +28,7 @@ import {
 
 export async function POST(request: Request) {
   try {
-    const ctx = await getCurrentAccount();
+    const ctx = await requireRole('agent');
     const db = supabaseAdmin();
 
     const body = (await request.json().catch(() => null)) as {
@@ -53,19 +54,24 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: 'Conversation not found' }, { status: 404 });
     }
 
-    // Resolve the Evolution channel: the conversation's own config, else
-    // the account's Evolution config (legacy single-channel).
-    let configQuery = db
+    // Resolve the Evolution channel from the conversation itself.
+    // Guessing "the account's first Evolution instance" mixed history
+    // from number A into number B's thread.
+    if (!conv.whatsapp_config_id) {
+      return NextResponse.json(
+        { error: 'This conversation is not linked to a WhatsApp number.' },
+        { status: 400 },
+      );
+    }
+    const { data: config } = await db
       .from('whatsapp_config')
       .select(
         'id, account_id, user_id, provider, evolution_base_url, evolution_api_key, evolution_instance',
       )
       .eq('account_id', ctx.accountId)
-      .eq('provider', 'evolution');
-    if (conv.whatsapp_config_id) {
-      configQuery = configQuery.eq('id', conv.whatsapp_config_id);
-    }
-    const { data: config } = await configQuery.limit(1).maybeSingle();
+      .eq('provider', 'evolution')
+      .eq('id', conv.whatsapp_config_id)
+      .maybeSingle();
     if (!config || !config.evolution_base_url || !config.evolution_instance) {
       return NextResponse.json(
         { error: 'This conversation is not on an Evolution (QR) number.' },
@@ -78,11 +84,13 @@ export async function POST(request: Request) {
       .select('phone')
       .eq('id', conv.contact_id)
       .maybeSingle();
-    const digits = String(contact?.phone ?? '').replace(/\D/g, '');
-    if (!digits) {
-      return NextResponse.json({ error: 'Contact has no phone' }, { status: 400 });
+    const remoteJid = contactKeyToRemoteJid(String(contact?.phone ?? ''));
+    if (!remoteJid) {
+      return NextResponse.json(
+        { error: 'Contact has no WhatsApp address' },
+        { status: 400 },
+      );
     }
-    const remoteJid = `${digits}@s.whatsapp.net`;
 
     const auth = {
       baseUrl: config.evolution_base_url as string,
@@ -100,6 +108,9 @@ export async function POST(request: Request) {
       id: config.id as string,
       account_id: config.account_id as string,
       user_id: config.user_id as string,
+      evolution_base_url: config.evolution_base_url as string,
+      evolution_api_key: auth.apiKey,
+      evolution_instance: auth.instance,
     };
 
     let recorded = 0;

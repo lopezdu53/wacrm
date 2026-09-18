@@ -93,14 +93,15 @@ wacrm stage lands in:
 | wacrm | Odoo |
 |---|---|
 | Contact name / phone / email / company | `res.partner` name / phone / email / company_name |
-| Contact custom field **NIT / CC** | `res.partner` `vat` |
-| Contact custom field **Dirección** | `res.partner` `street` |
-| Contact custom field **Ciudad** | `res.partner` `city` |
+| Contact custom field **NIT / CC** (configurable) | `res.partner` `vat` |
+| Contact custom field **Dirección** (configurable) | `res.partner` `street` |
+| Contact custom field **Ciudad** (configurable) | `res.partner` `city` |
 | Deal title | `crm.lead` name |
 | Deal value | `crm.lead` expected_revenue |
 | Deal stage | Pipeline Mapping row → `crm.stage` (fallback: by name) |
 | Deal contact | `crm.lead` partner (found or created) |
 | Deal status `lost` | opportunity archived |
+| Deal status `won` | probability 100 + Odoo won stage |
 | AI summary (what they're looking for) | `crm.lead` **Qué buscan (wacrm IA)** field |
 
 Existing Odoo contacts are adopted by matching phone (then email) before a
@@ -130,6 +131,14 @@ just clear them by hand once; nothing will write there again.
 
 ## Notes / limits
 
+- **v19.0.1.13.0 — incremental cron, won deals, default salesperson**:
+  the 15-minute cron now pulls only rows changed since the last
+  watermark (`updated_since` on `/api/v1/contacts` and `/api/v1/deals`).
+  **Sync Now** still does a full walk so drift can be healed. Won wacrm
+  deals set probability 100 and move to Odoo's won stage. Set a
+  **Default salesperson** in Settings so the cron (which runs as
+  OdooBot) doesn't leave opportunities unassigned. Custom-field names
+  for VAT / street / city are configurable instead of hardcoded Spanish.
 - **v19.0.1.12.0 — single sign-on for "wacrm chat"**: the green app
   tile now logs the agent straight into wacrm (see **Single sign-on**
   above) instead of just opening the logged-out wacrm URL. Requires

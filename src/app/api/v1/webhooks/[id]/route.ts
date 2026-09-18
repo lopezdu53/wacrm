@@ -15,6 +15,7 @@ import {
   serializeWebhookEndpoint,
   normalizeWebhookUrl,
 } from '@/lib/webhooks/endpoints';
+import { isDeliverableUrl } from '@/lib/webhooks/ssrf';
 
 export async function GET(
   request: Request,
@@ -65,6 +66,13 @@ export async function PATCH(
       const url = normalizeWebhookUrl(body.url);
       if (!url) {
         return fail('bad_request', "'url' must be a valid https:// URL", 400);
+      }
+      if (!(await isDeliverableUrl(url))) {
+        return fail(
+          'bad_request',
+          "'url' must resolve to a publicly-routable host (private / loopback addresses are blocked)",
+          400
+        );
       }
       updates.url = url;
     }

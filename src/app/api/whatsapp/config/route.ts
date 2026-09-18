@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server'
 import { createClient } from '@/lib/supabase/server'
+import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { createClient as createAdminClient } from '@supabase/supabase-js'
 import {
   registerPhoneNumber,
@@ -62,6 +63,9 @@ function supabaseAdmin() {
  */
 export async function GET(request: Request) {
   try {
+    // Decrypts the access token to ping Meta — viewers must not
+    // be able to burn API quota or exercise the stored credential.
+    await requireRole('agent')
     const supabase = await createClient()
 
     const {
@@ -167,6 +171,8 @@ export async function GET(request: Request) {
       )
     }
   } catch (error) {
+    const mapped = toErrorResponse(error)
+    if (mapped.status !== 500) return mapped
     console.error('Error in WhatsApp config GET:', error)
     return NextResponse.json(
       { connected: false, reason: 'unknown', message: 'Internal server error' },
@@ -183,6 +189,7 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   try {
+    await requireRole('admin')
     const supabase = await createClient()
 
     const {
@@ -493,6 +500,8 @@ export async function POST(request: Request) {
       phone_info: phoneInfo,
     })
   } catch (error) {
+    const mapped = toErrorResponse(error)
+    if (mapped.status !== 500) return mapped
     console.error('Error in WhatsApp config POST:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }
@@ -507,6 +516,7 @@ export async function POST(request: Request) {
  */
 export async function DELETE(request: Request) {
   try {
+    await requireRole('admin')
     const supabase = await createClient()
 
     const {
@@ -549,6 +559,8 @@ export async function DELETE(request: Request) {
 
     return NextResponse.json({ success: true })
   } catch (error) {
+    const mapped = toErrorResponse(error)
+    if (mapped.status !== 500) return mapped
     console.error('Error in WhatsApp config DELETE:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   }

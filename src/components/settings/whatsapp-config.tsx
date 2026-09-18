@@ -176,7 +176,9 @@ export function WhatsAppConfig() {
       // plus Evolution rows — migration 039).
       const { data: metas, error } = await supabase
         .from('whatsapp_config')
-        .select('*')
+        .select(
+          'id, user_id, provider, phone_number_id, waba_id, label, status, connected_at, registered_at, subscribed_apps_at, last_registration_error',
+        )
         .eq('account_id', acctId)
         .eq('provider', 'meta')
         .order('created_at', { ascending: true });

@@ -17,6 +17,7 @@ import { NextResponse } from "next/server";
 
 import { createClient } from "@/lib/supabase/server";
 import type { LinkPreviewData } from "@/lib/inbox/link-preview";
+import { isDeliverableUrl } from "@/lib/webhooks/ssrf";
 
 const MAX_BYTES = 512 * 1024; // 512 KB is plenty for <head>
 const TIMEOUT_MS = 5000;
@@ -103,6 +104,12 @@ export async function GET(request: Request) {
     if (isBlockedHost(target.hostname)) {
       return NextResponse.json({ error: "Host not allowed" }, { status: 400 });
     }
+    // DNS-resolve and reject private/reserved addresses (the hostname
+    // check above only catches literals). Combined with redirect:
+    // 'manual' below so a public URL can't 3xx into the LAN.
+    if (!(await isDeliverableUrl(target.toString()))) {
+      return NextResponse.json({ error: "Host not allowed" }, { status: 400 });
+    }
 
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -111,7 +118,7 @@ export async function GET(request: Request) {
     try {
       res = await fetch(target.toString(), {
         signal: controller.signal,
-        redirect: "follow",
+        redirect: "manual",
         headers: {
           // Some sites gate OG tags behind a "real" UA.
           "User-Agent":

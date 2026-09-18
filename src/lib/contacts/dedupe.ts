@@ -1,5 +1,11 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { normalizePhone, phonesMatch } from "@/lib/whatsapp/phone-utils";
+import {
+  canonicalContactKey,
+  contactKeyAliases,
+  isWhatsAppHandleKey,
+  normalizePhone,
+  phonesMatch,
+} from "@/lib/whatsapp/phone-utils";
 
 /**
  * Contact de-duplication helpers, shared by the WhatsApp webhook, the
@@ -13,9 +19,9 @@ import { normalizePhone, phonesMatch } from "@/lib/whatsapp/phone-utils";
  * surfaces.
  */
 
-/** Canonical de-dup key for a phone string (digits only). */
+/** Canonical de-dup key for a phone or WhatsApp @username/LID. */
 export function normalizeKey(phone: string): string {
-  return normalizePhone(phone);
+  return canonicalContactKey(phone) || normalizePhone(phone);
 }
 
 /** Minimal shape we need back from a contacts lookup. */
@@ -37,6 +43,50 @@ export async function findExistingContact(
   accountId: string,
   phone: string,
 ): Promise<ExistingContact | null> {
+  const key = canonicalContactKey(phone);
+  if (!key) return null;
+
+  if (isWhatsAppHandleKey(phone) || isWhatsAppHandleKey(key)) {
+    const aliases = contactKeyAliases(phone);
+    const { data, error } = await db
+      .from("contacts")
+      .select("*")
+      .eq("account_id", accountId)
+      .in("phone", aliases);
+
+    if (!error && data && data.length > 0) {
+      return (
+        (data as ExistingContact[]).find(
+          (c) => canonicalContactKey(c.phone) === key,
+        ) ?? (data[0] as ExistingContact)
+      );
+    }
+
+    if (key.startsWith("lid:")) {
+      const lid = key.slice(4);
+      const byLid = await db
+        .from("contacts")
+        .select("*")
+        .eq("account_id", accountId)
+        .eq("whatsapp_lid", lid)
+        .limit(1)
+        .maybeSingle();
+      if (byLid.data) return byLid.data as ExistingContact;
+    }
+    if (key.startsWith("user:")) {
+      const username = key.slice(5);
+      const byUser = await db
+        .from("contacts")
+        .select("*")
+        .eq("account_id", accountId)
+        .eq("whatsapp_username", username)
+        .limit(1)
+        .maybeSingle();
+      if (byUser.data) return byUser.data as ExistingContact;
+    }
+    return null;
+  }
+
   const normalized = normalizePhone(phone);
   if (!normalized) return null;
 
@@ -53,6 +103,24 @@ export async function findExistingContact(
   return (
     (data as ExistingContact[]).find((c) => phonesMatch(c.phone, phone)) ?? null
   );
+}
+
+/** Look up every identity key and return unique matching contacts. */
+export async function findContactsMatchingKeys(
+  db: SupabaseClient,
+  accountId: string,
+  keys: string[],
+): Promise<ExistingContact[]> {
+  const found: ExistingContact[] = [];
+  const seen = new Set<string>();
+  for (const key of keys) {
+    const hit = await findExistingContact(db, accountId, key);
+    if (hit && !seen.has(hit.id)) {
+      seen.add(hit.id);
+      found.push(hit);
+    }
+  }
+  return found;
 }
 
 /**

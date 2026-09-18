@@ -14,8 +14,23 @@
 
 import { NextResponse } from "next/server";
 
-import { getCurrentAccount, toErrorResponse } from "@/lib/auth/account";
+import {
+  getCurrentAccount,
+  requireRole,
+  toErrorResponse,
+} from "@/lib/auth/account";
+import {
+  CreateMemberError,
+  createAccountMember,
+  parseCreateMemberBody,
+} from "@/lib/auth/create-member";
+import { supabaseAdmin } from "@/lib/flows/admin-client";
 import { canManageMembers, isAccountRole } from "@/lib/auth/roles";
+import {
+  checkRateLimit,
+  rateLimitResponse,
+  RATE_LIMITS,
+} from "@/lib/rate-limit";
 import type { AccountMember } from "@/types";
 
 interface ProfileRow {
@@ -72,6 +87,57 @@ export async function GET() {
 
     return NextResponse.json({ members });
   } catch (err) {
+    return toErrorResponse(err);
+  }
+}
+
+/**
+ * POST /api/account/members
+ *
+ * Admin+ creates a teammate immediately: email + password + role.
+ * The login is email-confirmed so they can sign in without an invite
+ * link or verification wait.
+ */
+export async function POST(request: Request) {
+  try {
+    const ctx = await requireRole("admin");
+
+    const limit = checkRateLimit(
+      `admin:memberCreate:${ctx.userId}`,
+      RATE_LIMITS.adminAction,
+    );
+    if (!limit.success) return rateLimitResponse(limit);
+
+    const body = await request.json().catch(() => null);
+    const input = parseCreateMemberBody(body);
+    const {
+      data: { user },
+    } = await ctx.supabase.auth.getUser();
+    const { userId } = await createAccountMember(
+      supabaseAdmin(),
+      ctx.accountId,
+      input,
+      { caller: { userId: ctx.userId, email: user?.email ?? null } },
+    );
+
+    return NextResponse.json(
+      {
+        member: {
+          user_id: userId,
+          full_name: input.fullName,
+          email: input.email,
+          role: input.role,
+        },
+      },
+      { status: 201 },
+    );
+  } catch (err) {
+    if (err instanceof CreateMemberError) {
+      return NextResponse.json(
+        { error: err.message, code: err.code },
+        { status: err.status },
+      );
+    }
     return toErrorResponse(err);
   }
 }

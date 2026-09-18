@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
+import { formatWhatsAppAddress } from "@/lib/whatsapp/phone-utils";
 import type { Contact, Deal, ContactNote, Tag } from "@/types";
 import {
   Phone,
@@ -242,8 +243,8 @@ export function ContactSidebar({ contact, conversationId }: ContactSidebarProps)
     );
   }
 
-  const displayName = contact.name || contact.phone;
-  const initials = displayName.charAt(0).toUpperCase();
+  const displayName = contact.name || formatWhatsAppAddress(contact.phone);
+  const initials = displayName.replace(/^@/, "").charAt(0).toUpperCase();
 
   return (
     <div className="flex h-full w-70 flex-col border-l border-border bg-card">
@@ -277,7 +278,9 @@ export function ContactSidebar({ contact, conversationId }: ContactSidebarProps)
               className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-sm text-muted-foreground transition-colors hover:bg-muted"
             >
               <Phone className="h-4 w-4 text-muted-foreground" />
-              <span className="flex-1 text-left">{contact.phone}</span>
+              <span className="flex-1 text-left">
+                {formatWhatsAppAddress(contact.phone)}
+              </span>
               {copied ? (
                 <Check className="h-3 w-3 text-primary" />
               ) : (

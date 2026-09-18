@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server'
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { createClient } from '@/lib/supabase/server'
+import { requireRole, toErrorResponse } from '@/lib/auth/account'
 import { decrypt } from '@/lib/whatsapp/encryption'
 import { submitMessageTemplate } from '@/lib/whatsapp/meta-api'
 import {
@@ -88,6 +89,9 @@ async function upsertTemplateRow(
  */
 export async function POST(request: Request) {
   try {
+    // Template submission hits Meta before the local RLS insert —
+    // require admin so a viewer/agent can't create a WABA template.
+    await requireRole('admin')
     const supabase = await createClient()
     const {
       data: { user },
@@ -250,6 +254,8 @@ export async function POST(request: Request) {
       dry_run: dryRun,
     })
   } catch (error) {
+    const mapped = toErrorResponse(error)
+    if (mapped.status !== 500) return mapped
     console.error('Error submitting template:', error)
     return NextResponse.json(
       {

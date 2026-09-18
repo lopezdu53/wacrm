@@ -1,6 +1,7 @@
 import crypto from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { decrypt, encrypt, isLegacyFormat } from "./encryption";
+// encrypt is used by the ENCRYPTION_KEY validation test below.
 
 const KEY_HEX = process.env.ENCRYPTION_KEY!;
 
@@ -110,6 +111,18 @@ describe("encryption", () => {
       expect(isLegacyFormat(modern)).toBe(false);
     });
   });
+
+  describe("ENCRYPTION_KEY validation", () => {
+    it("rejects a missing or short key on encrypt", () => {
+      const prev = process.env.ENCRYPTION_KEY
+      process.env.ENCRYPTION_KEY = "too-short"
+      try {
+        expect(() => encrypt("x")).toThrow(/64-character hex/)
+      } finally {
+        process.env.ENCRYPTION_KEY = prev
+      }
+    })
+  })
 
   describe("malformed input", () => {
     it("throws on a single-token blob (no colons)", () => {

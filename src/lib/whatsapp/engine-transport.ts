@@ -13,6 +13,7 @@
 
 import type { SupabaseClient } from '@supabase/supabase-js'
 import { decrypt } from '@/lib/whatsapp/encryption'
+import { loadConfigForConversationSend } from '@/lib/whatsapp/resolve-config'
 import { sendTextMessage, sendMediaMessage, type MediaKind } from '@/lib/whatsapp/meta-api'
 import {
   sendEvolutionText,
@@ -24,9 +25,9 @@ import {
 export type ChannelConfig = any
 
 /**
- * Load the whatsapp_config that owns a conversation's channel, falling
- * back to the account's first config for legacy threads with no channel.
- * Returns null when the account has no config at all.
+ * Load the whatsapp_config that owns a conversation's channel.
+ * Unstamped threads only resolve when the account has exactly one
+ * number — guessing among Evolution instances crossed chats.
  */
 export async function loadConversationChannelConfig(
   db: SupabaseClient,
@@ -39,38 +40,7 @@ export async function loadConversationChannelConfig(
     .eq('id', conversationId)
     .maybeSingle()
   const configId = conv?.whatsapp_config_id as string | null | undefined
-
-  if (configId) {
-    const { data } = await db
-      .from('whatsapp_config')
-      .select('*')
-      .eq('account_id', accountId)
-      .eq('id', configId)
-      .maybeSingle()
-    if (data) return data
-  }
-  // Fallback for a conversation with no stamped channel. Prefer a Meta
-  // config over "whichever is oldest" — null-channel conversations
-  // predate multi-channel support and were always Meta, so guessing
-  // Meta first avoids routing the reply out an unrelated Evolution
-  // number (see the same fix in send-message.ts).
-  const { data: metaConfig } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', accountId)
-    .eq('provider', 'meta')
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-  if (metaConfig) return metaConfig
-  const { data } = await db
-    .from('whatsapp_config')
-    .select('*')
-    .eq('account_id', accountId)
-    .order('created_at', { ascending: true })
-    .limit(1)
-    .maybeSingle()
-  return data
+  return loadConfigForConversationSend(db, accountId, configId)
 }
 
 export function isEvolutionConfig(config: ChannelConfig): boolean {

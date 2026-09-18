@@ -26,12 +26,25 @@ function makeSupabaseStub(
       const entry: (typeof calls)[number] = { table };
       calls.push(entry);
       return {
+        select() {
+          return {
+            eq() {
+              return Promise.resolve({
+                data: [] as { account_id: string }[],
+                error: null,
+              });
+            },
+          };
+        },
         update(payload: Record<string, unknown>) {
           entry.update = payload;
           return {
             eq(column: string, value: unknown) {
               entry.filter = { column, value };
-              return {
+              const rest = {
+                in() {
+                  return rest;
+                },
                 select() {
                   return Promise.resolve(selectResult);
                 },
@@ -46,6 +59,7 @@ function makeSupabaseStub(
                   );
                 },
               };
+              return rest;
             },
           };
         },

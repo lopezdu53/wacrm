@@ -35,6 +35,23 @@
                         <setting help="Import wacrm deals as Odoo opportunities.">
                             <field name="wacrm_sync_opportunities"/>
                         </setting>
+                        <setting string="Default salesperson"
+                                 help="Assigned to imported opportunities that have no owner yet. Required for the cron (it runs as OdooBot).">
+                            <field name="wacrm_salesperson_id"/>
+                        </setting>
+                    </block>
+
+                    <block title="Contact Field Mapping" name="wacrm_fields_block"
+                           help="wacrm custom-field names that map onto native Odoo partner columns.">
+                        <setting string="VAT / tax id field">
+                            <field name="wacrm_field_vat" placeholder="NIT / CC"/>
+                        </setting>
+                        <setting string="Street field">
+                            <field name="wacrm_field_street" placeholder="Dirección"/>
+                        </setting>
+                        <setting string="City field">
+                            <field name="wacrm_field_city" placeholder="Ciudad"/>
+                        </setting>
                     </block>
 
                     <block title="Pipeline Mapping" name="wacrm_mapping_block"

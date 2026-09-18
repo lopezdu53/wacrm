@@ -9,6 +9,7 @@ import {
   normalizeConversations,
 } from "@/lib/inbox/conversations";
 import { cn } from "@/lib/utils";
+import { formatWhatsAppAddress } from "@/lib/whatsapp/phone-utils";
 import type { Conversation, ConversationStatus, Tag } from "@/types";
 import { Search, ChevronDown, X, MessageSquare } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
@@ -583,8 +584,9 @@ function ConversationItem({
   t,
 }: ConversationItemProps) {
   const contact = conversation.contact;
-  const displayName = contact?.name || contact?.phone || t("unknown");
-  const initials = displayName.charAt(0).toUpperCase();
+  const displayName =
+    contact?.name || formatWhatsAppAddress(contact?.phone) || t("unknown");
+  const initials = displayName.replace(/^@/, "").charAt(0).toUpperCase();
 
   const handleClick = useCallback(() => {
     onSelect(conversation);

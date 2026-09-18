@@ -43,6 +43,8 @@ const SECURITY_HEADERS = [
       // and 'unsafe-eval' in dev + some production optimisations.
       // Nonce-based CSP is a later project.
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
+      // Service worker for the installable PWA + Web Push.
+      "worker-src 'self'",
       // Tailwind + inline style attributes on lots of components.
       "style-src 'self' 'unsafe-inline'",
       // Supabase public-bucket avatars, contact avatars (arbitrary
@@ -103,6 +105,13 @@ const nextConfig: NextConfig = {
    */
   async headers() {
     return [
+      {
+        source: "/sw.js",
+        headers: [
+          { key: "Cache-Control", value: "no-cache, no-store, must-revalidate" },
+          { key: "Service-Worker-Allowed", value: "/" },
+        ],
+      },
       {
         source: "/api/:path*",
         headers: [{ key: "Cache-Control", value: "no-store" }],

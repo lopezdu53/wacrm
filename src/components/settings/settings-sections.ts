@@ -6,6 +6,7 @@ import {
   Palette,
   PlugZap,
   Shield,
+  Smartphone,
   Tags,
   User,
   UsersRound,
@@ -28,6 +29,7 @@ export const SETTINGS_SECTIONS = [
   'profile',
   'security',
   'appearance',
+  'mobile',
   'whatsapp',
   'templates',
   'quick-replies',
@@ -54,6 +56,7 @@ export const SECTION_META: Record<SettingsSection, SectionMeta> = {
   profile: { id: 'profile', label: 'Your profile', icon: User, group: 'account' },
   security: { id: 'security', label: 'Login & security', icon: Shield, group: 'account' },
   appearance: { id: 'appearance', label: 'Appearance', icon: Palette, group: 'account' },
+  mobile: { id: 'mobile', label: 'Phone app', icon: Smartphone, group: 'account' },
   whatsapp: { id: 'whatsapp', label: 'WhatsApp', icon: PlugZap, group: 'workspace' },
   templates: { id: 'templates', label: 'Templates', icon: FileText, group: 'workspace' },
   'quick-replies': { id: 'quick-replies', label: 'Quick replies', icon: Zap, group: 'workspace' },
@@ -71,7 +74,7 @@ export const RAIL_GROUPS: { label: string | null; group: SectionMeta['group'] }[
 
 /**
  * Sections an agent/viewer may see. They get only their own account
- * settings — profile, login & security, appearance — never the
+ * settings — profile, login & security, appearance, phone app — never the
  * Overview landing or any workspace-level section (WhatsApp, members,
  * API keys, …). Owners/admins see everything.
  */
@@ -79,6 +82,7 @@ const RESTRICTED_SECTIONS: readonly SettingsSection[] = [
   'profile',
   'security',
   'appearance',
+  'mobile',
 ];
 
 export function sectionsForRole(

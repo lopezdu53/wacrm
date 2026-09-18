@@ -73,24 +73,37 @@ export interface TemplateWebhookChange {
  * via isTemplateWebhookField, but treat unknown values as no-ops
  * defensively in case Meta adds new template fields later.
  */
+export interface TemplateWebhookOptions {
+  /**
+   * Meta webhook `entry.id` is the WABA id. When we can resolve
+   * account(s) that own that WABA, updates are scoped to them so a
+   * colliding `meta_template_id` in another tenant is left alone.
+   */
+  wabaId?: string | null
+}
+
 export async function handleTemplateWebhookChange(
   change: TemplateWebhookChange,
   // SupabaseClient typed loosely — the webhook route lazy-initialises
   // the admin client and exposes it as `any`. Type as the generic
   // SupabaseClient here so this module is testable in isolation.
   supabase: SupabaseClient,
+  opts: TemplateWebhookOptions = {},
 ): Promise<void> {
+  const accountIds = await resolveAccountIdsForWaba(supabase, opts.wabaId)
   switch (change.field) {
     case 'message_template_status_update':
       await handleStatusUpdate(
         change.value as TemplateStatusUpdateValue,
         supabase,
+        accountIds,
       )
       return
     case 'message_template_quality_update':
       await handleQualityUpdate(
         change.value as TemplateQualityUpdateValue,
         supabase,
+        accountIds,
       )
       return
     case 'message_template_components_update':
@@ -101,9 +114,23 @@ export async function handleTemplateWebhookChange(
   }
 }
 
+async function resolveAccountIdsForWaba(
+  supabase: SupabaseClient,
+  wabaId: string | null | undefined,
+): Promise<string[] | null> {
+  if (!wabaId) return null
+  const { data } = await supabase
+    .from('whatsapp_config')
+    .select('account_id')
+    .eq('waba_id', wabaId)
+  const ids = [...new Set((data ?? []).map((r) => r.account_id as string).filter(Boolean))]
+  return ids.length > 0 ? ids : null
+}
+
 async function handleStatusUpdate(
   value: TemplateStatusUpdateValue,
   supabase: SupabaseClient,
+  accountIds: string[] | null,
 ): Promise<void> {
   const metaTemplateId =
     value.message_template_id !== undefined
@@ -130,11 +157,12 @@ async function handleStatusUpdate(
     submission_error: null,
   }
 
-  const { data, error } = await supabase
+  let q = supabase
     .from('message_templates')
     .update(update)
     .eq('meta_template_id', metaTemplateId)
-    .select('id')
+  if (accountIds) q = q.in('account_id', accountIds)
+  const { data, error } = await q.select('id')
 
   if (error) {
     console.error(
@@ -162,6 +190,7 @@ async function handleStatusUpdate(
 async function handleQualityUpdate(
   value: TemplateQualityUpdateValue,
   supabase: SupabaseClient,
+  accountIds: string[] | null,
 ): Promise<void> {
   const metaTemplateId =
     value.message_template_id !== undefined
@@ -181,10 +210,12 @@ async function handleQualityUpdate(
       ? (raw.toUpperCase() as 'GREEN' | 'YELLOW' | 'RED')
       : null
 
-  const { error } = await supabase
+  let q = supabase
     .from('message_templates')
     .update({ quality_score: score })
     .eq('meta_template_id', metaTemplateId)
+  if (accountIds) q = q.in('account_id', accountIds)
+  const { error } = await q
 
   if (error) {
     console.error(

@@ -34,6 +34,31 @@ class ResConfigSettings(models.TransientModel):
         default=15,
         help="How often Odoo pulls updates from wacrm.",
     )
+    wacrm_salesperson_id = fields.Many2one(
+        "res.users",
+        string="Default Salesperson",
+        config_parameter="wacrm_sync.salesperson_user_id",
+        help="Assigned to imported opportunities that have no salesperson yet. "
+        "The cron runs as OdooBot — set this so deals land in My Pipeline.",
+    )
+    wacrm_field_vat = fields.Char(
+        string="wacrm field → VAT",
+        config_parameter="wacrm_sync.field_vat",
+        default="NIT / CC",
+        help="Contact custom-field name in wacrm that maps to res.partner vat.",
+    )
+    wacrm_field_street = fields.Char(
+        string="wacrm field → Street",
+        config_parameter="wacrm_sync.field_street",
+        default="Dirección",
+        help="Contact custom-field name in wacrm that maps to res.partner street.",
+    )
+    wacrm_field_city = fields.Char(
+        string="wacrm field → City",
+        config_parameter="wacrm_sync.field_city",
+        default="Ciudad",
+        help="Contact custom-field name in wacrm that maps to res.partner city.",
+    )
 
     # Read-only info shown in the panel.
     wacrm_last_sync_contacts = fields.Char(
