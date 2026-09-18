@@ -93,7 +93,7 @@ export async function POST(request: Request) {
     for (const row of contacts) {
       await linkEvolutionPeerContact(inboundCfg, contactRowToUpsert(row));
     }
-    await repairMixedEvolutionConversationsOnce(inboundCfg);
+    void repairMixedEvolutionConversationsOnce(inboundCfg);
     return NextResponse.json({ received: true });
   }
 
@@ -105,11 +105,11 @@ export async function POST(request: Request) {
         ? [raw as UpsertData]
         : [];
 
-  await repairMixedEvolutionConversationsOnce(inboundCfg);
-
   for (const item of items) {
     await processEvolutionItem(inboundCfg, item);
   }
+
+  void repairMixedEvolutionConversationsOnce(inboundCfg);
 
   return NextResponse.json({ received: true });
 }

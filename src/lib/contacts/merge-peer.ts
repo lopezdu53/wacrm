@@ -200,6 +200,46 @@ export async function mergePeerContacts(
   return (refreshed as ExistingContact | null) ?? survivor;
 }
 
+export function pickComplementaryNameTwin(
+  incomingKey: string,
+  incomingName: string,
+  candidates: ExistingContact[],
+): ExistingContact | null {
+  const name = incomingName.trim();
+  if (name.length < 2) return null;
+  if (isWhatsAppHandleKey(name)) return null;
+  if (/^\d{6,}$/.test(name)) return null;
+
+  const key = canonicalContactKey(incomingKey);
+  if (!key) return null;
+  const incomingHandle = isWhatsAppHandleKey(key);
+  const needle = name.toLowerCase();
+
+  const sameName = candidates.filter((c) => {
+    const n = (c.name ?? '').trim().toLowerCase();
+    if (n !== needle) return false;
+    return canonicalContactKey(c.phone) !== key;
+  });
+  if (sameName.length !== 1) return null;
+  const twin = sameName[0];
+  const twinHandle = isWhatsAppHandleKey(canonicalContactKey(twin.phone));
+  if (incomingHandle === twinHandle) return null;
+  return twin;
+}
+
+export function lidFromContact(contact: ExistingContact): string {
+  const key = canonicalContactKey(contact.phone);
+  if (key.startsWith('lid:')) return key.slice(4);
+  return String(contact.whatsapp_lid ?? '').replace(/\D/g, '');
+}
+
+export function usernameFromContact(contact: ExistingContact): string {
+  const key = canonicalContactKey(contact.phone);
+  if (key.startsWith('user:')) return key.slice(5);
+  const raw = String(contact.whatsapp_username ?? '').trim();
+  return raw ? canonicalizeWhatsAppUsername(raw) : '';
+}
+
 export function pickSurvivorContact(
   contacts: ExistingContact[],
   preferredKey: string,
