@@ -4,7 +4,7 @@ import { Component, type ReactNode } from "react";
 
 /** Keeps a chrome widget from replacing the whole dashboard with global-error. */
 export class SoftErrorBoundary extends Component<
-  { children: ReactNode },
+  { children: ReactNode; fallback?: ReactNode },
   { failed: boolean }
 > {
   state = { failed: false };
@@ -18,7 +18,7 @@ export class SoftErrorBoundary extends Component<
   }
 
   render() {
-    if (this.state.failed) return null;
+    if (this.state.failed) return this.props.fallback ?? null;
     return this.props.children;
   }
 }
