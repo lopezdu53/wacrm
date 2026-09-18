@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isContactOnPayload,
   isProvenPeerPair,
+  pickComplementaryNameTwin,
   pickSurvivorContact,
   selectMergeableLosers,
 } from './merge-peer';
@@ -123,5 +124,29 @@ describe('isProvenPeerPair', () => {
         },
       ),
     ).toBe(true);
+  });
+});
+
+describe('pickComplementaryNameTwin', () => {
+  it('joins a LID and a phone that share the same pushName and nobody else does', () => {
+    expect(
+      pickComplementaryNameTwin('lid:6611235915522259', 'AL', [
+        { id: 'p', phone: '573023582969', name: 'AL' },
+      ])?.id,
+    ).toBe('p');
+  });
+
+  it('does not join two phones or two people with the same name', () => {
+    expect(
+      pickComplementaryNameTwin('573000000001', 'AL', [
+        { id: 'p', phone: '573023582969', name: 'AL' },
+      ]),
+    ).toBeNull();
+    expect(
+      pickComplementaryNameTwin('lid:1', 'AL', [
+        { id: 'p', phone: '573023582969', name: 'AL' },
+        { id: 'q', phone: '573131423412', name: 'AL' },
+      ]),
+    ).toBeNull();
   });
 });
