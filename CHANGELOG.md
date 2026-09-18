@@ -9,6 +9,21 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.11] — 2026-09-18
+
+Puts the phone tabs in the dashboard column instead of `position:fixed`.
+The previous opaque paint still left a black strip: the bar sat inside
+`h-dvh overflow-hidden`, so the phone clipped it and only the reserved
+padding showed.
+
+No new migration. Redeploy.
+
+### Fixed
+
+- **Black bottom bar.** Chats / Interno / Noti / Perfil now sit in
+  normal layout flow under the inbox list. Perfil and the thread ⋮
+  drawer portal to `document.body` so they are not clipped either.
+
 ## [0.8.10] — 2026-09-18
 
 Makes the phone bottom tabs look like tabs instead of a black strip.

@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import React from "react";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { BottomDrawer } from "./bottom-drawer";
@@ -12,6 +14,16 @@ describe("BottomDrawer", () => {
       </BottomDrawer>,
     );
     expect(html).toBe("");
+  });
+
+  it("portals to document.body so overflow-hidden shells cannot clip it", () => {
+    const src = readFileSync(
+      resolve(process.cwd(), "src/components/layout/bottom-drawer.tsx"),
+      "utf8",
+    );
+    expect(src).toMatch(/createPortal/);
+    expect(src).toMatch(/document\.body/);
+    expect(src).not.toMatch(/from \"@\/components\/ui\/sheet\"/);
   });
 
   it("renders title and children when open", () => {
