@@ -25,6 +25,7 @@ import {
   parseBaileys,
   processEvolutionItem,
 } from '@/lib/whatsapp/evolution-inbound';
+import { repairMixedEvolutionConversationsOnce } from '@/lib/whatsapp/repair-mixed-conversations';
 
 export async function POST(request: Request) {
   try {
@@ -79,30 +80,11 @@ export async function POST(request: Request) {
       );
     }
 
-    const { data: contact } = await db
-      .from('contacts')
-      .select('phone')
-      .eq('id', conv.contact_id)
-      .maybeSingle();
-    const remoteJid = contactKeyToRemoteJid(String(contact?.phone ?? ''));
-    if (!remoteJid) {
-      return NextResponse.json(
-        { error: 'Contact has no WhatsApp address' },
-        { status: 400 },
-      );
-    }
-
     const auth = {
       baseUrl: config.evolution_base_url as string,
       apiKey: decrypt(config.evolution_api_key as string),
       instance: config.evolution_instance as string,
     };
-
-    const items = await fetchEvolutionMessages({
-      ...auth,
-      remoteJid,
-      limit: 50,
-    });
 
     const cfg = {
       id: config.id as string,
@@ -112,6 +94,50 @@ export async function POST(request: Request) {
       evolution_api_key: auth.apiKey,
       evolution_instance: auth.instance,
     };
+
+    await repairMixedEvolutionConversationsOnce(cfg);
+
+    // Conversation / contact may have been recreated when the collapsed
+    // thread was split — re-read before fetching this chat's history.
+    const { data: freshConv } = await db
+      .from('conversations')
+      .select('id, contact_id')
+      .eq('id', conversationId)
+      .eq('account_id', ctx.accountId)
+      .maybeSingle();
+    if (!freshConv) {
+      return NextResponse.json({
+        ok: true,
+        fetched: 0,
+        recorded: 0,
+        repaired: true,
+      });
+    }
+
+    const { data: contact } = await db
+      .from('contacts')
+      .select('phone, whatsapp_lid, whatsapp_username')
+      .eq('id', freshConv.contact_id)
+      .maybeSingle();
+    const remoteJid =
+      contactKeyToRemoteJid(String(contact?.phone ?? '')) ||
+      (contact?.whatsapp_lid
+        ? `${contact.whatsapp_lid}@lid`
+        : contact?.whatsapp_username
+          ? `${contact.whatsapp_username}@s.whatsapp.net`
+          : null);
+    if (!remoteJid) {
+      return NextResponse.json(
+        { error: 'Contact has no WhatsApp address' },
+        { status: 400 },
+      );
+    }
+
+    const items = await fetchEvolutionMessages({
+      ...auth,
+      remoteJid,
+      limit: 50,
+    });
 
     let recorded = 0;
     for (const item of items as EvolutionHistoryItem[]) {

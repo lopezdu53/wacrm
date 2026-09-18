@@ -18,10 +18,10 @@ import {
   type ExistingContact,
 } from '@/lib/contacts/dedupe';
 import {
+  isContactOnPayload,
   mergePeerContacts,
-  pickSurvivorContact,
+  selectMergeableLosers,
 } from '@/lib/contacts/merge-peer';
-import { findContactKeysByMessageIds } from '@/lib/whatsapp/peer-link';
 import { runAutomationsForTrigger } from '@/lib/automations/engine';
 import { dispatchInboundToFlows } from '@/lib/flows/engine';
 import { dispatchInboundToAiReply } from '@/lib/ai/auto-reply';
@@ -84,17 +84,29 @@ export async function findOrCreateContact(
   const seen = new Set<string>();
   for (const lookup of lookupKeys) {
     const hit = await findExistingContact(supabaseAdmin(), accountId, lookup);
-    if (hit && !seen.has(hit.id)) {
+    if (
+      hit &&
+      !seen.has(hit.id) &&
+      isContactOnPayload(hit, lookupKeys)
+    ) {
       seen.add(hit.id);
       matches.push(hit);
     }
   }
 
   if (matches.length > 0) {
-    let existing = pickSurvivorContact(matches, key);
-    const losers = matches.filter((c) => c.id !== existing.id);
-    if (losers.length > 0) {
-      existing = await mergePeerContacts(supabaseAdmin(), existing, losers);
+    const picked = selectMergeableLosers(matches, key, {
+      aliases: lookupKeys,
+      lid: options.lid,
+      username: options.username,
+    });
+    let existing = picked.survivor;
+    if (picked.losers.length > 0) {
+      existing = await mergePeerContacts(
+        supabaseAdmin(),
+        existing,
+        picked.losers,
+      );
     }
 
     const patch: Record<string, unknown> = {
@@ -133,10 +145,36 @@ export async function findOrCreateContact(
     .single();
 
   if (error) {
-    // Lost a race — re-resolve the row the unique index kept.
     if (isUniqueViolation(error)) {
       const raced = await findExistingContact(supabaseAdmin(), accountId, key);
-      if (raced) return { contact: raced as ContactRow, wasCreated: false };
+      if (raced && isContactOnPayload(raced, lookupKeys)) {
+        return { contact: raced as ContactRow, wasCreated: false };
+      }
+      // Unique on whatsapp_lid / username belonging to another row.
+      // Create this handle without copying the stolen stamp.
+      if (insertRow.whatsapp_lid || insertRow.whatsapp_username) {
+        delete insertRow.whatsapp_lid;
+        delete insertRow.whatsapp_username;
+        const retry = await supabaseAdmin()
+          .from('contacts')
+          .insert(insertRow)
+          .select()
+          .single();
+        if (!retry.error && retry.data) {
+          return { contact: retry.data as ContactRow, wasCreated: true };
+        }
+        if (retry.error && isUniqueViolation(retry.error)) {
+          const { data: byPhone } = await supabaseAdmin()
+            .from('contacts')
+            .select('*')
+            .eq('account_id', accountId)
+            .eq('phone', key)
+            .maybeSingle();
+          if (byPhone) {
+            return { contact: byPhone as ContactRow, wasCreated: false };
+          }
+        }
+      }
     }
     console.error('[inbound-core] error creating contact:', error);
     return null;
@@ -397,20 +435,13 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
   if (!senderPhone) return;
   const contentType = normalizeInboundContentType(args.contentType);
 
-  const extraKeys = await findContactKeysByMessageIds(
-    supabaseAdmin(),
-    accountId,
-    whatsappConfigId,
-    [messageId, args.replyToMetaMessageId ?? ''],
-  );
-
   const contactOutcome = await findOrCreateContact(
     accountId,
     configOwnerUserId,
     senderPhone,
     contactName,
     {
-      aliases: [...(args.identityAliases ?? []), ...extraKeys],
+      aliases: args.identityAliases ?? [],
       lid: args.whatsappLid,
       username: args.whatsappUsername,
     },

@@ -414,11 +414,49 @@ export async function sendEvolutionMedia({
 
 /** A message record as returned by Evolution's findMessages. */
 export interface EvolutionHistoryItem {
-  key?: { remoteJid?: string; fromMe?: boolean; id?: string };
+  key?: {
+    remoteJid?: string;
+    remoteJidAlt?: string;
+    previousRemoteJid?: string;
+    senderPn?: string;
+    senderLid?: string;
+    remoteJidUsername?: string;
+    fromMe?: boolean;
+    id?: string;
+  };
   pushName?: string;
   message?: Record<string, unknown>;
   messageType?: string;
   messageTimestamp?: number | string;
+  senderPn?: string;
+  senderLid?: string;
+  remoteJidAlt?: string;
+  previousRemoteJid?: string;
+}
+
+export interface EvolutionChatItem {
+  id?: string;
+  remoteJid?: string;
+  pushName?: string;
+  name?: string;
+  notify?: string;
+  lid?: string;
+  remoteJidAlt?: string;
+  senderLid?: string;
+  senderPn?: string;
+}
+
+function asHistoryItems(value: unknown): EvolutionHistoryItem[] {
+  return Array.isArray(value) ? (value as EvolutionHistoryItem[]) : [];
+}
+
+function parseEvolutionMessageList(json: unknown): EvolutionHistoryItem[] {
+  if (Array.isArray(json)) return json as EvolutionHistoryItem[];
+  const messages = (json as { messages?: unknown })?.messages;
+  if (Array.isArray(messages)) return asHistoryItems(messages);
+  const records = (messages as { records?: unknown } | undefined)?.records;
+  if (Array.isArray(records)) return asHistoryItems(records);
+  return [];
 }
 
 /**
@@ -427,6 +465,10 @@ export interface EvolutionHistoryItem {
  * `{ messages: [...] }`, or `{ messages: { records: [...] } }` — so we
  * normalise all three to a flat list. Best-effort: returns [] on any
  * failure rather than throwing, so the sync degrades gracefully.
+ *
+ * When `remoteJid` is omitted, asks Evolution for instance-wide history
+ * (used to unmix a collapsed thread). Some builds ignore `where` and
+ * already return every chat; callers must group by `key.remoteJid`.
  */
 export async function fetchEvolutionMessages({
   baseUrl,
@@ -435,28 +477,51 @@ export async function fetchEvolutionMessages({
   remoteJid,
   limit = 50,
   timeoutMs = 8000,
-}: EvolutionAuth & { remoteJid: string; limit?: number; timeoutMs?: number }): Promise<
-  EvolutionHistoryItem[]
-> {
+}: EvolutionAuth & {
+  remoteJid?: string;
+  limit?: number;
+  timeoutMs?: number;
+}): Promise<EvolutionHistoryItem[]> {
   const url = `${normalizeBaseUrl(baseUrl)}/chat/findMessages/${encodeURIComponent(instance)}`;
+  try {
+    const where = remoteJid ? { key: { remoteJid } } : {};
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: authHeaders(apiKey),
+      body: JSON.stringify({ where, limit, page: 1 }),
+      signal: AbortSignal.timeout(timeoutMs),
+    });
+    if (!response.ok) return [];
+    return parseEvolutionMessageList(await response.json());
+  } catch {
+    return [];
+  }
+}
+
+/** List 1:1 chats on an Evolution instance (`POST /chat/findChats/{instance}`). */
+export async function fetchEvolutionChats({
+  baseUrl,
+  apiKey,
+  instance,
+  timeoutMs = 8000,
+}: EvolutionAuth & { timeoutMs?: number }): Promise<EvolutionChatItem[]> {
+  const url = `${normalizeBaseUrl(baseUrl)}/chat/findChats/${encodeURIComponent(instance)}`;
   try {
     const response = await fetch(url, {
       method: 'POST',
       headers: authHeaders(apiKey),
-      body: JSON.stringify({ where: { key: { remoteJid } }, limit, page: 1 }),
+      body: JSON.stringify({}),
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) return [];
     const json: unknown = await response.json();
-
-    const asItems = (v: unknown): EvolutionHistoryItem[] =>
-      Array.isArray(v) ? (v as EvolutionHistoryItem[]) : [];
-
-    if (Array.isArray(json)) return json as EvolutionHistoryItem[];
-    const messages = (json as { messages?: unknown })?.messages;
-    if (Array.isArray(messages)) return asItems(messages);
-    const records = (messages as { records?: unknown })?.records;
-    if (Array.isArray(records)) return asItems(records);
+    if (Array.isArray(json)) return json as EvolutionChatItem[];
+    const chats = (json as { chats?: unknown }).chats;
+    if (Array.isArray(chats)) return chats as EvolutionChatItem[];
+    const records = (json as { records?: unknown }).records;
+    if (Array.isArray(records)) return records as EvolutionChatItem[];
+    const data = (json as { data?: unknown }).data;
+    if (Array.isArray(data)) return data as EvolutionChatItem[];
     return [];
   } catch {
     return [];

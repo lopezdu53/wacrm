@@ -4,8 +4,175 @@ import type { ExistingContact } from '@/lib/contacts/dedupe';
 import { isUniqueViolation } from '@/lib/contacts/dedupe';
 import {
   canonicalContactKey,
+  canonicalizeWhatsAppUsername,
   isWhatsAppHandleKey,
 } from '@/lib/whatsapp/phone-utils';
+
+export interface PeerMergeOptions {
+  aliases?: string[];
+  lid?: string | null;
+  username?: string | null;
+}
+
+/**
+ * True when this contact's stored `phone` is one of the identity keys
+ * on the current payload. A `whatsapp_lid` column hit on someone else's
+ * E.164 row must not count — that is how every @username chat collapsed
+ * into one inbox thread.
+ */
+export function isContactOnPayload(
+  contact: ExistingContact,
+  payloadKeys: Iterable<string>,
+): boolean {
+  const key = canonicalContactKey(contact.phone);
+  if (!key) return false;
+  const aliases = new Set(
+    [...payloadKeys].map((value) => canonicalContactKey(value)).filter(Boolean),
+  );
+  return aliases.has(key);
+}
+
+function identityKind(key: string): 'user' | 'lid' | 'phone' | '' {
+  if (!key) return '';
+  if (key.startsWith('user:')) return 'user';
+  if (key.startsWith('lid:')) return 'lid';
+  if (isWhatsAppHandleKey(key)) return key.startsWith('user:') ? 'user' : 'lid';
+  return 'phone';
+}
+
+/**
+ * One WhatsApp person can have at most three rows (E.164, LID, @username).
+ * Merge only when every row's phone key is on THIS payload and the kinds
+ * are complementary — never merge two E.164s or a grab-bag of handles.
+ */
+export function isProvenPeerPair(
+  a: ExistingContact,
+  b: ExistingContact,
+  options: PeerMergeOptions = {},
+): boolean {
+  const keyA = canonicalContactKey(a.phone);
+  const keyB = canonicalContactKey(b.phone);
+  if (!keyA || !keyB || keyA === keyB) return false;
+
+  const kindA = identityKind(keyA);
+  const kindB = identityKind(keyB);
+  if (!kindA || !kindB || kindA === kindB) return false;
+
+  const aliases = new Set(
+    [
+      ...(options.aliases ?? []),
+      options.lid ? `lid:${options.lid.replace(/\D/g, '')}` : '',
+      options.username
+        ? `user:${canonicalizeWhatsAppUsername(options.username)}`
+        : '',
+    ]
+      .map((value) => canonicalContactKey(value))
+      .filter(Boolean),
+  );
+  if (!aliases.has(keyA) || !aliases.has(keyB)) return false;
+
+  const lidKey = options.lid
+    ? canonicalContactKey(`lid:${options.lid.replace(/\D/g, '')}`)
+    : '';
+  const userKey = options.username
+    ? canonicalContactKey(`user:${canonicalizeWhatsAppUsername(options.username)}`)
+    : '';
+  if (lidKey) {
+    if (kindA === 'lid' && keyA !== lidKey) return false;
+    if (kindB === 'lid' && keyB !== lidKey) return false;
+  }
+  if (userKey) {
+    if (kindA === 'user' && keyA !== userKey) return false;
+    if (kindB === 'user' && keyB !== userKey) return false;
+  }
+
+  const hasHandleHint = Boolean(lidKey || userKey);
+  if (!hasHandleHint && (kindA === 'phone' || kindB === 'phone')) {
+    return false;
+  }
+  return true;
+}
+
+function areComplementaryIdentities(contacts: ExistingContact[]): boolean {
+  if (contacts.length < 2 || contacts.length > 3) return false;
+  const seen: Record<'user' | 'lid' | 'phone', number> = {
+    user: 0,
+    lid: 0,
+    phone: 0,
+  };
+  for (const contact of contacts) {
+    const kind = identityKind(canonicalContactKey(contact.phone));
+    if (!kind) return false;
+    seen[kind] += 1;
+    if (seen[kind] > 1) return false;
+  }
+  return seen.phone + seen.lid + seen.user === contacts.length;
+}
+
+/**
+ * Pick who to keep and who (if anyone) may be absorbed. Multiple LIDs or
+ * multiple E.164s are refused — that was the N-way merge that dumped
+ * every LID/phone pair into a single conversation. At most one row of
+ * each kind (phone, LID, @username) for the same payload may merge.
+ */
+export function selectMergeableLosers(
+  matches: ExistingContact[],
+  primaryKey: string,
+  options: PeerMergeOptions = {},
+): { survivor: ExistingContact; losers: ExistingContact[] } {
+  if (matches.length === 0) {
+    throw new Error('selectMergeableLosers requires at least one contact');
+  }
+  if (matches.length === 1) {
+    return { survivor: matches[0], losers: [] };
+  }
+
+  const payloadKeys = [
+    primaryKey,
+    ...(options.aliases ?? []),
+    options.lid ? `lid:${options.lid}` : '',
+    options.username ? `user:${options.username}` : '',
+  ];
+  const onPayload = matches.filter((contact) =>
+    isContactOnPayload(contact, payloadKeys),
+  );
+  const scoped = onPayload.length > 0 ? onPayload : matches.slice(0, 1);
+
+  const preferred = canonicalContactKey(primaryKey);
+  const fallback =
+    scoped.find((c) => canonicalContactKey(c.phone) === preferred) ??
+    pickSurvivorContact(scoped, primaryKey);
+
+  if (!areComplementaryIdentities(scoped)) {
+    return { survivor: fallback, losers: [] };
+  }
+
+  const hasPhone = scoped.some(
+    (c) => identityKind(canonicalContactKey(c.phone)) === 'phone',
+  );
+  if (hasPhone && !options.lid && !options.username) {
+    return { survivor: fallback, losers: [] };
+  }
+
+  for (let i = 0; i < scoped.length; i += 1) {
+    for (let j = i + 1; j < scoped.length; j += 1) {
+      if (
+        !isProvenPeerPair(scoped[i], scoped[j], {
+          ...options,
+          aliases: payloadKeys,
+        })
+      ) {
+        return { survivor: fallback, losers: [] };
+      }
+    }
+  }
+
+  const survivor = pickSurvivorContact(scoped, primaryKey);
+  return {
+    survivor,
+    losers: scoped.filter((c) => c.id !== survivor.id),
+  };
+}
 
 /**
  * When a LID inbound and a PN outbound are the same WhatsApp person,
