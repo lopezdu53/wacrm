@@ -1,10 +1,11 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { AuthProvider, useAuth } from "@/hooks/use-auth";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import { MobileTabBar } from "@/components/layout/mobile-tab-bar";
 import { DashboardNavContext } from "@/components/layout/dashboard-nav-context";
 import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
 import { PwaBootstrap } from "@/components/pwa/pwa-bootstrap";
@@ -19,12 +20,11 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const isInbox = pathname === "/inbox";
+  const isInternalChat = pathname.startsWith("/internal-chat");
+  const hideMobileHeader = isInbox || isInternalChat;
 
-  // Sidebar drawer state — only used on mobile. On lg+ the sidebar is
-  // always visible and this stays at `false` (ignored by the component).
-  const [sidebarOpen, setSidebarOpen] = useState(false);
-  const closeSidebar = useCallback(() => setSidebarOpen(false), []);
-  const openSidebar = useCallback(() => setSidebarOpen(true), []);
+  // Full-screen chats hide the WhatsApp-style bottom tabs.
+  const [mobileChatOpen, setMobileChatOpen] = useState(false);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -46,31 +46,29 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   if (!user) return null;
 
   return (
-    <DashboardNavContext.Provider value={{ openSidebar }}>
+    <DashboardNavContext.Provider value={{ setMobileChatOpen }}>
       <div className="flex h-dvh overflow-hidden bg-background">
-        {/* Reports this tab's online/away presence once we know a user is
-            signed in. Headless — renders nothing. */}
         <PresenceHeartbeat />
         <PwaBootstrap />
-        <Sidebar open={sidebarOpen} onClose={closeSidebar} />
+        <Sidebar />
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-          {/* Inbox on a phone is full-screen like WhatsApp Business — the
-              list and thread draw their own chrome (hamburger / back). */}
-          <Header
-            onOpenSidebar={openSidebar}
-            className={isInbox ? "max-lg:hidden" : undefined}
-          />
+          <Header className={hideMobileHeader ? "max-lg:hidden" : undefined} />
           <main
             className={cn(
               "min-h-0 flex-1",
               isInbox
                 ? "overflow-hidden p-0"
-                : "overflow-y-auto p-4 sm:p-6",
+                : isInternalChat
+                  ? "overflow-hidden max-lg:p-0 p-4 sm:p-6"
+                  : "overflow-y-auto p-4 sm:p-6",
+              !mobileChatOpen &&
+                "max-lg:pb-[calc(3.5rem+env(safe-area-inset-bottom))]",
             )}
           >
             {children}
           </main>
         </div>
+        <MobileTabBar hidden={mobileChatOpen} />
       </div>
     </DashboardNavContext.Provider>
   );

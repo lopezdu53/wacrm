@@ -9,6 +9,29 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.8] — 2026-09-18
+
+Replaces the phone hamburger with a WhatsApp Business-style bottom bar
+(Chats, Interno, Noti, Perfil). Opening ⋮ in an inbox chat now shows
+Assign and Followers instead of crashing with "This page couldn't load".
+
+No new migration. Redeploy and open the app on a phone.
+
+### Changed
+
+- **Bottom tabs.** Phones no longer use the left drawer. The four tabs
+  are Inbox, Internal chat, Notifications, and Profile. Pipelines,
+  contacts, settings, and sign out live under Perfil.
+- **Tabs hide in an open chat.** Same as WhatsApp Business — the thread
+  is full-screen; Back returns to the list and the tabs.
+
+### Fixed
+
+- **Inbox ⋮ crash.** Nested Base UI submenus on the thread overflow
+  menu threw and the PWA showed "This page couldn't load". Assign,
+  followers, status, contact, refresh, and sync now open in a bottom
+  sheet.
+
 ## [0.8.7] — 2026-09-18
 
 Makes the phone inbox feel like WhatsApp Business: full-screen chats,
