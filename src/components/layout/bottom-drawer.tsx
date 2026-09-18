@@ -1,11 +1,16 @@
 "use client";
 
 import type { ReactNode } from "react";
+import { createPortal } from "react-dom";
 
 /**
  * Plain bottom panel. Intentionally not Base UI Dialog/Sheet — those
  * portals have taken down the whole Next.js tree ("This page couldn't
  * load") when mounted from the dashboard shell or the inbox thread.
+ *
+ * React's createPortal to document.body is fine: the crash was Base UI
+ * DialogPortalContext, not portals themselves. Body-mounting keeps the
+ * overlay visible when the dashboard shell uses overflow-hidden.
  */
 export function BottomDrawer({
   open,
@@ -20,7 +25,7 @@ export function BottomDrawer({
 }) {
   if (!open) return null;
 
-  return (
+  const node = (
     <div className="fixed inset-0 z-50" role="dialog" aria-modal="true">
       <button
         type="button"
@@ -36,4 +41,7 @@ export function BottomDrawer({
       </div>
     </div>
   );
+
+  if (typeof document === "undefined") return node;
+  return createPortal(node, document.body);
 }
