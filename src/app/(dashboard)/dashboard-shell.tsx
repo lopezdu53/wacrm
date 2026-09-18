@@ -62,16 +62,14 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
                 : isInternalChat
                   ? "overflow-hidden max-lg:p-0 p-4 sm:p-6"
                   : "overflow-y-auto p-4 sm:p-6",
-              !mobileChatOpen &&
-                "max-lg:pb-[calc(4rem+env(safe-area-inset-bottom))]",
             )}
           >
             {children}
           </main>
+          <SoftErrorBoundary>
+            <MobileTabBar hidden={mobileChatOpen} />
+          </SoftErrorBoundary>
         </div>
-        <SoftErrorBoundary>
-          <MobileTabBar hidden={mobileChatOpen} />
-        </SoftErrorBoundary>
       </div>
     </DashboardNavContext.Provider>
   );
