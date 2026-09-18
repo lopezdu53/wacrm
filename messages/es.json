@@ -176,6 +176,8 @@
     },
     "messageThread": {
       "backToConversations": "Volver a conversaciones",
+      "contactDetails": "Datos del contacto",
+      "chatTools": "Herramientas del chat",
       "hideContactPanel": "Ocultar panel de contacto",
       "showContactPanel": "Mostrar panel de contacto",
       "hideContact": "Ocultar contacto",
@@ -219,7 +221,7 @@
       "templates": "Plantillas",
       "readOnlyPlaceholder": "Solo lectura — los observadores pueden ver pero no responder",
       "sessionExpiredPlaceholder": "Sesión expirada - usa una plantilla",
-      "typeMessagePlaceholder": "Escribe un mensaje... (Shift+Enter para nueva línea)",
+      "typeMessagePlaceholder": "Escribe un mensaje...",
       "readOnlyTitle": "Solo lectura — tu rol no puede enviar mensajes",
       "recording": "Grabando… {current} / {max}",
       "cancel": "Cancelar",

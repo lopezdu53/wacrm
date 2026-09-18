@@ -559,7 +559,7 @@ export function MessageComposer({
   return (
     <div
       className={cn(
-        "border-t border-border bg-card p-3",
+        "border-t border-border bg-card p-2 lg:p-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:pb-3",
         internalMode && "bg-amber-500/5",
       )}
     >
@@ -699,7 +699,7 @@ export function MessageComposer({
                     ? undefined
                     : t("attachMedia")
               }
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md p-0 text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full p-0 text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 lg:h-9 lg:w-9 lg:rounded-md"
             >
               {busy ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -739,11 +739,19 @@ export function MessageComposer({
                     ? undefined
                     : t("moreActions")
               }
-              className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md p-0 text-muted-foreground hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full p-0 text-muted-foreground hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-50 lg:h-9 lg:w-9 lg:rounded-md"
             >
               <Plus className="h-4 w-4" />
             </DropdownMenuTrigger>
             <DropdownMenuContent align="start" className="border-border bg-popover">
+              <DropdownMenuItem onClick={onOpenTemplates}>
+                <LayoutTemplate className="mr-2 h-4 w-4" />
+                {t("sendTemplate")}
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => void handleDraft()} disabled={drafting}>
+                <Sparkles className="mr-2 h-4 w-4" />
+                {t("draftWithAI")}
+              </DropdownMenuItem>
               <DropdownMenuItem onClick={() => openInteractiveBuilder()}>
                 <MessageSquareDashed className="mr-2 h-4 w-4" />
                 {t("interactiveMessage")}
@@ -755,6 +763,7 @@ export function MessageComposer({
             </DropdownMenuContent>
           </DropdownMenu>
 
+          <div className="hidden lg:contents">
           <GatedButton
             variant="ghost"
             size="sm"
@@ -783,6 +792,7 @@ export function MessageComposer({
               <Sparkles className="h-4 w-4" />
             )}
           </GatedButton>
+          </div>
           </>
           )}
 
@@ -807,7 +817,7 @@ export function MessageComposer({
             // The placeholder text also surfaces the read-only state.
             title={readOnly ? t("readOnlyTitle") : undefined}
             className={cn(
-              "flex-1 resize-none rounded-xl border border-border bg-muted px-4 py-2.5 text-sm text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50",
+              "flex-1 resize-none rounded-[1.5rem] border border-border bg-muted px-4 py-2.5 text-[15px] leading-5 text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50 lg:rounded-xl lg:text-sm",
               inputsDisabled && "cursor-not-allowed opacity-50",
               internalMode && "border-amber-500/40 bg-amber-500/10"
             )}
@@ -820,7 +830,7 @@ export function MessageComposer({
             disabled={!text.trim() || inputsDisabled || sending}
             onClick={handleSend}
             className={cn(
-              "h-9 w-9 shrink-0 p-0 disabled:opacity-40",
+              "h-11 w-11 shrink-0 rounded-full p-0 disabled:opacity-40 lg:h-9 lg:w-9 lg:rounded-md",
               internalMode
                 ? "bg-amber-500 text-amber-950 hover:bg-amber-500/90"
                 : "bg-primary hover:bg-primary/90"
@@ -835,7 +845,7 @@ export function MessageComposer({
           `items-end` buttons below the textarea. Indented to line up
           under the textarea left edge. */}
       {!draft && !recording && (
-        <p className="mt-1 pl-[5.5rem] text-[10px] text-muted-foreground">
+        <p className="mt-1 hidden pl-[5.5rem] text-[10px] text-muted-foreground lg:block">
           {t("draftHint")}
         </p>
       )}
