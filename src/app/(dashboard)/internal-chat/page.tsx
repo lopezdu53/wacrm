@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { format, isToday } from "date-fns";
 import { Loader2, MessagesSquare, Plus, Users } from "lucide-react";
+import { formatInboxListTime } from "@/lib/inbox/list-time";
 
 import { useAuth } from "@/hooks/use-auth";
 import { cn } from "@/lib/utils";
@@ -86,7 +86,7 @@ export default function InternalChatPage() {
       {/* Channel list */}
       <div
         className={cn(
-          "flex w-full flex-col border-r border-border lg:w-80 lg:shrink-0",
+          "flex w-full min-w-0 flex-col overflow-x-hidden border-r border-border lg:w-80 lg:shrink-0",
           active ? "hidden lg:flex" : "flex",
         )}
       >
@@ -150,12 +150,12 @@ export default function InternalChatPage() {
                       type="button"
                       onClick={() => setActiveId(c.id)}
                       className={cn(
-                        "flex w-full items-center gap-3 border-b border-border px-3 py-3 text-left transition-colors",
+                        "grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 overflow-hidden border-b border-border px-3 py-3 text-left transition-colors",
                         c.id === activeId ? "bg-muted" : "hover:bg-muted/50",
                       )}
                     >
                       {c.kind === "group" ? (
-                        <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
+                        <div className="row-span-2 flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-primary">
                           <Users className="size-4" />
                         </div>
                       ) : (
@@ -164,7 +164,7 @@ export default function InternalChatPage() {
                             (m) => m.user_id !== currentUserId,
                           );
                           return (
-                            <Avatar className="size-9 shrink-0">
+                            <Avatar className="row-span-2 size-9 shrink-0">
                               {other?.avatar_url ? (
                                 <AvatarImage src={other.avatar_url} alt={label} />
                               ) : null}
@@ -175,25 +175,17 @@ export default function InternalChatPage() {
                           );
                         })()
                       )}
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-sm font-medium text-foreground">
-                            {label}
-                          </span>
-                          {ts && (
-                            <span className="shrink-0 text-[10px] text-muted-foreground">
-                              {isToday(new Date(ts))
-                                ? format(new Date(ts), "HH:mm")
-                                : format(new Date(ts), "MMM d")}
-                            </span>
-                          )}
-                        </div>
-                        <div className="flex items-center justify-between gap-2">
-                          <span className="truncate text-xs text-muted-foreground">
-                            {preview || t("noMessagesShort")}
-                          </span>
-                          <UnreadBadge count={c.unread_count} />
-                        </div>
+                      <span className="min-w-0 truncate text-sm font-medium text-foreground">
+                        {label}
+                      </span>
+                      <span className="shrink-0 whitespace-nowrap text-[10px] tabular-nums text-muted-foreground">
+                        {formatInboxListTime(ts, { yesterday: t("yesterday") })}
+                      </span>
+                      <span className="min-w-0 truncate text-xs text-muted-foreground">
+                        {preview || t("noMessagesShort")}
+                      </span>
+                      <div className="flex justify-end">
+                        <UnreadBadge count={c.unread_count} />
                       </div>
                     </button>
                   </li>

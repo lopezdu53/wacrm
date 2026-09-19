@@ -12,8 +12,8 @@ import { cn } from "@/lib/utils";
 import { formatWhatsAppAddress } from "@/lib/whatsapp/phone-utils";
 import type { Conversation, ConversationStatus, Tag } from "@/types";
 import { Search, ChevronDown, X, MessageSquare } from "lucide-react";
-import { formatDistanceToNow } from "date-fns";
 import { useTranslations } from "next-intl";
+import { formatInboxListTime } from "@/lib/inbox/list-time";
 import { Input } from "@/components/ui/input";
 import {
   DropdownMenu,
@@ -293,7 +293,7 @@ export function ConversationList({
     // w-full on mobile so the list occupies the whole viewport when it's
     // the single pane showing; fixed 320px on desktop where it shares the
     // row with the thread + contact sidebar.
-    <div className="flex h-full w-full flex-col border-r border-border bg-card lg:w-80">
+    <div className="flex h-full w-full min-w-0 flex-col overflow-x-hidden border-r border-border bg-card lg:w-80">
       {/* Phone chrome — WhatsApp Business list header. Hidden on lg+
           because the dashboard header is already visible there. */}
       <div className="flex items-center px-4 pb-1 pt-[max(0.5rem,env(safe-area-inset-top))] lg:hidden">
@@ -553,7 +553,7 @@ export function ConversationList({
           every conversation instead of shrinking to the remaining
           space — the list then overflows and gets clipped by the
           parent's overflow-hidden with no scrollbar (issue #229). */}
-      <ScrollArea className="min-h-0 flex-1">
+      <ScrollArea className="min-h-0 min-w-0 flex-1 overflow-x-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />
@@ -602,22 +602,19 @@ function ConversationItem({
     onSelect(conversation);
   }, [onSelect, conversation]);
 
-  const timeAgo = conversation.last_message_at
-    ? formatDistanceToNow(new Date(conversation.last_message_at), {
-        addSuffix: false,
-      })
-    : "";
+  const timeAgo = formatInboxListTime(conversation.last_message_at, {
+    yesterday: t("yesterday"),
+  });
 
   return (
     <button
       onClick={handleClick}
       className={cn(
-        "flex w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/50 lg:items-start lg:py-3",
+        "grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-3 gap-y-0.5 overflow-hidden px-3 py-2.5 text-left transition-colors hover:bg-muted/50 lg:py-3",
         isActive && "bg-muted/70 lg:border-l-2 lg:border-primary"
       )}
     >
-      {/* Avatar */}
-      <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted text-base font-medium text-foreground lg:h-10 lg:w-10 lg:text-sm">
+      <div className="row-span-2 flex h-12 w-12 shrink-0 items-center justify-center rounded-full bg-muted text-base font-medium text-foreground lg:h-10 lg:w-10 lg:text-sm">
         {contact?.avatar_url ? (
           <img
             src={contact.avatar_url}
@@ -629,38 +626,32 @@ function ConversationItem({
         )}
       </div>
 
-      {/* Content */}
-      <div className="min-w-0 flex-1">
-        <div className="flex items-center justify-between gap-2">
-          <span className="truncate text-[15px] font-medium text-foreground lg:text-sm">
-            {displayName}
-          </span>
-          <span
-            className={cn(
-              "shrink-0 text-[11px] lg:text-[10px]",
-              conversation.unread_count > 0
-                ? "font-medium text-primary"
-                : "text-muted-foreground",
-            )}
-          >
-            {timeAgo}
-          </span>
-        </div>
-        <div className="mt-0.5 flex items-center justify-between gap-2">
-          <p className="truncate text-[13px] text-muted-foreground lg:text-xs">
-            {conversation.last_message_text || t("noMessagesYet")}
-          </p>
-          <div className="flex shrink-0 items-center gap-1.5">
-            <UnreadBadge count={conversation.unread_count} />
-            <span
-              className={cn(
-                "h-2 w-2 rounded-full",
-                STATUS_COLORS[conversation.status]
-              )}
-              title={conversation.status}
-            />
-          </div>
-        </div>
+      <span className="min-w-0 truncate text-[15px] font-medium text-foreground lg:text-sm">
+        {displayName}
+      </span>
+      <span
+        className={cn(
+          "shrink-0 whitespace-nowrap text-[11px] tabular-nums lg:text-[10px]",
+          conversation.unread_count > 0
+            ? "font-medium text-primary"
+            : "text-muted-foreground",
+        )}
+      >
+        {timeAgo}
+      </span>
+
+      <p className="min-w-0 truncate text-[13px] text-muted-foreground lg:text-xs">
+        {conversation.last_message_text || t("noMessagesYet")}
+      </p>
+      <div className="flex shrink-0 items-center justify-end gap-1.5">
+        <UnreadBadge count={conversation.unread_count} />
+        <span
+          className={cn(
+            "h-2 w-2 rounded-full",
+            STATUS_COLORS[conversation.status]
+          )}
+          title={conversation.status}
+        />
       </div>
     </button>
   );

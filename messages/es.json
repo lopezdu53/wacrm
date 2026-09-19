@@ -56,6 +56,7 @@
     "noChannels": "Aún no hay chats. Inicia uno con un compañero.",
     "noMessages": "Aún no hay mensajes — saluda.",
     "noMessagesShort": "Sin mensajes aún",
+    "yesterday": "Ayer",
     "selectAChat": "Selecciona un chat para empezar a escribir.",
     "back": "Volver",
     "directMessage": "Mensaje directo",
@@ -177,7 +178,8 @@
       "clearAll": "Limpiar todo",
       "noConversations": "No se encontraron conversaciones",
       "noMessagesYet": "Aún no hay mensajes",
-      "unknown": "Desconocido"
+      "unknown": "Desconocido",
+      "yesterday": "Ayer"
     },
     "messageThread": {
       "backToConversations": "Volver a conversaciones",

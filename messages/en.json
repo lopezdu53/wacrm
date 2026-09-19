@@ -56,6 +56,7 @@
     "noChannels": "No chats yet. Start one with a teammate.",
     "noMessages": "No messages yet — say hi.",
     "noMessagesShort": "No messages yet",
+    "yesterday": "Yesterday",
     "selectAChat": "Select a chat to start messaging.",
     "back": "Back",
     "directMessage": "Direct message",
@@ -177,7 +178,8 @@
       "clearAll": "Clear all",
       "noConversations": "No conversations found",
       "noMessagesYet": "No messages yet",
-      "unknown": "Unknown"
+      "unknown": "Unknown",
+      "yesterday": "Yesterday"
     },
     "messageThread": {
       "backToConversations": "Back to conversations",
