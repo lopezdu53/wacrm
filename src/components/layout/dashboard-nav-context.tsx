@@ -11,6 +11,9 @@ export const DashboardNavContext = createContext<{
   setViewingInternalChannelId: (id: string | null) => void;
   inboxUnread: number;
   setInboxUnread: (n: number) => void;
+  chatsUnread: number;
+  internalUnread: number;
+  notificationUnread: number;
 }>({
   setMobileChatOpen: () => {},
   viewingConversationId: null,
@@ -19,6 +22,9 @@ export const DashboardNavContext = createContext<{
   setViewingInternalChannelId: () => {},
   inboxUnread: 0,
   setInboxUnread: () => {},
+  chatsUnread: 0,
+  internalUnread: 0,
+  notificationUnread: 0,
 });
 
 export function useDashboardNav() {

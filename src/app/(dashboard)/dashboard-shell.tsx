@@ -13,6 +13,9 @@ import { SoftErrorBoundary } from "@/components/layout/soft-error-boundary";
 import { DashboardNavContext } from "@/components/layout/dashboard-nav-context";
 import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
 import { PwaBootstrap } from "@/components/pwa/pwa-bootstrap";
+import { useInternalUnread } from "@/hooks/use-internal-unread";
+import { useTotalUnread } from "@/hooks/use-total-unread";
+import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import { cn } from "@/lib/utils";
 
 // Auth-gated dashboard shell. Extracted from the layout so the layout
@@ -36,6 +39,10 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     string | null
   >(null);
   const [inboxUnread, setInboxUnread] = useState(0);
+  const hookedInbox = useTotalUnread(user?.id);
+  const internalUnread = useInternalUnread(user?.id);
+  const notificationUnread = useUnreadNotifications(user?.id);
+  const chatsUnread = Math.max(hookedInbox, inboxUnread);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -66,6 +73,9 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
         setViewingInternalChannelId,
         inboxUnread,
         setInboxUnread,
+        chatsUnread,
+        internalUnread,
+        notificationUnread,
       }}
     >
       <div className="flex h-dvh overflow-hidden bg-background">
@@ -87,9 +97,21 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
             {children}
           </main>
           <SoftErrorBoundary
-            fallback={<MobileTabBarFallback hidden={mobileChatOpen} />}
+            fallback={
+              <MobileTabBarFallback
+                hidden={mobileChatOpen}
+                chatsUnread={chatsUnread}
+                internalUnread={internalUnread}
+                unreadNotifications={notificationUnread}
+              />
+            }
           >
-            <MobileTabBar hidden={mobileChatOpen} />
+            <MobileTabBar
+              hidden={mobileChatOpen}
+              chatsUnread={chatsUnread}
+              internalUnread={internalUnread}
+              unreadNotifications={notificationUnread}
+            />
           </SoftErrorBoundary>
         </div>
       </div>

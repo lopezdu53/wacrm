@@ -9,6 +9,22 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.17] — 2026-09-19
+
+The phone tab bar now shows the same unread totals as the inbox list
+on Chats, Interno, and Noti. Counts are computed once in the dashboard
+shell and passed into both the live strip and the fallback, so a
+tab-bar error can no longer hide the numbers. The green pill sits
+next to the icon (in layout flow) so it cannot be clipped.
+
+No new migration. Redeploy and hard-refresh the phone PWA.
+
+### Fixed
+
+- **Tab counters.** Chats / Interno / Noti show WhatsApp-green totals.
+- **Duplicate realtime channels.** Unread hooks use a unique channel
+  name per mount so a second subscriber cannot throw after subscribe.
+
 ## [0.8.16] — 2026-09-19
 
 Phone inbox rows now keep the last-message time and unread pill on

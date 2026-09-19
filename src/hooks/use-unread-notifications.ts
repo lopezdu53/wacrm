@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Notification } from "@/types";
 
@@ -12,10 +12,12 @@ import type { Notification } from "@/types";
  * user_id`, so no explicit filter is needed here — same pattern as
  * `useTotalUnread` for conversations.
  */
-export function useUnreadNotifications(): number {
+export function useUnreadNotifications(userId?: string | null): number {
   const [count, setCount] = useState(0);
+  const channelName = `notifications-unread-count:${useId()}`;
 
   useEffect(() => {
+    if (!userId) return;
     const supabase = createClient();
     let cancelled = false;
 
@@ -31,7 +33,7 @@ export function useUnreadNotifications(): number {
     })();
 
     const channel = supabase
-      .channel("notifications-unread-count")
+      .channel(channelName)
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "notifications" },
@@ -57,7 +59,7 @@ export function useUnreadNotifications(): number {
       cancelled = true;
       supabase.removeChannel(channel);
     };
-  }, []);
+  }, [channelName, userId]);
 
   return count;
 }
