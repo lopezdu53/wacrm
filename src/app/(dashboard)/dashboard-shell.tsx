@@ -29,6 +29,12 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
 
   // Full-screen chats hide the WhatsApp-style bottom tabs.
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
+  const [viewingConversationId, setViewingConversationId] = useState<
+    string | null
+  >(null);
+  const [viewingInternalChannelId, setViewingInternalChannelId] = useState<
+    string | null
+  >(null);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -50,7 +56,15 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   if (!user) return null;
 
   return (
-    <DashboardNavContext.Provider value={{ setMobileChatOpen }}>
+    <DashboardNavContext.Provider
+      value={{
+        setMobileChatOpen,
+        viewingConversationId,
+        setViewingConversationId,
+        viewingInternalChannelId,
+        setViewingInternalChannelId,
+      }}
+    >
       <div className="flex h-dvh overflow-hidden bg-background">
         <PresenceHeartbeat />
         <PwaBootstrap />

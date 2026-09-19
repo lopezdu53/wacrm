@@ -12,8 +12,13 @@ supported way to put the CRM on a phone:
   need an Apple Developer account, TestFlight, and App Store review.
   The home-screen icon *is* the easy install path.
 
-Open **Settings → Phone app** while signed in for the in-product
-steps. New WhatsApp messages fan out as:
+On a phone the signed-in app shows an **Activar** banner until the
+agent grants notification permission (browsers require a tap). While
+the PWA is open, new WhatsApp and internal messages also beep and
+appear in the system tray. Settings → Phone app still has the full
+install + enable steps.
+
+New WhatsApp messages fan out as:
 
 1. A row in **Notifications** (`type = new_message`).
 2. A Web Push to every subscribed device of the assignee (or, if the

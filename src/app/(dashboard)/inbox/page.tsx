@@ -568,11 +568,20 @@ export default function InboxPage() {
   // before, unchanged.
   const hasActiveConv = !!activeConversation;
 
-  const { setMobileChatOpen } = useDashboardNav();
+  const { setMobileChatOpen, setViewingConversationId } = useDashboardNav();
   useEffect(() => {
     setMobileChatOpen(hasActiveConv);
-    return () => setMobileChatOpen(false);
-  }, [hasActiveConv, setMobileChatOpen]);
+    setViewingConversationId(activeConversation?.id ?? null);
+    return () => {
+      setMobileChatOpen(false);
+      setViewingConversationId(null);
+    };
+  }, [
+    hasActiveConv,
+    activeConversation?.id,
+    setMobileChatOpen,
+    setViewingConversationId,
+  ]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
