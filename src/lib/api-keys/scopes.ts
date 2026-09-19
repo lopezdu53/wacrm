@@ -23,6 +23,8 @@ export const API_SCOPES = [
   'broadcasts:send',
   'webhooks:manage',
   'sso:login',
+  'products:read',
+  'products:write',
 ] as const;
 
 export type ApiScope = (typeof API_SCOPES)[number];
@@ -38,6 +40,8 @@ export const SCOPE_DESCRIPTIONS: Record<ApiScope, string> = {
   'broadcasts:send': 'Launch broadcast campaigns',
   'webhooks:manage': 'Register and manage outbound event webhooks',
   'sso:login': 'Mint one-time login links for account members (SSO bridge)',
+  'products:read': 'List the Odoo product library',
+  'products:write': 'Create and update the Odoo product library',
 };
 
 /** Type-narrow an unknown value into a valid `ApiScope`. */

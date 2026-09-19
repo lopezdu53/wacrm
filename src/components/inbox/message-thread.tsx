@@ -59,6 +59,10 @@ import { TemplatePicker } from "./template-picker";
 import { AiThreadBanner } from "./ai-thread-banner";
 import { buildReplyPreview } from "./reply-quote";
 import { toast } from "sonner";
+import {
+  mediaKindForAsset,
+  type ProductSendItem,
+} from "@/lib/inbox/product-library";
 
 interface ReplyDraft {
   id: string;
@@ -646,7 +650,9 @@ export function MessageThread({
           onUpdateMessage(tempId, { status: "failed" });
           // The upload never reached the recipient — GC the orphaned
           // object rather than leaving it in the public bucket forever.
-          void deleteAccountMedia(CHAT_MEDIA_BUCKET, payload.path).catch(() => {});
+          if (payload.path) {
+            void deleteAccountMedia(CHAT_MEDIA_BUCKET, payload.path).catch(() => {});
+          }
           return;
         }
 
@@ -656,10 +662,38 @@ export function MessageThread({
         const reason = err instanceof Error ? err.message : "network error";
         toast.error(`Failed to send: ${reason}`);
         onUpdateMessage(tempId, { status: "failed" });
-        void deleteAccountMedia(CHAT_MEDIA_BUCKET, payload.path).catch(() => {});
+        if (payload.path) {
+          void deleteAccountMedia(CHAT_MEDIA_BUCKET, payload.path).catch(() => {});
+        }
       }
     },
     [conversation, onNewMessage, onUpdateMessage],
+  );
+
+  const handleSendProduct = useCallback(
+    async (items: ProductSendItem[]) => {
+      if (!conversation) return;
+      for (const item of items) {
+        const mediaKind = mediaKindForAsset(item.kind);
+        if (mediaKind) {
+          await handleSendMedia({
+            kind: mediaKind,
+            mediaUrl: item.url,
+            path: "",
+            caption: item.label,
+            filename: item.filename || item.label,
+          });
+        } else {
+          const text =
+            item.label && item.label !== item.url
+              ? `${item.label}\n${item.url}`
+              : item.url;
+          await handleSend(text);
+        }
+        await new Promise((resolve) => setTimeout(resolve, 400));
+      }
+    },
+    [conversation, handleSend, handleSendMedia],
   );
 
   const handleSendInteractive = useCallback(
@@ -1403,6 +1437,7 @@ export function MessageThread({
         onSendInternal={handleSendInternal}
         onSendMedia={handleSendMedia}
         onSendInteractive={handleSendInteractive}
+        onSendProduct={handleSendProduct}
         onOpenTemplates={handleOpenTemplates}
         replyTo={replyTo}
         onClearReply={() => setReplyTo(null)}

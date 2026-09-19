@@ -9,6 +9,24 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.18] — 2026-09-19
+
+Product library administered in Odoo and sendable from the WhatsApp
+inbox. Each product can hold a PDF datasheet, images, video, a YouTube
+link, and a website link. Agents send everything or pick pieces.
+
+**Migration required:** apply
+`supabase/migrations/053_product_library.sql` on Supabase. Upgrade the
+Odoo module `wacrm_sync` to 19.0.1.14.0 (adds the `product` app
+dependency). Give the Odoo API key the new `products:write` scope
+(and `products:read` if you want to list).
+
+### Added
+
+- **Odoo → Product library.** Own model with optional link to an
+  Inventory `product.template`. Push on save; **Push to wacrm** button.
+- **Inbox Products picker.** Plus menu → Products → Send all / Send selected.
+
 ## [0.8.17] — 2026-09-19
 
 The phone tab bar now shows the same unread totals as the inbox list

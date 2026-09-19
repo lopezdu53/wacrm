@@ -5,3 +5,4 @@ from . import crm_lead
 from . import wacrm_stage_mapping
 from . import wacrm_sync
 from . import res_config_settings
+from . import wacrm_product_library
