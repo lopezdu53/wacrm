@@ -7,6 +7,17 @@ from odoo.exceptions import UserError
 _logger = logging.getLogger(__name__)
 
 
+def _as_b64_str(value):
+    """ir.attachment.datas is bytes in Odoo 19; requests.json needs a str."""
+    if not value:
+        return None
+    if isinstance(value, memoryview):
+        value = value.tobytes()
+    if isinstance(value, bytes):
+        return value.decode("ascii")
+    return value
+
+
 class WacrmProductLibrary(models.Model):
     """Product sheet administered in Odoo and pushed to wacrm for chat send."""
 
@@ -56,7 +67,9 @@ class WacrmProductLibrary(models.Model):
                     "mimetype": "image/jpeg",
                 }
             )
-            self.env["wacrm.product.asset"].create(
+            self.env["wacrm.product.asset"].with_context(
+                wacrm_skip_push=True
+            ).create(
                 {
                     "library_id": rec.id,
                     "kind": "image",
@@ -91,13 +104,18 @@ class WacrmProductLibrary(models.Model):
             if asset.kind in ("youtube", "website"):
                 row["url"] = asset.url or ""
             elif asset.attachment_id:
+                content = _as_b64_str(asset.attachment_id.datas)
+                if not content:
+                    continue
                 row["filename"] = asset.attachment_id.name
                 row["mimetype"] = asset.attachment_id.mimetype
-                row["content_base64"] = asset.attachment_id.datas
+                row["content_base64"] = content
+            else:
+                continue
             assets.append(row)
         return assets
 
-    def _push_to_wacrm(self):
+    def _push_to_wacrm(self, raise_error=True):
         self.ensure_one()
         if self.env.context.get("wacrm_skip_push"):
             return
@@ -127,12 +145,15 @@ class WacrmProductLibrary(models.Model):
             if wacrm_id:
                 vals["wacrm_id"] = wacrm_id
             self.with_context(wacrm_skip_push=True).write(vals)
-        except UserError as exc:
+        except Exception as exc:
             _logger.warning("wacrm product push failed for %s: %s", self.id, exc)
             self.with_context(wacrm_skip_push=True).write(
                 {"last_push_error": str(exc)[:256]}
             )
-            raise
+            if raise_error:
+                if isinstance(exc, UserError):
+                    raise
+                raise UserError(str(exc)) from exc
 
     def _delete_on_wacrm(self):
         client = self.env["wacrm.client"]
@@ -151,11 +172,7 @@ class WacrmProductLibrary(models.Model):
         records = super().create(vals_list)
         for rec in records:
             rec._fill_image_from_inventory()
-            try:
-                rec._push_to_wacrm()
-            except UserError:
-                # Keep the Odoo record; last_push_error is stored.
-                pass
+            rec._push_to_wacrm(raise_error=False)
         return records
 
     def write(self, vals):
@@ -165,10 +182,7 @@ class WacrmProductLibrary(models.Model):
         if set(vals) <= {"wacrm_id", "last_push_error"}:
             return res
         for rec in self:
-            try:
-                rec._push_to_wacrm()
-            except UserError:
-                pass
+            rec._push_to_wacrm(raise_error=False)
         return res
 
     def unlink(self):
@@ -179,10 +193,7 @@ class WacrmProductLibrary(models.Model):
         for rec in self:
             if not rec.id:
                 continue
-            try:
-                rec._push_to_wacrm()
-            except UserError:
-                pass
+            rec._push_to_wacrm(raise_error=False)
 
 
 class WacrmProductAsset(models.Model):
@@ -216,7 +227,10 @@ class WacrmProductAsset(models.Model):
     @api.model_create_multi
     def create(self, vals_list):
         records = super().create(vals_list)
-        records.mapped("library_id").filtered(lambda r: r.id)._push_after_asset_change()
+        if not self.env.context.get("wacrm_skip_push"):
+            records.mapped("library_id").filtered(
+                lambda r: r.id
+            )._push_after_asset_change()
         return records
 
     def write(self, vals):
