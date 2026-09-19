@@ -17,6 +17,7 @@ import { channelLabel, type InternalChannel } from "@/lib/internal-chat/types";
 import { createClient } from "@/lib/supabase/client";
 import { useTranslations } from "next-intl";
 import { useDashboardNav } from "@/components/layout/dashboard-nav-context";
+import { UnreadBadge } from "@/components/layout/unread-badge";
 
 export default function InternalChatPage() {
   const t = useTranslations("InternalChat");
@@ -191,11 +192,7 @@ export default function InternalChatPage() {
                           <span className="truncate text-xs text-muted-foreground">
                             {preview || t("noMessagesShort")}
                           </span>
-                          {c.unread_count > 0 && (
-                            <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 px-1 text-[11px] font-bold text-white">
-                              {c.unread_count > 99 ? "99+" : c.unread_count}
-                            </span>
-                          )}
+                          <UnreadBadge count={c.unread_count} />
                         </div>
                       </div>
                     </button>

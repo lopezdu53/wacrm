@@ -22,7 +22,8 @@ import {
 } from "@/components/ui/avatar";
 import { BodyPortal } from "@/components/layout/body-portal";
 import { BottomDrawer } from "@/components/layout/bottom-drawer";
-import { formatUnreadBadge } from "@/lib/inbox/unread";
+import { UnreadBadge } from "@/components/layout/unread-badge";
+import { useDashboardNav } from "@/components/layout/dashboard-nav-context";
 
 interface MobileTabBarProps {
   hidden?: boolean;
@@ -45,7 +46,9 @@ export function MobileTabBar({ hidden = false }: MobileTabBarProps) {
   const t = useTranslations("Sidebar");
   const pathname = usePathname() ?? "";
   const { profile, accountRole, signOut } = useAuth();
-  const totalUnread = useTotalUnread();
+  const hookedInbox = useTotalUnread();
+  const { inboxUnread } = useDashboardNav();
+  const totalUnread = Math.max(hookedInbox, inboxUnread);
   const unreadNotifications = useUnreadNotifications();
   const internalUnread = useInternalUnread();
   const [profileOpen, setProfileOpen] = useState(false);
@@ -272,8 +275,6 @@ function TabLink({
   icon: typeof MessageSquare;
   badge: number;
 }) {
-  const labelText = formatUnreadBadge(badge);
-
   return (
     <li className="overflow-visible">
       <Link
@@ -286,11 +287,10 @@ function TabLink({
       >
         <span className="relative overflow-visible">
           <Icon className="h-6 w-6" />
-          {labelText ? (
-            <span className="absolute -right-3 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-bold leading-none text-white shadow-sm">
-              {labelText}
-            </span>
-          ) : null}
+          <UnreadBadge
+            count={badge}
+            className="absolute -right-3 -top-2"
+          />
         </span>
         {label}
       </Link>

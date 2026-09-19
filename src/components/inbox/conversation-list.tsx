@@ -23,6 +23,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { UnreadBadge } from "@/components/layout/unread-badge";
 
 interface ConversationListProps {
   activeConversationId: string | null;
@@ -650,13 +651,7 @@ function ConversationItem({
             {conversation.last_message_text || t("noMessagesYet")}
           </p>
           <div className="flex shrink-0 items-center gap-1.5">
-            {conversation.unread_count > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[11px] font-bold leading-none text-white">
-                {conversation.unread_count > 99
-                  ? "99+"
-                  : conversation.unread_count}
-              </span>
-            )}
+            <UnreadBadge count={conversation.unread_count} />
             <span
               className={cn(
                 "h-2 w-2 rounded-full",

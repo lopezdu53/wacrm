@@ -18,6 +18,7 @@ import { WifiOff } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { conversationHasNoSessionWindow } from "@/lib/inbox/session-window";
 import { useDashboardNav } from "@/components/layout/dashboard-nav-context";
+import { sumUnread } from "@/lib/inbox/unread";
 
 // Remembers the agent's show/hide choice for the desktop contact panel
 // across reloads and sessions (device-scoped, like the theme prefs).
@@ -568,7 +569,8 @@ export default function InboxPage() {
   // before, unchanged.
   const hasActiveConv = !!activeConversation;
 
-  const { setMobileChatOpen, setViewingConversationId } = useDashboardNav();
+  const { setMobileChatOpen, setViewingConversationId, setInboxUnread } =
+    useDashboardNav();
   useEffect(() => {
     setMobileChatOpen(hasActiveConv);
     setViewingConversationId(activeConversation?.id ?? null);
@@ -582,6 +584,12 @@ export default function InboxPage() {
     setMobileChatOpen,
     setViewingConversationId,
   ]);
+  useEffect(() => {
+    setInboxUnread(
+      sumUnread(conversations.map((c) => Number(c.unread_count) || 0)),
+    );
+    return () => setInboxUnread(0);
+  }, [conversations, setInboxUnread]);
 
   return (
     <div className="flex h-full min-h-0 flex-col overflow-hidden">
