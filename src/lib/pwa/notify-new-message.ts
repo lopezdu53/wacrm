@@ -1,11 +1,8 @@
-import webpush from "web-push";
-
 import { supabaseAdmin } from "@/lib/flows/admin-client";
-import { getVapidConfig } from "./vapid";
+import { sendWebPushToUsers } from "./send-web-push";
 import {
   previewInboundBody,
   resolveNewMessageRecipients,
-  shouldDropPushSubscription,
   type NewMessageMember,
 } from "./recipients";
 
@@ -17,26 +14,6 @@ export interface NotifyNewInboundArgs {
   contentText?: string | null;
   contentType: string;
   assignedAgentId?: string | null;
-}
-
-interface PushRow {
-  id: string;
-  user_id: string;
-  endpoint: string;
-  p256dh: string;
-  auth: string;
-}
-
-let vapidApplied = false;
-
-function applyVapid(): boolean {
-  const cfg = getVapidConfig();
-  if (!cfg) return false;
-  if (!vapidApplied) {
-    webpush.setVapidDetails(cfg.subject, cfg.publicKey, cfg.privateKey);
-    vapidApplied = true;
-  }
-  return true;
 }
 
 /**
@@ -82,24 +59,13 @@ export async function notifyNewInboundMessage(
       ),
     );
 
-    if (!applyVapid()) return;
-
-    const { data: subs } = await db
-      .from("push_subscriptions")
-      .select("id, user_id, endpoint, p256dh, auth")
-      .in("user_id", recipientIds);
-
     const url = `/inbox?c=${encodeURIComponent(args.conversationId)}`;
-    const payload = JSON.stringify({
+    await sendWebPushToUsers(recipientIds, {
       title,
       body,
       url,
       tag: `conv:${args.conversationId}`,
     });
-
-    await Promise.all(
-      ((subs ?? []) as PushRow[]).map((sub) => sendOne(sub, payload)),
-    );
   } catch (err) {
     console.error("[pwa] notifyNewInboundMessage failed:", err);
   }
@@ -145,24 +111,4 @@ async function upsertInAppNotification(args: {
     title: args.title,
     body: args.body,
   });
-}
-
-async function sendOne(sub: PushRow, payload: string): Promise<void> {
-  try {
-    await webpush.sendNotification(
-      {
-        endpoint: sub.endpoint,
-        keys: { p256dh: sub.p256dh, auth: sub.auth },
-      },
-      payload,
-      { TTL: 60 * 60 * 12, urgency: "high" },
-    );
-  } catch (err) {
-    const status = (err as { statusCode?: number }).statusCode;
-    if (shouldDropPushSubscription(status)) {
-      await supabaseAdmin().from("push_subscriptions").delete().eq("id", sub.id);
-      return;
-    }
-    console.warn("[pwa] push send failed:", status ?? err);
-  }
 }

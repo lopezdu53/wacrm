@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { sumUnread } from "@/lib/inbox/unread";
 
 /**
  * Total count of internal-chat channels with at least one unread
@@ -29,10 +30,9 @@ export function useInternalUnread(): number {
           channels?: { unread_count: number }[];
         };
         if (cancelled) return;
-        const count = (json.channels ?? []).filter(
-          (c) => c.unread_count > 0,
-        ).length;
-        setTotal(count);
+        setTotal(
+          sumUnread((json.channels ?? []).map((c) => c.unread_count ?? 0)),
+        );
       } catch {
         /* best-effort */
       }

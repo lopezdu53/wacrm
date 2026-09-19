@@ -10,6 +10,7 @@ import { NextResponse } from "next/server";
 import { createClient as createAdminClient } from "@supabase/supabase-js";
 
 import { getCurrentAccount, toErrorResponse } from "@/lib/auth/account";
+import { sendWebPushToUsers } from "@/lib/pwa/send-web-push";
 
 const MAX_LEN = 4000;
 
@@ -79,6 +80,22 @@ export async function POST(
         .eq("channel_id", channelId)
         .eq("user_id", ctx.userId),
     ]);
+
+    const { data: mates } = await db
+      .from("internal_channel_members")
+      .select("user_id")
+      .eq("channel_id", channelId);
+    const recipientIds = (mates ?? [])
+      .map((row) => row.user_id as string)
+      .filter((id) => id && id !== ctx.userId);
+    void sendWebPushToUsers(recipientIds, {
+      title: "Interno",
+      body: content.length > 140 ? `${content.slice(0, 139)}…` : content,
+      url: "/internal-chat",
+      tag: `internal:${channelId}`,
+    }).catch((err) =>
+      console.warn("[internal-chat] push failed:", err),
+    );
 
     return NextResponse.json({ message: inserted });
   } catch (err) {

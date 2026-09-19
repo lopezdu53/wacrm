@@ -26,6 +26,7 @@ vi.mock("web-push", () => ({
   default: {
     setVapidDetails: h.setVapidDetails,
     sendNotification: h.sendNotification,
+    generateVAPIDKeys: () => ({ publicKey: "gen-pub", privateKey: "gen-priv" }),
   },
 }));
 

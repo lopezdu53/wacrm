@@ -559,7 +559,7 @@ export function MessageComposer({
   return (
     <div
       className={cn(
-        "border-t border-border bg-card p-2 lg:p-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:pb-3",
+        "min-w-0 overflow-x-hidden border-t border-border bg-card p-2 lg:p-3 pb-[max(0.5rem,env(safe-area-inset-bottom))] lg:pb-3",
         internalMode && "bg-amber-500/5",
       )}
     >
@@ -684,7 +684,7 @@ export function MessageComposer({
           </Button>
         </div>
       ) : (
-        <div className="flex items-end gap-2">
+        <div className="flex min-w-0 items-end gap-2 overflow-x-hidden">
           {/* WhatsApp-only actions — hidden when writing an internal note. */}
           {!internalMode && (
           <>
@@ -817,7 +817,7 @@ export function MessageComposer({
             // The placeholder text also surfaces the read-only state.
             title={readOnly ? t("readOnlyTitle") : undefined}
             className={cn(
-              "flex-1 resize-none rounded-[1.5rem] border border-border bg-muted px-4 py-2.5 text-[15px] leading-5 text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50 lg:rounded-xl lg:text-sm",
+              "min-w-0 flex-1 resize-none rounded-[1.5rem] border border-border bg-muted px-4 py-2.5 text-[15px] leading-5 text-foreground placeholder-muted-foreground outline-none transition-colors focus:border-primary/50 lg:rounded-xl lg:text-sm",
               inputsDisabled && "cursor-not-allowed opacity-50",
               internalMode && "border-amber-500/40 bg-amber-500/10"
             )}
