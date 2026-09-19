@@ -9,6 +9,27 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.13] — 2026-09-19
+
+Phone notifications now ask to be enabled, sound, and land in the
+system tray while the app is open. Chats / Interno / Noti show a
+WhatsApp-style unread number even on the tab you are looking at.
+
+No new migration. Redeploy. For lock-screen alerts when the app is
+fully closed, VAPID keys must be set (docs/mobile.md).
+
+### Added
+
+- **Enable banner.** On the phone, a tap-to-enable strip asks for
+  notification permission (browsers block a silent prompt).
+- **In-app alerts.** New WhatsApp and internal messages play a beep,
+  vibrate, and show a system notification unless that thread is open.
+
+### Changed
+
+- **Tab badges.** Chats, Interno, and Noti always show the unread
+  count (green pill, 99+). Chats no longer hides its number on `/inbox`.
+
 ## [0.8.12] — 2026-09-18
 
 Pins the phone tabs to `document.body`. Putting them in the dashboard

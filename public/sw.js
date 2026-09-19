@@ -35,6 +35,8 @@ self.addEventListener("push", (event) => {
       badge: "/pwa-icon/192",
       tag,
       renotify: true,
+      silent: false,
+      vibrate: [80, 40, 120],
       data: { url },
     }),
   );
