@@ -20,6 +20,7 @@ export function UnreadBadge({
       data-unread-badge={label}
       style={{
         display: "inline-flex",
+        flexShrink: 0,
         alignItems: "center",
         justifyContent: "center",
         minWidth: 20,
