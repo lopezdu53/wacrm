@@ -9,6 +9,23 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.16] — 2026-09-19
+
+Phone inbox rows now keep the last-message time and unread pill on
+screen. Long previews used to stretch the row past the viewport, so
+the right-hand meta was clipped on small widths while desktop (fixed
+320px column) still showed it.
+
+No new migration. Redeploy and hard-refresh the phone PWA.
+
+### Fixed
+
+- **Mobile list meta.** Conversation and internal-chat rows use a
+  three-column grid (`minmax(0,1fr)` for the preview) so the clock and
+  unread number cannot be pushed off-screen.
+- **Shorter timestamps.** Today shows `HH:mm`, yesterday shows the
+  localized label, older dates show `d/M/yy`.
+
 ## [0.8.15] — 2026-09-19
 
 Makes unread numbers actually visible (WhatsApp-green pills, same
