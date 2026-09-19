@@ -666,6 +666,13 @@ export interface AutomationLog {
 
 export type QuickReplyKind = 'text' | 'interactive';
 
+export type {
+  ProductAsset,
+  ProductAssetKind,
+  ProductLibraryItem,
+  ProductSendItem,
+} from "@/lib/inbox/product-library";
+
 export interface QuickReply {
   id: string;
   /** Account tenancy key — shared across all members of the account. */

@@ -38,7 +38,8 @@ Installing adds two tiles to the Odoo home menu (app drawer):
 ## Configure
 
 1. In wacrm: **Settings → API keys → New API key**. Grant the scopes
-   **`contacts:read`**, **`deals:read`**, and **`sso:login`** (needed
+   **`contacts:read`**, **`deals:read`**, **`products:write`**,
+   **`products:read`**, and **`sso:login`** (needed
    for the "wacrm chat" tile's auto-login — see below; skip it if you
    don't want that). Copy the key (shown once).
 2. In Odoo: **Settings → wacrm Sync**.
@@ -73,6 +74,20 @@ the Odoo user's **own email**.
   the person currently clicking the tile. That's fine as long as it
   only ever lives in this Settings screen (server-side), which is the
   only place this module uses it — never paste it anywhere else.
+
+## Product library
+
+The **wacrm → Product library** menu is the catalog agents send from
+chat. Each record can optionally **link an Inventory product**
+(`product.template`) and hold:
+
+- a PDF datasheet, images, and a video file
+- a YouTube URL and a website URL on the header
+- extra YouTube / website lines on the Files and links tab
+
+Saving (or **Push to wacrm**) upserts the sheet into wacrm. The
+configured API key needs **`products:write`**. In the inbox, open
+**+ → Products**, then **Send all** or tick pieces and **Send selected**.
 
 ## Pipeline Mapping
 
