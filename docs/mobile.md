@@ -48,8 +48,10 @@ key inlined — the app actually fetches the public key at runtime from
 | `VAPID_PRIVATE_KEY` | Server secret used to sign pushes. Never expose it. |
 | `VAPID_SUBJECT` | Optional. `mailto:you@example.com` or `https://crm.example.com`. Defaults to `NEXT_PUBLIC_SITE_URL`. |
 
-Apply migration **`051_push_subscriptions_new_message.sql`** on the
-Supabase project (after 050). Redeploy the app.
+Apply migrations **`051_push_subscriptions_new_message.sql`** and
+**`052_push_vapid.sql`** on the Supabase project (after 050). Redeploy
+the app. 052 lets the app generate VAPID keys itself when the env
+vars below are unset — required for alerts while the phone is locked.
 
 Without the keys, the inbox still works; Settings → Phone app shows
 that push is not configured yet.

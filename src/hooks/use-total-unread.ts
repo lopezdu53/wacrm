@@ -2,12 +2,12 @@
 
 import { useEffect, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { sumUnread } from "@/lib/inbox/unread";
 import type { Conversation } from "@/types";
 
 /**
- * Count of conversations with at least one unread inbound message for
- * the current user. Used by the sidebar to surface a green dot on the
- * Inbox nav entry when the user is elsewhere in the app.
+ * Total unread WhatsApp messages for the current user (sum of
+ * conversation.unread_count). Drives the Chats tab badge.
  *
  * Lives on its own realtime channel (distinct from the inbox page's
  * "inbox-realtime") so both can coexist without sharing state.
@@ -32,14 +32,11 @@ export function useTotalUnread(): number {
       if (cancelled || error || !data) return;
 
       const map = new Map<string, number>();
-      let sum = 0;
       for (const row of data as { id: string; unread_count: number }[]) {
-        const n = row.unread_count ?? 0;
-        map.set(row.id, n);
-        if (n > 0) sum += 1;
+        map.set(row.id, row.unread_count ?? 0);
       }
       countsRef.current = map;
-      setTotal(sum);
+      setTotal(sumUnread(map.values()));
     })();
 
     const channel = supabase
@@ -56,10 +53,7 @@ export function useTotalUnread(): number {
             const row = payload.new as Conversation;
             map.set(row.id, row.unread_count ?? 0);
           }
-          // Recompute — cheap, conversations per user stay small.
-          let sum = 0;
-          for (const n of map.values()) if (n > 0) sum += 1;
-          setTotal(sum);
+          setTotal(sumUnread(map.values()));
         },
       )
       .subscribe();

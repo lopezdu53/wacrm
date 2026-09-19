@@ -23,9 +23,17 @@ import { IncomingAlerts } from "@/components/pwa/incoming-alerts";
 export function PwaBootstrap() {
   useEffect(() => {
     captureInstallPrompt();
-    void registerServiceWorker().then(() => {
-      void resubscribeIfGranted();
-    });
+    const boot = () => {
+      void registerServiceWorker().then(() => {
+        void resubscribeIfGranted();
+      });
+    };
+    boot();
+    const onVisible = () => {
+      if (document.visibilityState === "visible") boot();
+    };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => document.removeEventListener("visibilitychange", onVisible);
   }, []);
   return (
     <>

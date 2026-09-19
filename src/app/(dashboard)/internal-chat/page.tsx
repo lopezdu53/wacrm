@@ -192,8 +192,8 @@ export default function InternalChatPage() {
                             {preview || t("noMessagesShort")}
                           </span>
                           {c.unread_count > 0 && (
-                            <span className="flex h-4 min-w-4 shrink-0 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground">
-                              {c.unread_count > 9 ? "9+" : c.unread_count}
+                            <span className="flex h-5 min-w-5 shrink-0 items-center justify-center rounded-full bg-emerald-500 px-1 text-[11px] font-bold text-white">
+                              {c.unread_count > 99 ? "99+" : c.unread_count}
                             </span>
                           )}
                         </div>

@@ -361,7 +361,7 @@ export function ConversationList({
           />
         </div>
 
-        <div className="flex flex-nowrap items-center gap-1 overflow-x-auto pb-0.5 lg:flex-wrap">
+        <div className="flex flex-wrap items-center gap-1 pb-0.5">
           {/* Assignment filter — My inbox / Unassigned / All. */}
           <DropdownMenu>
             <DropdownMenuTrigger
@@ -651,8 +651,10 @@ function ConversationItem({
           </p>
           <div className="flex shrink-0 items-center gap-1.5">
             {conversation.unread_count > 0 && (
-              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1.5 text-[11px] font-bold text-primary-foreground lg:h-4 lg:min-w-4 lg:px-1 lg:text-[10px]">
-                {conversation.unread_count}
+              <span className="flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1.5 text-[11px] font-bold leading-none text-white">
+                {conversation.unread_count > 99
+                  ? "99+"
+                  : conversation.unread_count}
               </span>
             )}
             <span
