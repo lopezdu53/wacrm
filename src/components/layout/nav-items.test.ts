@@ -37,6 +37,8 @@ describe("dashboard shell tab placement", () => {
     );
     expect(src).toMatch(/MobileTabBarFallback/);
     expect(src).toMatch(/MobileTabBar/);
+    expect(src).toMatch(/chatsUnread=\{chatsUnread\}/);
+    expect(src).toMatch(/unreadNotifications=\{notificationUnread\}/);
   });
 });
 
@@ -55,6 +57,8 @@ describe("mobile tab bar", () => {
     expect(src).toMatch(/badge=\{totalUnread\}/);
     expect(src).toMatch(/badge=\{internalUnread\}/);
     expect(src).toMatch(/badge=\{unreadNotifications\}/);
+    expect(src).toMatch(/badge=\{chatsUnread\}/);
+    expect(src).not.toMatch(/badge=\{0\}/);
     expect(src).not.toMatch(/!inboxActive/);
   });
 

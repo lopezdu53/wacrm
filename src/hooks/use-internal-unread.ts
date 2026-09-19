@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { sumUnread } from "@/lib/inbox/unread";
 
@@ -13,10 +13,12 @@ import { sumUnread } from "@/lib/inbox/unread";
  * message lands anywhere (RLS scopes the realtime stream to the user's
  * own channels), so the badge stays live without per-channel wiring.
  */
-export function useInternalUnread(): number {
+export function useInternalUnread(userId?: string | null): number {
   const [total, setTotal] = useState(0);
+  const channelName = `internal-unread:${useId()}`;
 
   useEffect(() => {
+    if (!userId) return;
     const supabase = createClient();
     let cancelled = false;
 
@@ -41,7 +43,7 @@ export function useInternalUnread(): number {
     void refresh();
 
     const channel = supabase
-      .channel("internal-unread")
+      .channel(channelName)
       .on(
         "postgres_changes",
         { event: "INSERT", schema: "public", table: "internal_messages" },
@@ -58,7 +60,7 @@ export function useInternalUnread(): number {
       supabase.removeChannel(channel);
       window.removeEventListener("focus", onFocus);
     };
-  }, []);
+  }, [channelName, userId]);
 
   return total;
 }

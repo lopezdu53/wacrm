@@ -4,9 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
-import { useTotalUnread } from "@/hooks/use-total-unread";
-import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
-import { useInternalUnread } from "@/hooks/use-internal-unread";
+import { useDashboardNav } from "@/components/layout/dashboard-nav-context";
 import {
   Crown,
   LogOut,
@@ -81,9 +79,8 @@ export function Sidebar() {
   const t = useTranslations("Sidebar");
   const pathname = usePathname() ?? "";
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
-  const totalUnread = useTotalUnread();
-  const unreadNotifications = useUnreadNotifications();
-  const internalUnread = useInternalUnread();
+  const { chatsUnread: totalUnread, notificationUnread: unreadNotifications, internalUnread } =
+    useDashboardNav();
 
   // Agents and viewers see a trimmed main menu. Owners/admins (and while
   // the role is still resolving) see the full set.

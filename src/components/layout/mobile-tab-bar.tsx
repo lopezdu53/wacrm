@@ -7,9 +7,6 @@ import { useTranslations } from "next-intl";
 import { Bell, LogOut, MessageSquare, MessagesSquare, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
-import { useTotalUnread } from "@/hooks/use-total-unread";
-import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
-import { useInternalUnread } from "@/hooks/use-internal-unread";
 import {
   APP_NAV_ITEMS,
   MOBILE_TAB_HREFS,
@@ -23,10 +20,12 @@ import {
 import { BodyPortal } from "@/components/layout/body-portal";
 import { BottomDrawer } from "@/components/layout/bottom-drawer";
 import { UnreadBadge } from "@/components/layout/unread-badge";
-import { useDashboardNav } from "@/components/layout/dashboard-nav-context";
 
 interface MobileTabBarProps {
   hidden?: boolean;
+  chatsUnread?: number;
+  internalUnread?: number;
+  unreadNotifications?: number;
 }
 
 const TAB_BAR_HEIGHT =
@@ -42,15 +41,16 @@ const TAB_BAR_HEIGHT =
  * WebViews — that produced a black hole (#50) and then no menu at all
  * (#51). Body-fixed chrome sits on the visual viewport.
  */
-export function MobileTabBar({ hidden = false }: MobileTabBarProps) {
+export function MobileTabBar({
+  hidden = false,
+  chatsUnread = 0,
+  internalUnread = 0,
+  unreadNotifications = 0,
+}: MobileTabBarProps) {
   const t = useTranslations("Sidebar");
   const pathname = usePathname() ?? "";
   const { profile, accountRole, signOut } = useAuth();
-  const hookedInbox = useTotalUnread();
-  const { inboxUnread } = useDashboardNav();
-  const totalUnread = Math.max(hookedInbox, inboxUnread);
-  const unreadNotifications = useUnreadNotifications();
-  const internalUnread = useInternalUnread();
+  const totalUnread = chatsUnread;
   const [profileOpen, setProfileOpen] = useState(false);
 
   const restrictedNav =
@@ -199,7 +199,12 @@ export function MobileTabBar({ hidden = false }: MobileTabBarProps) {
  * Hook-free strip so SoftErrorBoundary can still show the four tabs
  * if the live bar throws (i18n / unread / auth).
  */
-export function MobileTabBarFallback({ hidden = false }: MobileTabBarProps) {
+export function MobileTabBarFallback({
+  hidden = false,
+  chatsUnread = 0,
+  internalUnread = 0,
+  unreadNotifications = 0,
+}: MobileTabBarProps) {
   if (hidden) return null;
 
   return (
@@ -210,31 +215,31 @@ export function MobileTabBarFallback({ hidden = false }: MobileTabBarProps) {
           data-mobile-tab-bar=""
           aria-label="Navegación principal"
           className={cn(
-            "fixed inset-x-0 bottom-0 z-40 hidden w-full flex-col border-t border-border bg-secondary text-foreground max-lg:flex",
+            "fixed inset-x-0 bottom-0 z-40 hidden w-full flex-col overflow-visible border-t border-border bg-secondary text-foreground max-lg:flex",
             "pb-[env(safe-area-inset-bottom,0px)]",
           )}
         >
-          <ul className="grid h-16 grid-cols-4">
+          <ul className="grid h-16 grid-cols-4 overflow-visible">
             <TabLink
               href="/inbox"
               label="Chats"
               active={false}
               icon={MessageSquare}
-              badge={0}
+              badge={chatsUnread}
             />
             <TabLink
               href="/internal-chat"
               label="Interno"
               active={false}
               icon={MessagesSquare}
-              badge={0}
+              badge={internalUnread}
             />
             <TabLink
               href="/notifications"
               label="Noti"
               active={false}
               icon={Bell}
-              badge={0}
+              badge={unreadNotifications}
             />
             <li>
               <Link
@@ -276,23 +281,23 @@ function TabLink({
   badge: number;
 }) {
   return (
-    <li className="overflow-visible">
+    <li className="min-w-0 overflow-visible">
       <Link
         href={href}
         aria-current={active ? "page" : undefined}
+        aria-label={
+          badge > 0 ? `${label}, ${badge}` : label
+        }
         className={cn(
-          "relative flex h-full flex-col items-center justify-center gap-1 overflow-visible text-[11px] font-medium",
+          "flex h-full min-w-0 flex-col items-center justify-center gap-0.5 overflow-visible px-1 text-[11px] font-medium",
           active ? "text-primary" : "text-foreground/70",
         )}
       >
-        <span className="relative overflow-visible">
-          <Icon className="h-6 w-6" />
-          <UnreadBadge
-            count={badge}
-            className="absolute -right-3 -top-2"
-          />
+        <span className="flex items-center justify-center gap-0.5 overflow-visible">
+          <Icon className="h-6 w-6 shrink-0" />
+          <UnreadBadge count={badge} />
         </span>
-        {label}
+        <span className="max-w-full truncate">{label}</span>
       </Link>
     </li>
   );
