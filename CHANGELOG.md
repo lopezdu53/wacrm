@@ -9,6 +9,23 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.15] — 2026-09-19
+
+Makes unread numbers actually visible (WhatsApp-green pills, same
+source as the inbox list) and puts the app icon in the phone
+notification instead of a white square.
+
+No new migration. Redeploy, then hard-refresh the PWA so `/sw.js`
+updates.
+
+### Fixed
+
+- **Missing counters.** Tab totals reuse the inbox list counts; row
+  pills use inline green so they cannot disappear. `unread_count` is
+  coerced to a number.
+- **White notification box.** Android needs an absolute icon URL and a
+  white-on-transparent badge. Color icon stays `/pwa-icon/192`.
+
 ## [0.8.14] — 2026-09-19
 
 Unread counts are now the number of messages (not just chats), each

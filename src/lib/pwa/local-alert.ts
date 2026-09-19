@@ -91,10 +91,11 @@ export async function emitLocalAlert(args: {
     /* vibrate is optional */
   }
 
+  const origin = window.location.origin;
   const options = {
     body: args.body,
-    icon: "/pwa-icon/192",
-    badge: "/pwa-icon/192",
+    icon: `${origin}/pwa-icon/192`,
+    badge: `${origin}/pwa-icon/badge`,
     tag: args.tag,
     renotify: true,
     silent: false,

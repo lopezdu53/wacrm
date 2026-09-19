@@ -28,11 +28,12 @@ self.addEventListener("push", (event) => {
   const url = typeof data.url === "string" && data.url.startsWith("/") ? data.url : "/inbox";
   const tag = typeof data.tag === "string" && data.tag ? data.tag : "wacrm";
 
+  const origin = self.location.origin;
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
-      icon: "/pwa-icon/192",
-      badge: "/pwa-icon/192",
+      icon: origin + "/pwa-icon/192",
+      badge: origin + "/pwa-icon/badge",
       tag,
       renotify: true,
       silent: false,
