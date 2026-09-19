@@ -84,6 +84,7 @@ class WacrmProductLibrary(models.Model):
             raise UserError("Link an Inventory product first.")
         self._onchange_product_tmpl_id()
         self._fill_image_from_inventory()
+        self._push_to_wacrm(raise_error=False)
         return True
 
     def action_push_to_wacrm(self):
