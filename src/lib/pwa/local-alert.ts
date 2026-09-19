@@ -35,8 +35,8 @@ export function resetAlertDedupe(): void {
 
 /** Returns true when this tag has not fired in the last 2s. */
 export function markAlertEmitted(tag: string, now = Date.now()): boolean {
-  const prev = recent.get(tag) ?? 0;
-  if (now - prev < DEDUPE_MS) return false;
+  const prev = recent.get(tag);
+  if (prev !== undefined && now - prev < DEDUPE_MS) return false;
   recent.set(tag, now);
   return true;
 }
@@ -91,7 +91,7 @@ export async function emitLocalAlert(args: {
     /* vibrate is optional */
   }
 
-  const options: NotificationOptions & { vibrate?: number[] } = {
+  const options = {
     body: args.body,
     icon: "/pwa-icon/192",
     badge: "/pwa-icon/192",
@@ -100,7 +100,7 @@ export async function emitLocalAlert(args: {
     silent: false,
     vibrate: [80, 40, 120],
     data: { url: args.url },
-  };
+  } as NotificationOptions;
 
   try {
     const reg = await navigator.serviceWorker?.ready;
