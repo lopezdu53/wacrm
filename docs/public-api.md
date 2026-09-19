@@ -52,6 +52,8 @@ it. Grant the minimum.
 | `broadcasts:send`    | Launch broadcast campaigns               |
 | `webhooks:manage`    | Register and manage outbound webhooks    |
 | `sso:login`          | Mint a one-time login link for a member (server-side integrations only) |
+| `products:read`      | List the Odoo product library |
+| `products:write`     | Create and update the Odoo product library |
 
 A key with **no scopes** still authenticates and can call
 `GET /api/v1/me` — useful for verifying a key works.
@@ -403,6 +405,43 @@ reconcile with the read endpoints when it matters.
 resolve to a public address — requests to `localhost`, private/RFC1918
 ranges, link-local (incl. cloud metadata `169.254.169.254`), and similar
 internal targets are refused at delivery time.
+
+## Product library
+
+Odoo is the source of truth. The module upserts a product (and its
+files) with `PUT /api/v1/products` (`products:write`). Agents list
+active products from the dashboard (`GET /api/products`, cookie auth).
+
+```http
+PUT /api/v1/products
+Content-Type: application/json
+
+{
+  "odoo_id": "12",
+  "name": "Envasadora",
+  "sku": "ENV-1",
+  "description": "Semi automática",
+  "website_url": "https://example.com/p/envasadora",
+  "youtube_url": "https://youtu.be/abc",
+  "inventory_product_ref": "45",
+  "active": true,
+  "assets": [
+    {
+      "odoo_id": "3",
+      "kind": "pdf",
+      "name": "Ficha técnica",
+      "filename": "ficha.pdf",
+      "mimetype": "application/pdf",
+      "content_base64": "<base64>"
+    }
+  ]
+}
+```
+
+`DELETE /api/v1/products?odoo_id=12` removes the copy in wacrm.
+`GET /api/v1/products` lists them (`products:read`). Asset kinds:
+`pdf`, `image`, `video`, `youtube`, `website`. File kinds need
+`content_base64` (max 16 MB). Link kinds need `url`.
 
 ## Roadmap
 

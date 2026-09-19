@@ -22,6 +22,7 @@ import {
   Plus,
   MessageSquareDashed,
   Zap,
+  Package,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { GatedButton } from "@/components/ui/gated-button";
@@ -54,7 +55,9 @@ import {
 } from "@/components/interactive/interactive-builder";
 import { validateInteractivePayload } from "@/lib/whatsapp/interactive";
 import type { InteractiveMessagePayload, QuickReply } from "@/types";
+import type { ProductSendItem } from "@/lib/inbox/product-library";
 import { QuickReplyPicker } from "./quick-reply-picker";
+import { ProductLibraryPicker } from "./product-library-picker";
 
 /** Media content types an agent can send from the composer. */
 export type ComposerMediaKind = "image" | "video" | "document" | "audio";
@@ -117,6 +120,7 @@ interface MessageComposerProps {
   onSendInternal?: (text: string) => void;
   onSendMedia: (payload: SendMediaPayload) => void;
   onSendInteractive: (payload: InteractiveMessagePayload, replyToId?: string) => void;
+  onSendProduct?: (items: ProductSendItem[]) => void;
   onOpenTemplates: () => void;
   replyTo?: ReplyDraft | null;
   onClearReply?: () => void;
@@ -140,6 +144,7 @@ export function MessageComposer({
   onSendInternal,
   onSendMedia,
   onSendInteractive,
+  onSendProduct,
   onOpenTemplates,
   replyTo,
   onClearReply,
@@ -159,6 +164,7 @@ export function MessageComposer({
     useState<InteractiveMessagePayload>(blankButtonsPayload);
   const [savingQuickReply, setSavingQuickReply] = useState(false);
   const [quickReplyOpen, setQuickReplyOpen] = useState(false);
+  const [productOpen, setProductOpen] = useState(false);
 
   // Media attachment state. `draft` holds an uploaded-but-not-yet-sent
   // attachment; `busy` covers the upload/transcode window.
@@ -760,6 +766,12 @@ export function MessageComposer({
                 <Zap className="mr-2 h-4 w-4" />
                 {t("quickReplies")}
               </DropdownMenuItem>
+              {onSendProduct && (
+                <DropdownMenuItem onClick={() => setProductOpen(true)}>
+                  <Package className="mr-2 h-4 w-4" />
+                  {t("productLibrary")}
+                </DropdownMenuItem>
+              )}
             </DropdownMenuContent>
           </DropdownMenu>
 
@@ -889,6 +901,13 @@ export function MessageComposer({
         onOpenChange={setQuickReplyOpen}
         onPick={handlePickQuickReply}
       />
+      {onSendProduct && (
+        <ProductLibraryPicker
+          open={productOpen}
+          onOpenChange={setProductOpen}
+          onSend={onSendProduct}
+        />
+      )}
     </div>
   );
 }

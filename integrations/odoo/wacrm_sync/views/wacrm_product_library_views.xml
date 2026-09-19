@@ -1,0 +1,83 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="wacrm_product_library_view_list" model="ir.ui.view">
+        <field name="name">wacrm.product.library.view.list</field>
+        <field name="model">wacrm.product.library</field>
+        <field name="arch" type="xml">
+            <list>
+                <field name="name"/>
+                <field name="sku"/>
+                <field name="product_tmpl_id"/>
+                <field name="active"/>
+                <field name="wacrm_id" optional="hide"/>
+                <field name="last_push_error"/>
+            </list>
+        </field>
+    </record>
+
+    <record id="wacrm_product_library_view_form" model="ir.ui.view">
+        <field name="name">wacrm.product.library.view.form</field>
+        <field name="model">wacrm.product.library</field>
+        <field name="arch" type="xml">
+            <form>
+                <header>
+                    <button name="action_fill_from_inventory" type="object"
+                            string="Fill from inventory" class="btn-secondary"
+                            invisible="not product_tmpl_id"/>
+                    <button name="action_push_to_wacrm" type="object"
+                            string="Push to wacrm" class="btn-primary"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="sku"/>
+                            <field name="product_tmpl_id"/>
+                            <field name="active"/>
+                        </group>
+                        <group>
+                            <field name="website_url"/>
+                            <field name="youtube_url"/>
+                            <field name="wacrm_id"/>
+                            <field name="last_push_error"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="description"/>
+                    </group>
+                    <notebook>
+                        <page string="Files and links">
+                            <field name="asset_ids">
+                                <list editable="bottom">
+                                    <field name="sequence" widget="handle"/>
+                                    <field name="kind"/>
+                                    <field name="name"/>
+                                    <field name="attachment_id"/>
+                                    <field name="url"/>
+                                </list>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_wacrm_product_library" model="ir.actions.act_window">
+        <field name="name">Product library</field>
+        <field name="res_model">wacrm.product.library</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">No products yet</p>
+            <p>Create a product sheet with a PDF datasheet, photos, video,
+               YouTube, and a website link. Push it to wacrm to send it
+               from the WhatsApp chat.</p>
+        </field>
+    </record>
+
+    <menuitem id="menu_wacrm_product_library"
+              name="Product library"
+              parent="menu_wacrm_root"
+              action="action_wacrm_product_library"
+              sequence="5"/>
+</odoo>

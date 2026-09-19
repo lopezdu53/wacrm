@@ -44,12 +44,11 @@ class WacrmClient(models.AbstractModel):
         }
 
     @api.model
-    def _request(self, path, params=None, method="GET", json_body=None):
+    def _request(self, path, params=None, method="GET", json_body=None, timeout=None):
         """Call `path` (e.g. '/api/v1/contacts') and return the parsed JSON.
 
-        `method` is "GET" (query `params`) or "POST" (JSON `json_body`).
-        Raises UserError on missing config, network failure, or a non-2xx
-        response (mapping the API's error envelope to a clear message).
+        `method` is GET, POST, PUT, or DELETE. Raises UserError on missing
+        config, network failure, or a non-2xx response.
         """
         base_url, api_key = self._get_credentials()
         if not base_url or not api_key:
@@ -59,20 +58,35 @@ class WacrmClient(models.AbstractModel):
             )
 
         url = "%s%s" % (base_url, path)
+        wait = timeout or DEFAULT_TIMEOUT
         try:
             if method == "POST":
                 resp = requests.post(
                     url,
                     headers=self._headers(api_key),
                     json=json_body or {},
-                    timeout=DEFAULT_TIMEOUT,
+                    timeout=wait,
+                )
+            elif method == "PUT":
+                resp = requests.put(
+                    url,
+                    headers=self._headers(api_key),
+                    json=json_body or {},
+                    timeout=wait,
+                )
+            elif method == "DELETE":
+                resp = requests.delete(
+                    url,
+                    headers=self._headers(api_key),
+                    params=params or {},
+                    timeout=wait,
                 )
             else:
                 resp = requests.get(
                     url,
                     headers=self._headers(api_key),
                     params=params or {},
-                    timeout=DEFAULT_TIMEOUT,
+                    timeout=wait,
                 )
         except requests.RequestException as exc:
             raise UserError("Could not reach wacrm at %s: %s" % (url, exc))
