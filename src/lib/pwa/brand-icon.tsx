@@ -7,12 +7,13 @@ import { ImageResponse } from "next/og";
  */
 export function brandIconPng(
   size: number,
-  opts: { radius?: number; padding?: number } = {},
+  opts: { radius?: number; padding?: number; monochrome?: boolean } = {},
 ): ImageResponse {
   const radius = opts.radius ?? Math.round(size * 0.2);
   const padding = opts.padding ?? 0;
   const inner = size - padding * 2;
   const glyph = Math.round(inner * 0.62);
+  const mono = Boolean(opts.monochrome);
 
   return new ImageResponse(
     (
@@ -23,7 +24,7 @@ export function brandIconPng(
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: padding ? "#020617" : "#7c3aed",
+          background: mono ? "transparent" : padding ? "#020617" : "#7c3aed",
         }}
       >
         <div
@@ -33,8 +34,8 @@ export function brandIconPng(
             display: "flex",
             alignItems: "center",
             justifyContent: "center",
-            background: "#7c3aed",
-            borderRadius: radius,
+            background: mono ? "transparent" : "#7c3aed",
+            borderRadius: mono ? 0 : radius,
           }}
         >
           <svg

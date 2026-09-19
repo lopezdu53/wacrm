@@ -35,6 +35,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   const [viewingInternalChannelId, setViewingInternalChannelId] = useState<
     string | null
   >(null);
+  const [inboxUnread, setInboxUnread] = useState(0);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -63,6 +64,8 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
         setViewingConversationId,
         viewingInternalChannelId,
         setViewingInternalChannelId,
+        inboxUnread,
+        setInboxUnread,
       }}
     >
       <div className="flex h-dvh overflow-hidden bg-background">

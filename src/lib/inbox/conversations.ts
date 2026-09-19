@@ -22,11 +22,17 @@ type RawConversation = Omit<Conversation, "contact"> & {
  */
 export function normalizeConversation(raw: RawConversation): Conversation {
   const rawContact = raw.contact;
-  if (!rawContact) return raw as Conversation;
+  if (!rawContact) {
+    return {
+      ...raw,
+      unread_count: Number(raw.unread_count) || 0,
+    } as Conversation;
+  }
 
   const { contact_tags, ...contact } = rawContact;
   return {
     ...raw,
+    unread_count: Number(raw.unread_count) || 0,
     contact: {
       ...contact,
       tags: (contact_tags ?? [])

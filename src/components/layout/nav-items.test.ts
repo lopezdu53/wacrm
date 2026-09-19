@@ -62,6 +62,8 @@ describe("mobile tab bar", () => {
     const src = readFileSync(resolve(process.cwd(), "public/sw.js"), "utf8");
     expect(src).toMatch(/vibrate/);
     expect(src).toMatch(/silent: false/);
+    expect(src).toMatch(/location\.origin/);
+    expect(src).toMatch(/pwa-icon\/badge/);
   });
 
   it("portals the strip to document.body so overflow-hidden cannot clip it", () => {

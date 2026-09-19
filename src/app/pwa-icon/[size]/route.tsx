@@ -2,10 +2,16 @@ import { brandIconPng } from "@/lib/pwa/brand-icon";
 
 export const runtime = "edge";
 
-const VARIANTS: Record<string, { size: number; padding: number }> = {
+const VARIANTS: Record<
+  string,
+  { size: number; padding: number; monochrome?: boolean }
+> = {
   "192": { size: 192, padding: 0 },
   "512": { size: 512, padding: 0 },
   maskable: { size: 512, padding: 64 },
+  // Android status-bar glyph: white silhouette, transparent ground.
+  // A full-color PNG here paints as a white box in the shade.
+  badge: { size: 96, padding: 0, monochrome: true },
 };
 
 export async function GET(
@@ -20,5 +26,6 @@ export async function GET(
   return brandIconPng(variant.size, {
     padding: variant.padding,
     radius: Math.round(variant.size * 0.2),
+    monochrome: variant.monochrome,
   });
 }
