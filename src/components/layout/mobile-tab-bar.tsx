@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/avatar";
 import { BodyPortal } from "@/components/layout/body-portal";
 import { BottomDrawer } from "@/components/layout/bottom-drawer";
+import { formatUnreadBadge } from "@/lib/inbox/unread";
 
 interface MobileTabBarProps {
   hidden?: boolean;
@@ -76,11 +77,11 @@ export function MobileTabBar({ hidden = false }: MobileTabBarProps) {
             data-mobile-tab-bar=""
             aria-label={t("mobileTabs")}
             className={cn(
-              "fixed inset-x-0 bottom-0 z-40 hidden w-full flex-col border-t border-border bg-secondary text-foreground max-lg:flex",
+              "fixed inset-x-0 bottom-0 z-40 hidden w-full flex-col overflow-visible border-t border-border bg-secondary text-foreground max-lg:flex",
               "pb-[env(safe-area-inset-bottom,0px)]",
             )}
           >
-            <ul className="grid h-16 grid-cols-4">
+            <ul className="grid h-16 grid-cols-4 overflow-visible">
               <TabLink
                 href="/inbox"
                 label={t("tabChats")}
@@ -271,23 +272,25 @@ function TabLink({
   icon: typeof MessageSquare;
   badge: number;
 }) {
+  const labelText = formatUnreadBadge(badge);
+
   return (
-    <li>
+    <li className="overflow-visible">
       <Link
         href={href}
         aria-current={active ? "page" : undefined}
         className={cn(
-          "relative flex h-full flex-col items-center justify-center gap-1 text-[11px] font-medium",
+          "relative flex h-full flex-col items-center justify-center gap-1 overflow-visible text-[11px] font-medium",
           active ? "text-primary" : "text-foreground/70",
         )}
       >
-        <span className="relative">
+        <span className="relative overflow-visible">
           <Icon className="h-6 w-6" />
-          {badge > 0 && (
-            <span className="absolute -right-3 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-bold leading-none text-white">
-              {badge > 99 ? "99+" : badge}
+          {labelText ? (
+            <span className="absolute -right-3 -top-2 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-bold leading-none text-white shadow-sm">
+              {labelText}
             </span>
-          )}
+          ) : null}
         </span>
         {label}
       </Link>

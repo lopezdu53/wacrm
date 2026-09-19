@@ -109,6 +109,7 @@ export async function subscribeToPush(): Promise<{ ok: boolean; error?: string }
 
   const registration = await registerServiceWorker();
   if (!registration) return { ok: false, error: "sw" };
+  await navigator.serviceWorker.ready.catch(() => undefined);
 
   const existing = await registration.pushManager.getSubscription();
   const subscription =

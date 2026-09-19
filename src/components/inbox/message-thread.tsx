@@ -1025,7 +1025,12 @@ export function MessageThread({
     // clipped and the hover toolbar overlaps the Tags panel. Letting the
     // root shrink lets the bubbles' break-words / max-w caps apply.
     // Issue #257.
-    <div className={cn("flex min-w-0 flex-1 flex-col", DOODLE_BG_CLASSES)}>
+    <div
+      className={cn(
+        "flex min-w-0 flex-1 flex-col overflow-x-hidden",
+        DOODLE_BG_CLASSES,
+      )}
+    >
       {/* Header — WhatsApp Business chat chrome on phones (back, avatar,
           name, overflow with CRM tools). Desktop keeps the full toolbar. */}
       <div className="flex items-center justify-between gap-1 border-b border-border bg-card px-1 py-1.5 max-lg:pt-[max(0.35rem,env(safe-area-inset-top))] sm:gap-2 sm:px-4 sm:py-3">
@@ -1276,7 +1281,10 @@ export function MessageThread({
       </div>
 
       {/* Messages Area */}
-      <div ref={scrollRef} className="flex-1 overflow-y-auto px-3 py-3 lg:px-4 lg:py-4">
+      <div
+        ref={scrollRef}
+        className="min-w-0 flex-1 overflow-x-hidden overflow-y-auto px-3 py-3 lg:px-4 lg:py-4"
+      >
         {loading ? (
           <div className="flex items-center justify-center py-12">
             <div className="h-5 w-5 animate-spin rounded-full border-2 border-primary border-t-transparent" />

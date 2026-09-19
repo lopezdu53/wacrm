@@ -9,6 +9,27 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.14] — 2026-09-19
+
+Unread counts are now the number of messages (not just chats), each
+row shows its own green number, the open thread no longer scrolls
+sideways, and lock-screen push no longer depends on leftover VAPID
+env vars.
+
+**Migration required:** apply
+`supabase/migrations/052_push_vapid.sql` on Supabase, then redeploy.
+After that, open the phone app, tap **Activar**, and allow
+notifications. Alerts should sound with the phone locked.
+
+### Fixed
+
+- **Tab + row badges.** Chats / Interno count unread *messages*. Each
+  conversation shows its own count.
+- **Horizontal swipe in a chat.** The thread and composer clip overflow
+  so long messages cannot scroll the pane sideways.
+- **Locked-phone silence.** The app now creates and stores a VAPID key
+  pair (or uses env keys) so Web Push can wake a killed/locked PWA.
+
 ## [0.8.13] — 2026-09-19
 
 Phone notifications now ask to be enabled, sound, and land in the

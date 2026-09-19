@@ -129,7 +129,7 @@ export function ChatThread({ channel, currentUserId, onActivity }: ChatThreadPro
       : t("directMessage");
 
   return (
-    <div className="flex h-full flex-col">
+    <div className="flex h-full min-w-0 flex-col overflow-x-hidden">
       {/* Header */}
       <div className="flex h-14 shrink-0 items-center gap-3 border-b border-border px-4">
         <div className="min-w-0">
