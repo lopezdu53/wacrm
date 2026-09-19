@@ -86,7 +86,7 @@ export function MobileTabBar({ hidden = false }: MobileTabBarProps) {
                 label={t("tabChats")}
                 active={inboxActive}
                 icon={MessageSquare}
-                badge={totalUnread > 0 && !inboxActive ? totalUnread : 0}
+                badge={totalUnread}
               />
               <TabLink
                 href="/internal-chat"
@@ -284,8 +284,8 @@ function TabLink({
         <span className="relative">
           <Icon className="h-6 w-6" />
           {badge > 0 && (
-            <span className="absolute -right-2.5 -top-1 flex h-4 min-w-4 items-center justify-center rounded-full bg-primary px-1 text-[9px] font-bold text-primary-foreground">
-              {badge > 9 ? "9+" : badge}
+            <span className="absolute -right-3 -top-1.5 flex h-5 min-w-5 items-center justify-center rounded-full bg-emerald-500 px-1 text-[10px] font-bold leading-none text-white">
+              {badge > 99 ? "99+" : badge}
             </span>
           )}
         </span>

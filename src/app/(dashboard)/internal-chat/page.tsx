@@ -63,11 +63,15 @@ export default function InternalChatPage() {
   }, [refresh]);
 
   const active = channels.find((c) => c.id === activeId) ?? null;
-  const { setMobileChatOpen } = useDashboardNav();
+  const { setMobileChatOpen, setViewingInternalChannelId } = useDashboardNav();
   useEffect(() => {
     setMobileChatOpen(Boolean(active));
-    return () => setMobileChatOpen(false);
-  }, [active, setMobileChatOpen]);
+    setViewingInternalChannelId(activeId);
+    return () => {
+      setMobileChatOpen(false);
+      setViewingInternalChannelId(null);
+    };
+  }, [active, activeId, setMobileChatOpen, setViewingInternalChannelId]);
   const visible = tab === "unread" ? channels.filter((c) => c.unread_count > 0) : channels;
   const totalUnread = channels.filter((c) => c.unread_count > 0).length;
 

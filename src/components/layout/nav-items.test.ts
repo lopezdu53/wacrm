@@ -52,6 +52,16 @@ describe("mobile tab bar", () => {
     expect(src).toMatch(/fixed inset-x-0/);
     expect(src).toMatch(/BottomDrawer/);
     expect(src).toMatch(/tabChats/);
+    expect(src).toMatch(/badge=\{totalUnread\}/);
+    expect(src).toMatch(/badge=\{internalUnread\}/);
+    expect(src).toMatch(/badge=\{unreadNotifications\}/);
+    expect(src).not.toMatch(/!inboxActive/);
+  });
+
+  it("vibrates and is not silent when a push lands", () => {
+    const src = readFileSync(resolve(process.cwd(), "public/sw.js"), "utf8");
+    expect(src).toMatch(/vibrate/);
+    expect(src).toMatch(/silent: false/);
   });
 
   it("portals the strip to document.body so overflow-hidden cannot clip it", () => {
