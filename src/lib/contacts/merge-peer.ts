@@ -258,6 +258,27 @@ export function pickSurvivorContact(
   return contacts[0];
 }
 
+/** Rewrite a stored LID/@username key to E.164 once the phone is known. */
+export function preferE164ContactPhone(
+  existingPhone: string,
+  incomingKey: string,
+): string | null {
+  const incoming = canonicalContactKey(incomingKey);
+  const existing = canonicalContactKey(existingPhone);
+  if (!incoming || !existing) return null;
+  if (isWhatsAppHandleKey(incoming)) return null;
+  if (existing === incoming) return null;
+  if (!isWhatsAppHandleKey(existing)) return null;
+  return incoming;
+}
+
+export function contactNameLooksLikeId(
+  name: string | null | undefined,
+  phone: string,
+): boolean {
+  return nameLooksLikeId(name, phone);
+}
+
 function nameLooksLikeId(name: string | null | undefined, phone: string): boolean {
   const n = (name ?? '').trim();
   if (!n) return true;

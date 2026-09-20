@@ -9,6 +9,28 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.19] — 2026-09-19
+
+Fixes the Odoo product-library save crash after uploading a PDF, simplifies
+file upload, adds a home-menu tile, restyles the chat product picker, and
+stores WhatsApp chats on the phone number when Evolution also lists a LID.
+
+Upgrade `wacrm_sync` to **19.0.1.14.2** on app8 (Apps → Upgrade). Redeploy
+wacrm. No new migration.
+
+### Fixed
+
+- **PDF save.** Binary upload + JSON-safe push so `bytes` never hits
+  `requests.json`. Push once after the parent save, not mid-One2many create.
+- **Product picker.** Larger card, darker overlay, kind labels instead of
+  raw URLs on a washed-out dialog.
+- **Split chats.** `resolveEvolutionPeer` uses E.164 as `contactKey` when
+  the phone is known; existing LID rows rewrite to the phone and merge.
+
+### Added
+
+- **Odoo desktop tile.** Product library appears next to wacrm / wacrm chat.
+
 ## [0.8.18] — 2026-09-19
 
 Product library administered in Odoo and sendable from the WhatsApp

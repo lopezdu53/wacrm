@@ -11,7 +11,10 @@
  */
 
 import { supabaseAdmin } from '@/lib/flows/admin-client';
-import { canonicalContactKey } from '@/lib/whatsapp/phone-utils';
+import {
+  canonicalContactKey,
+  formatWhatsAppAddress,
+} from '@/lib/whatsapp/phone-utils';
 import {
   findExistingContact,
   isUniqueViolation,
@@ -19,9 +22,11 @@ import {
 } from '@/lib/contacts/dedupe';
 import {
   isContactOnPayload,
+  contactNameLooksLikeId,
   lidFromContact,
   mergePeerContacts,
   pickComplementaryNameTwin,
+  preferE164ContactPhone,
   selectMergeableLosers,
   usernameFromContact,
 } from '@/lib/contacts/merge-peer';
@@ -161,6 +166,17 @@ export async function findOrCreateContact(
     if (mergeLid && !existing.whatsapp_lid) patch.whatsapp_lid = mergeLid;
     if (mergeUsername && !existing.whatsapp_username) {
       patch.whatsapp_username = mergeUsername;
+    }
+    const e164 = preferE164ContactPhone(existing.phone, key);
+    if (e164) {
+      const existingKey = canonicalContactKey(existing.phone);
+      patch.phone = e164;
+      if (existingKey.startsWith('lid:') && !existing.whatsapp_lid && !patch.whatsapp_lid) {
+        patch.whatsapp_lid = existingKey.slice(4);
+      }
+      if (contactNameLooksLikeId(existing.name, existing.phone)) {
+        patch.name = formatWhatsAppAddress(e164) || e164;
+      }
     }
     if (Object.keys(patch).length > 1) {
       await supabaseAdmin()

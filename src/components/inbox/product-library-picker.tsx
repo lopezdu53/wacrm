@@ -107,17 +107,20 @@ export function ProductLibraryPicker({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent
+        overlayClassName="bg-black/45 backdrop-blur-none supports-backdrop-filter:backdrop-blur-none"
+        className="max-h-[min(90vh,40rem)] w-full overflow-y-auto border border-border bg-card p-5 text-card-foreground shadow-xl sm:max-w-lg"
+      >
         <DialogHeader>
-          <DialogTitle>{t("productLibrary")}</DialogTitle>
+          <DialogTitle className="text-foreground">{t("productLibrary")}</DialogTitle>
         </DialogHeader>
         <input
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           placeholder={t("productSearch")}
-          className="h-9 w-full rounded-md border border-border bg-muted px-3 text-sm text-foreground outline-none focus:border-primary/50"
+          className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm text-foreground outline-none focus:border-primary/50"
         />
-        <div className="max-h-[50vh] overflow-y-auto">
+        <div className="max-h-[40vh] overflow-y-auto">
           {loading ? (
             <div className="flex justify-center py-8">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
@@ -135,8 +138,8 @@ export function ProductLibraryPicker({
                     onClick={() => chooseProduct(product)}
                     className={`flex w-full items-start gap-2 rounded-md border p-2.5 text-left ${
                       selectedId === product.id
-                        ? "border-primary/50 bg-muted"
-                        : "border-border bg-muted/40 hover:border-primary/40"
+                        ? "border-primary bg-primary/10"
+                        : "border-border bg-background hover:border-primary/40"
                     }`}
                   >
                     <Package className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
@@ -164,16 +167,28 @@ export function ProductLibraryPicker({
             <ul className="flex flex-col gap-1">
               {sendables.map((item) => {
                 const Icon = kindIcon(item.kind);
+                const kindLabel = t(`productKind.${item.kind}`);
                 return (
                   <li key={item.key}>
-                    <label className="flex cursor-pointer items-center gap-2 rounded-md px-1 py-1 text-sm text-foreground hover:bg-muted">
+                    <label className="flex cursor-pointer items-start gap-2 rounded-md border border-border bg-background px-2 py-2 text-sm text-foreground hover:bg-muted">
                       <input
                         type="checkbox"
+                        className="mt-1"
                         checked={keys.includes(item.key)}
                         onChange={() => toggleKey(item.key)}
                       />
-                      <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
-                      <span className="min-w-0 truncate">{item.label}</span>
+                      <Icon className="mt-0.5 h-4 w-4 shrink-0 text-primary" />
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">
+                          {kindLabel}
+                          {item.label && item.label !== kindLabel ? ` · ${item.label}` : ""}
+                        </span>
+                        {item.detail ? (
+                          <span className="block truncate text-xs text-muted-foreground">
+                            {item.detail}
+                          </span>
+                        ) : null}
+                      </span>
                     </label>
                   </li>
                 );
@@ -181,7 +196,7 @@ export function ProductLibraryPicker({
             </ul>
           </div>
         )}
-        <DialogFooter className="gap-2 sm:justify-between">
+        <DialogFooter className="gap-2 bg-card sm:justify-between">
           <Button
             type="button"
             variant="outline"

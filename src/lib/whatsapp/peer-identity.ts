@@ -110,8 +110,8 @@ function usernameFromField(value: string | undefined | null): string | null {
  *
  * Collect every LID / phone / @username on the payload as aliases so
  * inbound LID and outbound PN merge into one contact. Canonical key
- * prefers @username, then LID, then E.164 — a fromMe send addressed to
- * the phone still has to land on the LID chat the customer replies in.
+ * prefers E.164 when WhatsApp also listed a LID, then @username, then
+ * LID — the inbox stores and shows the phone whenever it is known.
  */
 export function resolveEvolutionPeer(
   item: EvolutionPeerSource,
@@ -143,22 +143,22 @@ export function resolveEvolutionPeer(
   if (!username && chat?.kind === 'username') username = chat.user;
   if (!phone && chat?.kind === 'phone') phone = chat.user;
 
-  // Username, then LID, then phone. A fromMe echo addressed to the
-  // E.164 still has to land on the LID/@username contact the customer
-  // replies on — chat-JID-first kept agent greens on the phone window.
+  // Phone first so LID/@lid chats store and display E.164. Username
+  // only when there is no phone. LID is last-resort when WhatsApp
+  // never listed a number.
   let contactKey = '';
-  if (username) {
+  if (phone) {
+    contactKey = phone;
+  } else if (username) {
     contactKey = `user:${username}`;
   } else if (lid) {
     contactKey = `lid:${lid}`;
-  } else if (phone) {
-    contactKey = phone;
+  } else if (chat?.kind === 'phone') {
+    contactKey = chat.user;
   } else if (chat?.kind === 'username') {
     contactKey = `user:${chat.user}`;
   } else if (chat?.kind === 'lid') {
     contactKey = `lid:${chat.user}`;
-  } else if (chat?.kind === 'phone') {
-    contactKey = chat.user;
   }
 
   if (!contactKey) return null;

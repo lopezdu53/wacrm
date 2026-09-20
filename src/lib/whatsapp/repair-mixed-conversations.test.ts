@@ -95,5 +95,6 @@ describe('handlePhoneLinksFromPeers', () => {
       links,
     );
     expect(lidOnly.phone).toBe('573023582969');
+    expect(lidOnly.contactKey).toBe('573023582969');
   });
 });
