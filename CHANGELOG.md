@@ -9,6 +9,20 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.20] — 2026-09-20
+
+Opening the inbox now joins a LID chat and a phone chat that share
+**one unique customer name** (the two Sebastian threads). Merge still
+refuses two phones or a name that belongs to more than one pair.
+
+No new migration. Redeploy and hard-refresh the inbox.
+
+### Fixed
+
+- **Split same-person chats.** Complementary LID + E.164 rows with the
+  same unique pushName collapse onto the phone number when the inbox
+  loads, not only when Evolution lists both JIDs on one webhook.
+
 ## [0.8.19] — 2026-09-19
 
 Fixes the Odoo product-library save crash after uploading a PDF, simplifies

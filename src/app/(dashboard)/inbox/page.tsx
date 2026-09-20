@@ -216,6 +216,27 @@ export default function InboxPage() {
     checkConnection();
   }, []);
 
+  // Join a LID chat and a phone chat that share one unique name
+  // (Sebastian / Sebastian). Merge is server-side; refetch the list
+  // only when something actually collapsed.
+  useEffect(() => {
+    let cancelled = false;
+    void (async () => {
+      try {
+        const res = await fetch("/api/inbox/repair-peers", { method: "POST" });
+        const data = (await res.json().catch(() => ({}))) as { merged?: number };
+        if (!cancelled && res.ok && (data.merged ?? 0) > 0) {
+          setResyncToken((n) => n + 1);
+        }
+      } catch {
+        // Repair is best-effort; the list still loads.
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   // Handle realtime message events
   const handleMessageEvent = useCallback(
     (event: { eventType: string; new: Message; old: Partial<Message> }) => {
