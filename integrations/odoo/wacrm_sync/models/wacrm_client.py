@@ -17,6 +17,24 @@ DEFAULT_TIMEOUT = 30
 MAX_PAGES = 200
 
 
+def _json_safe(value):
+    """requests.json cannot encode bytes (Odoo Binary / attachment.datas)."""
+    if isinstance(value, memoryview):
+        value = value.tobytes()
+    if isinstance(value, bytes):
+        try:
+            return value.decode("ascii")
+        except UnicodeDecodeError:
+            import base64
+
+            return base64.b64encode(value).decode("ascii")
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
+    return value
+
+
 class WacrmClient(models.AbstractModel):
     """Thin HTTP client for the wacrm public API (/api/v1).
 
@@ -59,19 +77,20 @@ class WacrmClient(models.AbstractModel):
 
         url = "%s%s" % (base_url, path)
         wait = timeout or DEFAULT_TIMEOUT
+        body = _json_safe(json_body) if json_body is not None else {}
         try:
             if method == "POST":
                 resp = requests.post(
                     url,
                     headers=self._headers(api_key),
-                    json=json_body or {},
+                    json=body,
                     timeout=wait,
                 )
             elif method == "PUT":
                 resp = requests.put(
                     url,
                     headers=self._headers(api_key),
-                    json=json_body or {},
+                    json=body,
                     timeout=wait,
                 )
             elif method == "DELETE":

@@ -10,7 +10,7 @@ import {
 } from './peer-identity';
 
 describe('resolveEvolutionPeer', () => {
-  it('uses the chat JID (LID), not the alt phone, as the contact key', () => {
+  it('uses the alt phone as the contact key when Evolution also lists a LID', () => {
     expect(
       resolveEvolutionPeer({
         key: {
@@ -19,7 +19,7 @@ describe('resolveEvolutionPeer', () => {
         },
       }),
     ).toEqual({
-      contactKey: 'lid:66244327888465593',
+      contactKey: '573131423412',
       phone: '573131423412',
       lid: '66244327888465593',
       username: null,
@@ -101,7 +101,7 @@ describe('resolveEvolutionPeer', () => {
     expect(a?.contactKey).not.toBe(b?.contactKey);
   });
 
-  it('uses the LID as the contact key even when fromMe is addressed to the phone', () => {
+  it('keeps fromMe phone+LID chats on the E.164 contact key', () => {
     expect(
       resolveEvolutionPeer({
         key: {
@@ -111,7 +111,7 @@ describe('resolveEvolutionPeer', () => {
         },
       }),
     ).toEqual({
-      contactKey: 'lid:6611235915522259',
+      contactKey: '573023582969',
       phone: '573023582969',
       lid: '6611235915522259',
       username: null,
@@ -127,7 +127,7 @@ describe('resolveEvolutionPeer', () => {
       previousRemoteJid: '6611235915522259@lid',
     });
     expect(peer).toMatchObject({
-      contactKey: 'lid:6611235915522259',
+      contactKey: '573023582969',
       phone: '573023582969',
       lid: '6611235915522259',
     });
@@ -141,6 +141,7 @@ describe('resolveEvolutionPeer', () => {
         remoteJidUsername: 'sebastianac01',
       },
     });
+    expect(peer?.contactKey).toBe('573131423412');
     expect(peerLookupKeys(peer!)).toEqual(
       expect.arrayContaining([
         'user:sebastianac01',

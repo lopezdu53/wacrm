@@ -5,8 +5,21 @@ import {
   isProvenPeerPair,
   pickComplementaryNameTwin,
   pickSurvivorContact,
+  preferE164ContactPhone,
   selectMergeableLosers,
 } from './merge-peer';
+
+describe('preferE164ContactPhone', () => {
+  it('promotes a stored LID key to the known E.164', () => {
+    expect(preferE164ContactPhone('lid:244327888465593', '573112423412')).toBe(
+      '573112423412',
+    );
+    expect(preferE164ContactPhone('573112423412', 'lid:244327888465593')).toBe(
+      null,
+    );
+    expect(preferE164ContactPhone('573112423412', '573112423412')).toBe(null);
+  });
+});
 
 describe('pickSurvivorContact', () => {
   it('prefers the E.164 contact so the LID row can stamp whatsapp_lid on it', () => {

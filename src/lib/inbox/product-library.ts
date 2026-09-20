@@ -40,6 +40,7 @@ export interface ProductSendItem {
   key: string;
   kind: ProductAssetKind;
   label: string;
+  detail?: string;
   url: string;
   filename?: string;
 }
@@ -60,7 +61,8 @@ export function listProductSendables(
     items.push({
       key: "header:youtube",
       kind: "youtube",
-      label: product.youtube_url,
+      label: "YouTube",
+      detail: product.youtube_url,
       url: product.youtube_url,
     });
   }
@@ -68,7 +70,8 @@ export function listProductSendables(
     items.push({
       key: "header:website",
       kind: "website",
-      label: product.website_url,
+      label: "Website",
+      detail: product.website_url,
       url: product.website_url,
     });
   }
@@ -78,7 +81,8 @@ export function listProductSendables(
     items.push({
       key: asset.id,
       kind: asset.kind,
-      label: asset.name,
+      label: asset.name || asset.filename || asset.kind,
+      detail: asset.filename ?? undefined,
       url: asset.url,
       filename: asset.filename ?? undefined,
     });

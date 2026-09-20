@@ -95,6 +95,9 @@ describe("WhatsApp @username / LID keys", () => {
 
   it("formats handles for the inbox", () => {
     expect(formatWhatsAppAddress("user:yel_cac")).toBe("@yel_cac");
+    expect(formatWhatsAppAddress("lid:244327888465593")).toBe(
+      "ID 244327888465593",
+    );
     expect(isWhatsAppHandleKey("1E4NDRA")).toBe(true);
     expect(isWhatsAppHandleKey("66244327888465593")).toBe(true);
     expect(isWhatsAppHandleKey("573001112233")).toBe(false);

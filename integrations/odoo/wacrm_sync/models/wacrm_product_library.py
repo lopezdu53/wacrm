@@ -1,5 +1,6 @@
 # -*- coding: utf-8 -*-
 import logging
+import mimetypes
 
 from odoo import api, fields, models
 from odoo.exceptions import UserError
@@ -8,13 +9,36 @@ _logger = logging.getLogger(__name__)
 
 
 def _as_b64_str(value):
-    """ir.attachment.datas is bytes in Odoo 19; requests.json needs a str."""
+    """Binary / ir.attachment.datas is bytes in Odoo 19; JSON needs a str."""
     if not value:
         return None
     if isinstance(value, memoryview):
         value = value.tobytes()
     if isinstance(value, bytes):
-        return value.decode("ascii")
+        try:
+            return value.decode("ascii")
+        except UnicodeDecodeError:
+            import base64
+
+            return base64.b64encode(value).decode("ascii")
+    return value
+
+
+def _json_safe(value):
+    """Walk a payload so requests.json never sees bytes/memoryview."""
+    if isinstance(value, memoryview):
+        value = value.tobytes()
+    if isinstance(value, bytes):
+        try:
+            return value.decode("ascii")
+        except UnicodeDecodeError:
+            import base64
+
+            return base64.b64encode(value).decode("ascii")
+    if isinstance(value, dict):
+        return {str(k): _json_safe(v) for k, v in value.items()}
+    if isinstance(value, (list, tuple)):
+        return [_json_safe(v) for v in value]
     return value
 
 
@@ -56,17 +80,8 @@ class WacrmProductLibrary(models.Model):
         for rec in self:
             if not rec.product_tmpl_id or not rec.product_tmpl_id.image_1920:
                 continue
-            if rec.asset_ids.filtered(lambda a: a.kind == "image" and a.attachment_id):
+            if rec.asset_ids.filtered(lambda a: a.kind == "image" and a._has_file()):
                 continue
-            attachment = self.env["ir.attachment"].create(
-                {
-                    "name": "%s.jpg" % rec.product_tmpl_id.name,
-                    "datas": rec.product_tmpl_id.image_1920,
-                    "res_model": rec._name,
-                    "res_id": rec.id,
-                    "mimetype": "image/jpeg",
-                }
-            )
             self.env["wacrm.product.asset"].with_context(
                 wacrm_skip_push=True
             ).create(
@@ -74,7 +89,8 @@ class WacrmProductLibrary(models.Model):
                     "library_id": rec.id,
                     "kind": "image",
                     "name": rec.product_tmpl_id.name,
-                    "attachment_id": attachment.id,
+                    "file": rec.product_tmpl_id.image_1920,
+                    "filename": "%s.jpg" % rec.product_tmpl_id.name,
                 }
             )
 
@@ -104,15 +120,16 @@ class WacrmProductLibrary(models.Model):
             }
             if asset.kind in ("youtube", "website"):
                 row["url"] = asset.url or ""
-            elif asset.attachment_id:
-                content = _as_b64_str(asset.attachment_id.datas)
+            else:
+                content = asset._file_b64()
                 if not content:
                     continue
-                row["filename"] = asset.attachment_id.name
-                row["mimetype"] = asset.attachment_id.mimetype
+                filename = asset.filename or (
+                    asset.attachment_id.name if asset.attachment_id else None
+                )
+                row["filename"] = filename or ("%s.bin" % (asset.kind or "file"))
+                row["mimetype"] = asset._mimetype()
                 row["content_base64"] = content
-            else:
-                continue
             assets.append(row)
         return assets
 
@@ -121,19 +138,21 @@ class WacrmProductLibrary(models.Model):
         if self.env.context.get("wacrm_skip_push"):
             return
         client = self.env["wacrm.client"]
-        payload = {
-            "odoo_id": str(self.id),
-            "name": self.name,
-            "sku": self.sku or None,
-            "description": self.description or None,
-            "website_url": self.website_url or None,
-            "youtube_url": self.youtube_url or None,
-            "inventory_product_ref": str(self.product_tmpl_id.id)
-            if self.product_tmpl_id
-            else None,
-            "active": bool(self.active),
-            "assets": self._asset_payload(),
-        }
+        payload = _json_safe(
+            {
+                "odoo_id": str(self.id),
+                "name": self.name,
+                "sku": self.sku or None,
+                "description": self.description or None,
+                "website_url": self.website_url or None,
+                "youtube_url": self.youtube_url or None,
+                "inventory_product_ref": str(self.product_tmpl_id.id)
+                if self.product_tmpl_id
+                else None,
+                "active": bool(self.active),
+                "assets": self._asset_payload(),
+            }
+        )
         try:
             data = client._request(
                 "/api/v1/products",
@@ -190,12 +209,6 @@ class WacrmProductLibrary(models.Model):
         self._delete_on_wacrm()
         return super().unlink()
 
-    def _push_after_asset_change(self):
-        for rec in self:
-            if not rec.id:
-                continue
-            rec._push_to_wacrm(raise_error=False)
-
 
 class WacrmProductAsset(models.Model):
     _name = "wacrm.product.asset"
@@ -221,26 +234,58 @@ class WacrmProductAsset(models.Model):
         default="pdf",
     )
     name = fields.Char(required=True)
-    attachment_id = fields.Many2one("ir.attachment", string="File", ondelete="set null")
+    file = fields.Binary(string="File", attachment=True)
+    filename = fields.Char(string="Filename")
+    attachment_id = fields.Many2one(
+        "ir.attachment",
+        string="Legacy file",
+        ondelete="set null",
+        help="Kept so older library rows still push after the Binary upload.",
+    )
     url = fields.Char(string="URL")
     wacrm_id = fields.Char(readonly=True, copy=False)
 
+    def _has_file(self):
+        self.ensure_one()
+        return bool(self.file or self.attachment_id)
+
+    def _file_b64(self):
+        self.ensure_one()
+        content = _as_b64_str(self.file)
+        if content:
+            return content
+        if self.attachment_id:
+            return _as_b64_str(self.attachment_id.datas)
+        return None
+
+    def _mimetype(self):
+        self.ensure_one()
+        if self.attachment_id and self.attachment_id.mimetype:
+            return self.attachment_id.mimetype
+        guessed, _ = mimetypes.guess_type(self.filename or "")
+        if guessed:
+            return guessed
+        if self.kind == "pdf":
+            return "application/pdf"
+        if self.kind == "image":
+            return "image/jpeg"
+        if self.kind == "video":
+            return "video/mp4"
+        return "application/octet-stream"
+
+    @api.onchange("filename", "kind")
+    def _onchange_filename(self):
+        if self.filename and (
+            not self.name or self.name in ("pdf", "image", "video", "File")
+        ):
+            self.name = self.filename
+
     @api.model_create_multi
     def create(self, vals_list):
-        records = super().create(vals_list)
-        if not self.env.context.get("wacrm_skip_push"):
-            records.mapped("library_id").filtered(
-                lambda r: r.id
-            )._push_after_asset_change()
-        return records
+        for vals in vals_list:
+            if not vals.get("name"):
+                vals["name"] = vals.get("filename") or vals.get("kind") or "File"
+        return super().create(vals_list)
 
     def write(self, vals):
-        res = super().write(vals)
-        self.mapped("library_id")._push_after_asset_change()
-        return res
-
-    def unlink(self):
-        libraries = self.mapped("library_id")
-        res = super().unlink()
-        libraries._push_after_asset_change()
-        return res
+        return super().write(vals)

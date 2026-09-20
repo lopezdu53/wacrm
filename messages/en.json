@@ -252,6 +252,13 @@
       "productChooseAssets": "What to send",
       "productSendAll": "Send all",
       "productSendSelected": "Send selected",
+      "productKind": {
+        "pdf": "PDF datasheet",
+        "image": "Photo",
+        "video": "Video",
+        "youtube": "YouTube",
+        "website": "Website"
+      },
       "saveAsQuickReply": "Save as quick reply",
       "send": "Send",
       "quickReplyNamePrompt": "Name this quick reply:",

@@ -52,8 +52,12 @@
                                     <field name="sequence" widget="handle"/>
                                     <field name="kind"/>
                                     <field name="name"/>
-                                    <field name="attachment_id"/>
-                                    <field name="url"/>
+                                    <field name="file" filename="filename"
+                                           invisible="kind in ('youtube', 'website')"/>
+                                    <field name="filename" column_invisible="1"/>
+                                    <field name="url"
+                                           invisible="kind in ('pdf', 'image', 'video')"/>
+                                    <field name="attachment_id" column_invisible="1"/>
                                 </list>
                             </field>
                         </page>
@@ -80,4 +84,11 @@
               parent="menu_wacrm_root"
               action="action_wacrm_product_library"
               sequence="5"/>
+
+    <!-- Home-menu tile so agents open the library without digging into wacrm. -->
+    <menuitem id="menu_wacrm_product_library_root"
+              name="Product library"
+              web_icon="wacrm_sync,static/description/icon_library.png"
+              action="action_wacrm_product_library"
+              sequence="97"/>
 </odoo>

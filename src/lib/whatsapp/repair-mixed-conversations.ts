@@ -86,12 +86,16 @@ export function enrichPeerWithLinks(
   peer: EvolutionPeer,
   links: Map<string, string>,
 ): EvolutionPeer {
-  if (peer.phone) return peer;
+  if (peer.phone) {
+    return peer.contactKey === peer.phone
+      ? peer
+      : { ...peer, contactKey: peer.phone };
+  }
   const fromLid = peer.lid ? links.get(`lid:${peer.lid}`) : undefined;
   const fromUser = peer.username ? links.get(`user:${peer.username}`) : undefined;
   const phone = fromLid || fromUser || null;
   if (!phone) return peer;
-  return { ...peer, phone };
+  return { ...peer, phone, contactKey: phone };
 }
 
 /**
@@ -167,15 +171,20 @@ export function assignMessagesToPeers(
           username: a.peer.username || b.peer.username,
         })
       ) {
+        const mergedPhone = a.peer.phone || b.peer.phone;
+        const mergedUser = a.peer.username || b.peer.username;
+        const mergedLid = a.peer.lid || b.peer.lid;
         const merged: EvolutionPeer = {
-          contactKey: a.peer.username || b.peer.username
-            ? `user:${a.peer.username || b.peer.username}`
-            : a.peer.lid || b.peer.lid
-              ? `lid:${a.peer.lid || b.peer.lid}`
-              : a.peer.phone || b.peer.phone || a.peer.contactKey,
-          phone: a.peer.phone || b.peer.phone,
-          lid: a.peer.lid || b.peer.lid,
-          username: a.peer.username || b.peer.username,
+          contactKey: mergedPhone
+            ? mergedPhone
+            : mergedUser
+              ? `user:${mergedUser}`
+              : mergedLid
+                ? `lid:${mergedLid}`
+                : a.peer.contactKey,
+          phone: mergedPhone,
+          lid: mergedLid,
+          username: mergedUser,
         };
         out.set(messageId, {
           messageId,
