@@ -53,6 +53,8 @@ describe("listProductSendables", () => {
       "a1",
       "a2",
     ]);
+    expect(items[0]).toMatchObject({ label: "YouTube", detail: product.youtube_url });
+    expect(items[2]).toMatchObject({ label: "Ficha técnica", detail: "ficha.pdf" });
   });
 });
 

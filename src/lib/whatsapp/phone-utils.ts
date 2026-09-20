@@ -112,7 +112,10 @@ export function formatWhatsAppAddress(phone: string | null | undefined): string 
   if (!phone) return ''
   const key = canonicalContactKey(phone)
   if (key.startsWith('user:')) return `@${key.slice(5)}`
-  if (key.startsWith('lid:')) return phone.trim()
+  if (key.startsWith('lid:')) {
+    const digits = key.slice(4)
+    return digits ? `ID ${digits}` : phone.trim()
+  }
   return phone.trim()
 }
 

@@ -252,6 +252,13 @@
       "productChooseAssets": "Qué enviar",
       "productSendAll": "Enviar todo",
       "productSendSelected": "Enviar selección",
+      "productKind": {
+        "pdf": "Ficha PDF",
+        "image": "Foto",
+        "video": "Video",
+        "youtube": "YouTube",
+        "website": "Sitio web"
+      },
       "saveAsQuickReply": "Guardar como respuesta rápida",
       "send": "Enviar",
       "quickReplyNamePrompt": "Nombra esta respuesta rápida:",
