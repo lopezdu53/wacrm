@@ -15,21 +15,33 @@ export interface PeerMergeOptions {
 }
 
 /**
- * True when this contact's stored `phone` is one of the identity keys
- * on the current payload. A `whatsapp_lid` column hit on someone else's
- * E.164 row must not count — that is how every @username chat collapsed
- * into one inbox thread.
+ * True when this contact is this WhatsApp person on the current payload.
+ *
+ * Match the stored `phone` key, or an exact `whatsapp_lid` /
+ * `whatsapp_username` stamp. After a LID+phone merge the survivor is
+ * E.164 with the LID stamped; a later LID-only inbound must still land
+ * on that row. A leftover stamp on the wrong person is a data issue
+ * (unique `whatsapp_lid`) — rejecting the stamp created a second chat.
  */
 export function isContactOnPayload(
   contact: ExistingContact,
   payloadKeys: Iterable<string>,
 ): boolean {
   const key = canonicalContactKey(contact.phone);
-  if (!key) return false;
   const aliases = new Set(
     [...payloadKeys].map((value) => canonicalContactKey(value)).filter(Boolean),
   );
-  return aliases.has(key);
+  if (key && aliases.has(key)) return true;
+
+  const lid = String(contact.whatsapp_lid ?? '').replace(/\D/g, '');
+  if (lid && aliases.has(`lid:${lid}`)) return true;
+
+  const username = canonicalizeWhatsAppUsername(
+    String(contact.whatsapp_username ?? ''),
+  );
+  if (username && aliases.has(`user:${username}`)) return true;
+
+  return false;
 }
 
 function identityKind(key: string): 'user' | 'lid' | 'phone' | '' {
