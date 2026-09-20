@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     "name": "wacrm Sync",
-    "version": "19.0.1.14.2",
+    "version": "19.0.1.14.3",
     "summary": "Sync contacts and opportunities from wacrm; push a product library",
     "description": """
 wacrm Sync

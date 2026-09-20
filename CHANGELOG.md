@@ -15,8 +15,9 @@ Fixes the Odoo product-library save crash after uploading a PDF, simplifies
 file upload, adds a home-menu tile, restyles the chat product picker, and
 stores WhatsApp chats on the phone number when Evolution also lists a LID.
 
-Upgrade `wacrm_sync` to **19.0.1.14.2** on app8 (Apps → Upgrade). Redeploy
-wacrm. No new migration.
+Upgrade `wacrm_sync` to **19.0.1.14.3** on app8 (Apps → Upgrade). The
+home-menu tile reuses `icon.png` so Odoo does not fail the upgrade when
+it cannot read a newly copied PNG. Redeploy wacrm. No new migration.
 
 ### Fixed
 
