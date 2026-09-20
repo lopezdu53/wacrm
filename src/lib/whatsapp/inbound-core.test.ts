@@ -366,6 +366,35 @@ describe('recordInboundMessage', () => {
     );
     expect(h.inserts.some((row) => row.table === 'messages')).toBe(true);
   });
+
+  it('does not open a second chat when a LID-only inbound matches a stamped phone', async () => {
+    h.findExistingContact.mockImplementation(
+      async (_db: unknown, _acct: string, phone: string) => {
+        if (phone === 'lid:244327888465953') {
+          return {
+            id: 'contact-balon',
+            name: '573008579176',
+            phone: '573008579176',
+            whatsapp_lid: '244327888465953',
+          };
+        }
+        return null;
+      },
+    );
+    await recordInboundMessage({
+      ...BASE,
+      senderPhone: 'lid:244327888465953',
+      identityAliases: ['lid:244327888465953'],
+      whatsappLid: '244327888465953',
+      contactName: 'Cliente',
+    });
+    expect(h.inserts.some((row) => row.table === 'contacts')).toBe(false);
+    expect(h.inserts.some((row) => row.table === 'messages')).toBe(true);
+    const contactUpdates = h.updates.filter((row) => row.table === 'contacts');
+    expect(contactUpdates.some((row) => row.payload.phone === 'lid:244327888465953')).toBe(
+      false,
+    );
+  });
 });
 
 describe('planLegacyConversationReuse', () => {

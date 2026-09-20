@@ -40,10 +40,19 @@ describe('pickSurvivorContact', () => {
 });
 
 describe('isContactOnPayload', () => {
-  it('rejects an E.164 row that only matched via a leftover whatsapp_lid stamp', () => {
+  it('keeps a merged E.164 row when a later inbound is LID-only', () => {
     expect(
       isContactOnPayload(
-        { id: 'mega', phone: '573023582969', whatsapp_lid: '66244327888465593' },
+        { id: 'balon', phone: '573008579176', whatsapp_lid: '244327888465953' },
+        ['lid:244327888465953'],
+      ),
+    ).toBe(true);
+  });
+
+  it('does not treat a different LID as the stamped phone row', () => {
+    expect(
+      isContactOnPayload(
+        { id: 'mega', phone: '573023582969', whatsapp_lid: '6611235915522259' },
         ['lid:66244327888465593'],
       ),
     ).toBe(false);
