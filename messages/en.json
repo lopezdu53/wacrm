@@ -18,6 +18,7 @@
     "title": "CRM Template for WhatsApp",
     "dashboard": "Dashboard",
     "inbox": "Inbox",
+    "opportunities": "Opportunities",
     "internalChat": "Internal chat",
     "notifications": "Notifications",
     "contacts": "Contacts",
@@ -29,6 +30,7 @@
     "settings": "Settings",
     "beta": "Beta",
     "unreadConversations": "{count} unread {count, plural, =1 {conversation} other {conversations}}",
+    "unreadOpportunities": "{count} unread {count, plural, =1 {opportunity} other {opportunities}}",
     "unreadNotifications": "{count} unread {count, plural, =1 {notification} other {notifications}}",
     "unreadInternal": "{count} unread internal {count, plural, =1 {chat} other {chats}}",
     "roleOwner": "Owner",
@@ -43,6 +45,7 @@
     "menuSignOut": "Sign out",
     "mobileTabs": "Main navigation",
     "tabChats": "Chats",
+    "tabOpp": "Opp",
     "tabInternal": "Interno",
     "tabNoti": "Noti",
     "tabProfile": "Profile"
@@ -74,6 +77,7 @@
   "Header": {
     "dashboard": "Dashboard",
     "inbox": "Inbox",
+    "opportunities": "Opportunities",
     "internalChat": "Internal chat",
     "notifications": "Notifications",
     "contacts": "Contacts",
@@ -177,6 +181,7 @@
       "allCompanies": "All companies",
       "clearAll": "Clear all",
       "noConversations": "No conversations found",
+      "noOpportunities": "No opportunities yet. Send a chat here from the inbox.",
       "noMessagesYet": "No messages yet",
       "unknown": "Unknown",
       "yesterday": "Yesterday"
@@ -209,6 +214,11 @@
       "sendTemplateHint": "Send a template to start the conversation",
       "selectConversation": "Select a conversation",
       "selectConversationHint": "Choose a conversation from the left to start messaging",
+      "sendToOpportunities": "Send to Opportunities",
+      "removeFromOpportunities": "Remove from Opportunities",
+      "sentToOpportunities": "Chat sent to Opportunities",
+      "removedFromOpportunities": "Chat returned to the inbox",
+      "opportunityFailed": "Could not move the chat",
       "internalNote": "Internal note",
       "today": "Today",
       "yesterday": "Yesterday"

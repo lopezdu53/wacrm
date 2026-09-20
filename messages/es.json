@@ -18,6 +18,7 @@
     "title": "Plantilla CRM para WhatsApp",
     "dashboard": "Panel",
     "inbox": "Bandeja de entrada",
+    "opportunities": "Oportunidades",
     "internalChat": "Chat interno",
     "notifications": "Notificaciones",
     "contacts": "Contactos",
@@ -29,6 +30,7 @@
     "settings": "Configuración",
     "beta": "Beta",
     "unreadConversations": "{count} {count, plural, =1 {conversación sin leer} other {conversaciones sin leer}}",
+    "unreadOpportunities": "{count} {count, plural, =1 {oportunidad sin leer} other {oportunidades sin leer}}",
     "unreadNotifications": "{count} {count, plural, =1 {notificación sin leer} other {notificaciones sin leer}}",
     "unreadInternal": "{count} {count, plural, =1 {chat interno sin leer} other {chats internos sin leer}}",
     "roleOwner": "Propietario",
@@ -43,6 +45,7 @@
     "menuSignOut": "Cerrar sesión",
     "mobileTabs": "Navegación principal",
     "tabChats": "Chats",
+    "tabOpp": "Opp",
     "tabInternal": "Interno",
     "tabNoti": "Noti",
     "tabProfile": "Perfil"
@@ -74,6 +77,7 @@
   "Header": {
     "dashboard": "Panel",
     "inbox": "Bandeja de entrada",
+    "opportunities": "Oportunidades",
     "internalChat": "Chat interno",
     "notifications": "Notificaciones",
     "contacts": "Contactos",
@@ -177,6 +181,7 @@
       "allCompanies": "Todas las empresas",
       "clearAll": "Limpiar todo",
       "noConversations": "No se encontraron conversaciones",
+      "noOpportunities": "Aún no hay oportunidades. Envíalas desde la bandeja de entrada.",
       "noMessagesYet": "Aún no hay mensajes",
       "unknown": "Desconocido",
       "yesterday": "Ayer"
@@ -209,6 +214,11 @@
       "sendTemplateHint": "Envía una plantilla para iniciar la conversación",
       "selectConversation": "Selecciona una conversación",
       "selectConversationHint": "Elige una conversación de la izquierda para empezar a chatear",
+      "sendToOpportunities": "Enviar a Oportunidades",
+      "removeFromOpportunities": "Quitar de Oportunidades",
+      "sentToOpportunities": "Chat enviado a Oportunidades",
+      "removedFromOpportunities": "Chat devuelto a la bandeja de entrada",
+      "opportunityFailed": "No se pudo mover el chat",
       "internalNote": "Nota interna",
       "today": "Hoy",
       "yesterday": "Ayer"

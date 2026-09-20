@@ -9,6 +9,22 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.23] — 2026-09-20
+
+A third WhatsApp tray sits between Inbox and Internal Chat for chats
+that need more attention. Agents send a thread from the inbox; it
+stays the same conversation, just in this lane.
+
+**Migration required:** apply `supabase/migrations/054_opportunity_inbox.sql`
+on your Supabase project (`is_opportunity` on `conversations`), then
+redeploy and hard-refresh.
+
+### Added
+
+- **Oportunidades / Opp.** Web sidebar label *Oportunidades*; phone tab
+  *Opp*. Thread action *Enviar a Oportunidades* / *Quitar*. Unread
+  badges are split so Chats and Opp do not share one count.
+
 ## [0.8.22] — 2026-09-20
 
 The ⚽ detergent-filler chats (phone `573008579176` vs LID

@@ -7,6 +7,7 @@ import {
   MessageSquare,
   MessagesSquare,
   Radio,
+  Target,
   Settings,
   Users,
   Workflow,
@@ -23,6 +24,7 @@ export interface AppNavItem {
 export const APP_NAV_ITEMS: AppNavItem[] = [
   { href: "/dashboard", labelKey: "dashboard", icon: LayoutDashboard },
   { href: "/inbox", labelKey: "inbox", icon: MessageSquare },
+  { href: "/opportunities", labelKey: "opportunities", icon: Target },
   { href: "/internal-chat", labelKey: "internalChat", icon: MessagesSquare },
   { href: "/notifications", labelKey: "notifications", icon: Bell },
   { href: "/contacts", labelKey: "contacts", icon: Users },
@@ -42,12 +44,14 @@ export const SETTINGS_NAV_ITEM: AppNavItem = {
 /** Main-nav entries an agent/viewer may see. */
 export const RESTRICTED_NAV_HREFS = new Set([
   "/inbox",
+  "/opportunities",
   "/internal-chat",
   "/notifications",
 ]);
 
 export const MOBILE_TAB_HREFS = [
   "/inbox",
+  "/opportunities",
   "/internal-chat",
   "/notifications",
 ] as const;

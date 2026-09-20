@@ -59,7 +59,15 @@ export async function notifyNewInboundMessage(
       ),
     );
 
-    const url = `/inbox?c=${encodeURIComponent(args.conversationId)}`;
+    const { data: convLane } = await db
+      .from("conversations")
+      .select("is_opportunity")
+      .eq("id", args.conversationId)
+      .maybeSingle();
+    const url =
+      convLane?.is_opportunity === true
+        ? `/opportunities?c=${encodeURIComponent(args.conversationId)}`
+        : `/inbox?c=${encodeURIComponent(args.conversationId)}`;
     await sendWebPushToUsers(recipientIds, {
       title,
       body,

@@ -4,7 +4,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useTranslations } from "next-intl";
-import { Bell, LogOut, MessageSquare, MessagesSquare, User } from "lucide-react";
+import { Bell, LogOut, MessageSquare, MessagesSquare, Target, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/hooks/use-auth";
 import {
@@ -24,6 +24,7 @@ import { UnreadBadge } from "@/components/layout/unread-badge";
 interface MobileTabBarProps {
   hidden?: boolean;
   chatsUnread?: number;
+  oppUnread?: number;
   internalUnread?: number;
   unreadNotifications?: number;
 }
@@ -32,9 +33,9 @@ const TAB_BAR_HEIGHT =
   "h-[calc(4rem+env(safe-area-inset-bottom,0px))]";
 
 /**
- * WhatsApp Business-style bottom tabs on phones. The four destinations
- * the user asked for: Chats, Interno, Noti, Perfil. Everything else
- * (settings, pipelines, sign out) lives under Perfil.
+ * WhatsApp Business-style bottom tabs on phones: Chats, Opp, Interno,
+ * Noti, Perfil. Everything else (settings, pipelines, sign out) lives
+ * under Perfil.
  *
  * The visible strip is portaled to document.body. A fixed bar inside
  * the dashboard's h-dvh overflow-hidden shell is clipped on phone
@@ -44,6 +45,7 @@ const TAB_BAR_HEIGHT =
 export function MobileTabBar({
   hidden = false,
   chatsUnread = 0,
+  oppUnread = 0,
   internalUnread = 0,
   unreadNotifications = 0,
 }: MobileTabBarProps) {
@@ -62,6 +64,8 @@ export function MobileTabBar({
   ].filter((item) => (restrictedNav ? item.href === "/settings" : true));
 
   const inboxActive = pathname === "/inbox" || pathname.startsWith("/inbox/");
+  const oppActive =
+    pathname === "/opportunities" || pathname.startsWith("/opportunities/");
   const internalActive = pathname.startsWith("/internal-chat");
   const notiActive = pathname.startsWith("/notifications");
   const profileActive = profileOpen || pathname.startsWith("/settings");
@@ -84,13 +88,20 @@ export function MobileTabBar({
               "pb-[env(safe-area-inset-bottom,0px)]",
             )}
           >
-            <ul className="grid h-16 grid-cols-4 overflow-visible">
+            <ul className="grid h-16 grid-cols-5 overflow-visible">
               <TabLink
                 href="/inbox"
                 label={t("tabChats")}
                 active={inboxActive}
                 icon={MessageSquare}
                 badge={totalUnread}
+              />
+              <TabLink
+                href="/opportunities"
+                label={t("tabOpp")}
+                active={oppActive}
+                icon={Target}
+                badge={oppUnread}
               />
               <TabLink
                 href="/internal-chat"
@@ -202,6 +213,7 @@ export function MobileTabBar({
 export function MobileTabBarFallback({
   hidden = false,
   chatsUnread = 0,
+  oppUnread = 0,
   internalUnread = 0,
   unreadNotifications = 0,
 }: MobileTabBarProps) {
@@ -219,13 +231,20 @@ export function MobileTabBarFallback({
             "pb-[env(safe-area-inset-bottom,0px)]",
           )}
         >
-          <ul className="grid h-16 grid-cols-4 overflow-visible">
+          <ul className="grid h-16 grid-cols-5 overflow-visible">
             <TabLink
               href="/inbox"
               label="Chats"
               active={false}
               icon={MessageSquare}
               badge={chatsUnread}
+            />
+            <TabLink
+              href="/opportunities"
+              label="Opp"
+              active={false}
+              icon={Target}
+              badge={oppUnread}
             />
             <TabLink
               href="/internal-chat"

@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/use-auth";
+import { canSendMessages } from "@/lib/auth/roles";
+import { conversationIsOpportunity } from "@/lib/inbox/conversations";
 import { usePresence } from "@/hooks/use-presence";
 import { PresenceDot } from "@/components/presence/presence-dot";
 import { presenceLabel } from "@/lib/presence";
@@ -32,6 +34,7 @@ import {
   StickyNote,
   Users,
   MoreVertical,
+  Target,
   User,
 } from "lucide-react";
 import { format, isToday, isYesterday, differenceInHours } from "date-fns";
@@ -88,6 +91,10 @@ interface MessageThreadProps {
   onAssignChange: (
     conversationId: string,
     assignedAgentId: string | null,
+  ) => void;
+  onOpportunityChange?: (
+    conversationId: string,
+    isOpportunity: boolean,
   ) => void;
   /**
    * On mobile, the thread is shown full-screen with the conversation list
@@ -180,6 +187,7 @@ export function MessageThread({
   onUpdateMessage,
   onStatusChange,
   onAssignChange,
+  onOpportunityChange,
   onBack,
   resyncToken = 0,
   onRefresh,
@@ -191,7 +199,8 @@ export function MessageThread({
   const tTimer = useTranslations("Inbox.sessionTimer");
   const tQuote = useTranslations("Inbox.replyQuote");
 
-  const { user } = useAuth();
+  const { user, accountRole } = useAuth();
+  const canMoveOpportunity = canSendMessages(accountRole ?? "viewer");
   const { getPresence, getRow, now } = usePresence();
   const [loading, setLoading] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -764,6 +773,25 @@ export function MessageThread({
     [conversation, onStatusChange]
   );
 
+  const handleOpportunityToggle = useCallback(async () => {
+    if (!conversation || !canMoveOpportunity) return;
+    const next = !conversationIsOpportunity(conversation);
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("conversations")
+      .update({ is_opportunity: next })
+      .eq("id", conversation.id);
+    if (error) {
+      toast.error(t("opportunityFailed"));
+      return;
+    }
+    toast.success(
+      next ? t("sentToOpportunities") : t("removedFromOpportunities"),
+    );
+    onOpportunityChange?.(conversation.id, next);
+    setToolsOpen(false);
+  }, [canMoveOpportunity, conversation, onOpportunityChange, t]);
+
   const handleOpenTemplates = useCallback(() => {
     setTemplateModalOpen(true);
   }, []);
@@ -1191,6 +1219,31 @@ export function MessageThread({
             </DropdownMenuContent>
           </DropdownMenu>
 
+          {canMoveOpportunity && (
+            <button
+              type="button"
+              onClick={() => void handleOpportunityToggle()}
+              title={
+                conversationIsOpportunity(conversation)
+                  ? t("removeFromOpportunities")
+                  : t("sendToOpportunities")
+              }
+              className={cn(
+                "inline-flex h-7 items-center gap-1 rounded-md px-2 text-xs hover:bg-muted",
+                conversationIsOpportunity(conversation)
+                  ? "text-primary"
+                  : "text-muted-foreground hover:text-foreground",
+              )}
+            >
+              <Target className="h-3 w-3" />
+              <span className="hidden sm:inline">
+                {conversationIsOpportunity(conversation)
+                  ? t("removeFromOpportunities")
+                  : t("sendToOpportunities")}
+              </span>
+            </button>
+          )}
+
           <DropdownMenu>
             <DropdownMenuTrigger
               className={cn(
@@ -1552,6 +1605,18 @@ export function MessageThread({
             </section>
 
             <div className="flex flex-col gap-1">
+              {canMoveOpportunity && (
+                <button
+                  type="button"
+                  onClick={() => void handleOpportunityToggle()}
+                  className="flex items-center gap-2 rounded-lg px-2 py-2.5 text-sm text-foreground hover:bg-muted"
+                >
+                  <Target className="h-4 w-4" />
+                  {conversationIsOpportunity(conversation)
+                    ? t("removeFromOpportunities")
+                    : t("sendToOpportunities")}
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
