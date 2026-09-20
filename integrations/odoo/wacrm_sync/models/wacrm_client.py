@@ -62,6 +62,53 @@ class WacrmClient(models.AbstractModel):
         }
 
     @api.model
+    def _request_multipart(self, path, data=None, files=None, timeout=None):
+        """POST multipart/form-data (raw files, not JSON base64)."""
+        base_url, api_key = self._get_credentials()
+        if not base_url or not api_key:
+            raise UserError(
+                "wacrm is not configured. Set the Base URL and API key under "
+                "Settings -> wacrm Sync."
+            )
+        url = "%s%s" % (base_url, path)
+        wait = timeout or 300
+        headers = {
+            "Authorization": "Bearer %s" % api_key,
+            "Accept": "application/json",
+        }
+        try:
+            resp = requests.post(
+                url,
+                headers=headers,
+                data=data or {},
+                files=files or {},
+                timeout=wait,
+            )
+        except requests.RequestException as exc:
+            raise UserError("Could not reach wacrm at %s: %s" % (url, exc))
+        if resp.status_code == 401:
+            raise UserError("wacrm rejected the API key (401). Check the token.")
+        if resp.status_code == 403:
+            raise UserError(
+                "The API key is missing a required scope (403) for %s." % path
+            )
+        if resp.status_code >= 400:
+            message = None
+            try:
+                body = resp.json()
+                message = (body.get("error") or {}).get("message")
+            except ValueError:
+                message = None
+            raise UserError(
+                "wacrm API error (%s) on %s: %s"
+                % (resp.status_code, path, message or resp.text[:200])
+            )
+        try:
+            return resp.json()
+        except ValueError:
+            raise UserError("wacrm returned a non-JSON response on %s." % path)
+
+    @api.model
     def _request(self, path, params=None, method="GET", json_body=None, timeout=None):
         """Call `path` (e.g. '/api/v1/contacts') and return the parsed JSON.
 

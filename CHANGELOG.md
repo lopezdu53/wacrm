@@ -9,6 +9,24 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.24] — 2026-09-20
+
+A 50 MB Odoo library video failed with `JSON body is required` because
+the whole MP4 was embedded as base64 (~68 MB JSON). Odoo now PUTs the
+product without that file, then POSTs the MP4 as multipart.
+
+**Migration required:** `055_product_media_64mb.sql` (product-media
+bucket 64 MB) plus Odoo module **19.0.1.14.4**. Redeploy, upgrade
+wacrm_sync, hard-refresh Odoo, then Push to wacrm again.
+
+WhatsApp in-chat video playback is still happiest at ≤16 MB; a 50 MB
+file can live in the library and send as a file.
+
+### Fixed
+
+- **Odoo 50 MB video push.** Multipart upload + 64 MB library cap.
+  The old 400 was a dropped JSON body, not a bad product.
+
 ## [0.8.23] — 2026-09-20
 
 A third WhatsApp tray sits between Inbox and Internal Chat for chats

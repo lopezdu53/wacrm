@@ -105,7 +105,16 @@ export async function DELETE(request: Request) {
 export async function PUT(request: Request) {
   try {
     const ctx = await requireApiKey(request, "products:write");
-    const body = await request.json().catch(() => null);
+    let body: unknown = null;
+    try {
+      body = await request.json();
+    } catch {
+      return fail(
+        "bad_request",
+        "JSON body is required. Files over 2 MB (a 50 MB video is ~68 MB as JSON) must be uploaded with POST /api/v1/products/assets as multipart, not as content_base64.",
+        400,
+      );
+    }
     const parsed = parseUpsertProduct(body);
     if (typeof parsed === "string") {
       return fail("bad_request", parsed, 400);

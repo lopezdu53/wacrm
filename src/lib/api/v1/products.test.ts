@@ -1,6 +1,11 @@
 import { describe, expect, it } from "vitest";
 
 import { parseUpsertProduct, serializeProduct } from "./products";
+import {
+  FILE_ASSET_KINDS,
+  PRODUCT_FILE_MAX_BYTES,
+  PRODUCT_INLINE_MAX_BYTES,
+} from "./product-upsert";
 
 describe("parseUpsertProduct", () => {
   it("requires odoo_id and name", () => {
@@ -31,6 +36,28 @@ describe("parseUpsertProduct", () => {
     });
     if (typeof parsed === "string") throw new Error(parsed);
     expect(parsed.assets?.[0]?.mime_type).toBe("application/pdf");
+  });
+
+  it("allows file assets without content_base64 (multipart follows)", () => {
+    const parsed = parseUpsertProduct({
+      odoo_id: "12",
+      name: "Video",
+      assets: [{ odoo_id: "9", kind: "video", name: "Institucional" }],
+    });
+    if (typeof parsed === "string") throw new Error(parsed);
+    expect(parsed.assets?.[0]).toMatchObject({
+      kind: "video",
+      content_base64: null,
+    });
+  });
+});
+
+describe("product file limits", () => {
+  it("keeps JSON inline small and allows a 51 MB library video", () => {
+    expect(PRODUCT_INLINE_MAX_BYTES).toBe(2 * 1024 * 1024);
+    expect(PRODUCT_FILE_MAX_BYTES).toBe(64 * 1024 * 1024);
+    expect(FILE_ASSET_KINDS.has("video")).toBe(true);
+    expect(51.22 * 1024 * 1024).toBeLessThan(PRODUCT_FILE_MAX_BYTES);
   });
 });
 
