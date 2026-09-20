@@ -4,6 +4,7 @@ import {
   isContactOnPayload,
   isProvenPeerPair,
   listComplementaryNameTwinPairs,
+  listStampedLidPairs,
   pickComplementaryNameTwin,
   pickSurvivorContact,
   preferE164ContactPhone,
@@ -170,6 +171,28 @@ describe('listComplementaryNameTwinPairs', () => {
         { id: 'x', phone: 'lid:999', name: 'Sebastian' },
       ]),
     ).toEqual([]);
+  });
+
+  it('joins the soccer-ball chats even when one name has a variation selector', () => {
+    const pairs = listComplementaryNameTwinPairs([
+      { id: 'p', phone: '573008579176', name: '⚽' },
+      { id: 'l', phone: 'lid:43048675373122', name: '⚽\uFE0F' },
+    ]);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].survivor.id).toBe('p');
+    expect(pairs[0].loser.id).toBe('l');
+  });
+});
+
+describe('listStampedLidPairs', () => {
+  it('joins a lid: row onto the E.164 that already has that whatsapp_lid', () => {
+    const pairs = listStampedLidPairs([
+      { id: 'p', phone: '573008579176', name: '573008579176', whatsapp_lid: '43048675373122' },
+      { id: 'l', phone: 'lid:43048675373122', name: '⚽' },
+    ]);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].survivor.id).toBe('p');
+    expect(pairs[0].loser.id).toBe('l');
   });
 });
 

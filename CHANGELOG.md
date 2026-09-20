@@ -9,6 +9,21 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.22] — 2026-09-20
+
+The ⚽ detergent-filler chats (phone `573008579176` vs LID
+`43048675373122`) stayed split because name-join required the exact
+same string and ignored a stamped LID on the phone row. Inbox repair
+now joins (1) `lid:X` + E.164 with `whatsapp_lid=X`, and (2) the same
+pushName after stripping emoji variation selectors (`⚽` / `⚽️`).
+
+No new migration. Redeploy, then hard-refresh the inbox once.
+
+### Fixed
+
+- **Split-after-merge (emoji / short LID).** Stamp-based join plus
+  normalized names so the next inbound cannot leave a second ⚽ thread.
+
 ## [0.8.21] — 2026-09-20
 
 A LID+phone merge no longer splits again on the next customer message.
