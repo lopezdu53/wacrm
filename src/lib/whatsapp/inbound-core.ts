@@ -108,8 +108,12 @@ export async function findOrCreateContact(
     }
   }
 
-  if (name.trim() && options.allowRename !== false) {
-    const needle = name.trim();
+  const twinNames = new Set<string>();
+  if (name.trim()) twinNames.add(name.trim());
+  for (const match of matches) {
+    if (match.name?.trim()) twinNames.add(match.name.trim());
+  }
+  for (const needle of twinNames) {
     const { data: named } = await supabaseAdmin()
       .from('contacts')
       .select('*')
