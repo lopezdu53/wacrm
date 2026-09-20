@@ -75,7 +75,8 @@
             <p class="o_view_nocontent_smiling_face">No products yet</p>
             <p>Create a product sheet with a PDF datasheet, photos, video,
                YouTube, and a website link. Push it to wacrm to send it
-               from the WhatsApp chat.</p>
+               from the WhatsApp chat. Videos up to 64 MB; WhatsApp
+               plays them in-chat more reliably at 16 MB or less.</p>
         </field>
     </record>
 

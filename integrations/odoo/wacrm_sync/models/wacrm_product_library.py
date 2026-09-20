@@ -1,4 +1,5 @@
 # -*- coding: utf-8 -*-
+import base64
 import logging
 import mimetypes
 
@@ -6,6 +7,11 @@ from odoo import api, fields, models
 from odoo.exceptions import UserError
 
 _logger = logging.getLogger(__name__)
+
+# Keep small files in the JSON PUT. A 50 MB MP4 as base64 is ~68 MB and
+# the wacrm JSON parser never sees a body ("JSON body is required").
+INLINE_JSON_MAX_BYTES = 2 * 1024 * 1024
+PRODUCT_FILE_MAX_BYTES = 64 * 1024 * 1024
 
 
 def _as_b64_str(value):
@@ -108,9 +114,11 @@ class WacrmProductLibrary(models.Model):
             rec._push_to_wacrm()
         return True
 
-    def _asset_payload(self):
+    def _split_assets(self):
+        """JSON-safe small assets vs files that must POST as multipart."""
         self.ensure_one()
-        assets = []
+        inline = []
+        deferred = []
         for asset in self.asset_ids:
             row = {
                 "odoo_id": str(asset.id),
@@ -120,24 +128,50 @@ class WacrmProductLibrary(models.Model):
             }
             if asset.kind in ("youtube", "website"):
                 row["url"] = asset.url or ""
-            else:
-                content = asset._file_b64()
-                if not content:
-                    continue
-                filename = asset.filename or (
-                    asset.attachment_id.name if asset.attachment_id else None
+                inline.append(row)
+                continue
+            raw = asset._file_bytes()
+            if not raw:
+                continue
+            if len(raw) > PRODUCT_FILE_MAX_BYTES:
+                raise UserError(
+                    "El archivo %s pesa %.1f MB. El máximo en la biblioteca "
+                    "es 64 MB. Comprime el video o súbelo a YouTube y usa "
+                    "el tipo YouTube."
+                    % (asset.name or asset.filename or "video", len(raw) / (1024 * 1024))
                 )
-                row["filename"] = filename or ("%s.bin" % (asset.kind or "file"))
-                row["mimetype"] = asset._mimetype()
-                row["content_base64"] = content
-            assets.append(row)
-        return assets
+            filename = asset.filename or (
+                asset.attachment_id.name if asset.attachment_id else None
+            )
+            filename = filename or ("%s.bin" % (asset.kind or "file"))
+            meta = {
+                "filename": filename,
+                "mimetype": asset._mimetype(),
+                "bytes": raw,
+            }
+            if len(raw) > INLINE_JSON_MAX_BYTES:
+                deferred.append({**row, **meta})
+            else:
+                row["filename"] = filename
+                row["mimetype"] = meta["mimetype"]
+                row["content_base64"] = base64.b64encode(raw).decode("ascii")
+                inline.append(row)
+        return inline, deferred
 
     def _push_to_wacrm(self, raise_error=True):
         self.ensure_one()
         if self.env.context.get("wacrm_skip_push"):
             return
         client = self.env["wacrm.client"]
+        try:
+            inline, deferred = self._split_assets()
+        except UserError as exc:
+            self.with_context(wacrm_skip_push=True).write(
+                {"last_push_error": str(exc)[:256]}
+            )
+            if raise_error:
+                raise
+            return
         payload = _json_safe(
             {
                 "odoo_id": str(self.id),
@@ -150,7 +184,7 @@ class WacrmProductLibrary(models.Model):
                 if self.product_tmpl_id
                 else None,
                 "active": bool(self.active),
-                "assets": self._asset_payload(),
+                "assets": inline,
             }
         )
         try:
@@ -160,6 +194,27 @@ class WacrmProductLibrary(models.Model):
                 json_body=payload,
                 timeout=120,
             )
+            for item in deferred:
+                client._request_multipart(
+                    "/api/v1/products/assets",
+                    data={
+                        "odoo_id": str(self.id),
+                        "asset_odoo_id": item["odoo_id"],
+                        "kind": item["kind"],
+                        "name": item["name"],
+                        "filename": item["filename"],
+                        "mimetype": item["mimetype"],
+                        "sort_order": item["sort_order"],
+                    },
+                    files={
+                        "file": (
+                            item["filename"],
+                            item["bytes"],
+                            item["mimetype"] or "application/octet-stream",
+                        )
+                    },
+                    timeout=300,
+                )
             wacrm_id = (data.get("data") or {}).get("id")
             vals = {"last_push_error": False}
             if wacrm_id:
@@ -257,6 +312,16 @@ class WacrmProductAsset(models.Model):
         if self.attachment_id:
             return _as_b64_str(self.attachment_id.datas)
         return None
+
+    def _file_bytes(self):
+        self.ensure_one()
+        encoded = self._file_b64()
+        if not encoded:
+            return None
+        try:
+            return base64.b64decode(encoded, validate=False)
+        except Exception:  # noqa: BLE001 — Odoo Binary can be messy
+            return None
 
     def _mimetype(self):
         self.ensure_one()
