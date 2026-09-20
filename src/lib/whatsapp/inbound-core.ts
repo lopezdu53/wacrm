@@ -212,33 +212,39 @@ export async function findOrCreateContact(
   if (error) {
     if (isUniqueViolation(error)) {
       const raced = await findExistingContact(supabaseAdmin(), accountId, key);
-      if (raced && isContactOnPayload(raced, lookupKeys)) {
+      if (raced) {
         return { contact: raced as ContactRow, wasCreated: false };
       }
-      // Unique on whatsapp_lid / username belonging to another row.
-      // Create this handle without copying the stolen stamp.
-      if (insertRow.whatsapp_lid || insertRow.whatsapp_username) {
-        delete insertRow.whatsapp_lid;
-        delete insertRow.whatsapp_username;
-        const retry = await supabaseAdmin()
+      if (options.lid) {
+        const { data: byLid } = await supabaseAdmin()
           .from('contacts')
-          .insert(insertRow)
-          .select()
-          .single();
-        if (!retry.error && retry.data) {
-          return { contact: retry.data as ContactRow, wasCreated: true };
+          .select('*')
+          .eq('account_id', accountId)
+          .eq('whatsapp_lid', options.lid)
+          .maybeSingle();
+        if (byLid) {
+          return { contact: byLid as ContactRow, wasCreated: false };
         }
-        if (retry.error && isUniqueViolation(retry.error)) {
-          const { data: byPhone } = await supabaseAdmin()
-            .from('contacts')
-            .select('*')
-            .eq('account_id', accountId)
-            .eq('phone', key)
-            .maybeSingle();
-          if (byPhone) {
-            return { contact: byPhone as ContactRow, wasCreated: false };
-          }
+      }
+      if (options.username) {
+        const { data: byUser } = await supabaseAdmin()
+          .from('contacts')
+          .select('*')
+          .eq('account_id', accountId)
+          .eq('whatsapp_username', options.username)
+          .maybeSingle();
+        if (byUser) {
+          return { contact: byUser as ContactRow, wasCreated: false };
         }
+      }
+      const { data: byPhone } = await supabaseAdmin()
+        .from('contacts')
+        .select('*')
+        .eq('account_id', accountId)
+        .eq('phone', key)
+        .maybeSingle();
+      if (byPhone) {
+        return { contact: byPhone as ContactRow, wasCreated: false };
       }
     }
     console.error('[inbound-core] error creating contact:', error);

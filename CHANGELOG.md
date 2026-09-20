@@ -9,6 +9,20 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.21] — 2026-09-20
+
+A LID+phone merge no longer splits again on the next customer message.
+WhatsApp often sends later inbound as LID-only; that used to miss the
+merged E.164 row and open a second chat.
+
+No new migration. Redeploy and hard-refresh the inbox.
+
+### Fixed
+
+- **Split-after-merge.** An E.164 contact with `whatsapp_lid` is the
+  home for later LID-only events. Unique-constraint races reuse that
+  row instead of inserting a stamp-less `lid:` duplicate.
+
 ## [0.8.20] — 2026-09-20
 
 Opening the inbox now joins a LID chat and a phone chat that share
