@@ -23,6 +23,7 @@ import { cn } from "@/lib/utils";
 const pageTitles: Record<string, string> = {
   "/dashboard": "dashboard",
   "/inbox": "inbox",
+  "/opportunities": "opportunities",
   "/internal-chat": "internalChat",
   "/notifications": "notifications",
   "/contacts": "contacts",

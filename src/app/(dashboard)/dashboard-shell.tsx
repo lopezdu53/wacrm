@@ -14,7 +14,7 @@ import { DashboardNavContext } from "@/components/layout/dashboard-nav-context";
 import { PresenceHeartbeat } from "@/components/presence/presence-heartbeat";
 import { PwaBootstrap } from "@/components/pwa/pwa-bootstrap";
 import { useInternalUnread } from "@/hooks/use-internal-unread";
-import { useTotalUnread } from "@/hooks/use-total-unread";
+import { useLaneUnread } from "@/hooks/use-lane-unread";
 import { useUnreadNotifications } from "@/hooks/use-unread-notifications";
 import { cn } from "@/lib/utils";
 
@@ -26,9 +26,12 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   const router = useRouter();
   const pathname = usePathname() ?? "";
-  const isInbox = pathname === "/inbox";
+  const isInbox = pathname === "/inbox" || pathname.startsWith("/inbox/");
+  const isOpportunities =
+    pathname === "/opportunities" || pathname.startsWith("/opportunities/");
+  const isChatLane = isInbox || isOpportunities;
   const isInternalChat = pathname.startsWith("/internal-chat");
-  const hideMobileHeader = isInbox || isInternalChat;
+  const hideMobileHeader = isChatLane || isInternalChat;
 
   // Full-screen chats hide the WhatsApp-style bottom tabs.
   const [mobileChatOpen, setMobileChatOpen] = useState(false);
@@ -39,10 +42,12 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
     string | null
   >(null);
   const [inboxUnread, setInboxUnread] = useState(0);
-  const hookedInbox = useTotalUnread(user?.id);
+  const [oppUnread, setOppUnread] = useState(0);
+  const hookedLanes = useLaneUnread(user?.id);
   const internalUnread = useInternalUnread(user?.id);
   const notificationUnread = useUnreadNotifications(user?.id);
-  const chatsUnread = Math.max(hookedInbox, inboxUnread);
+  const chatsUnread = Math.max(hookedLanes.inbox, inboxUnread);
+  const opportunitiesUnread = Math.max(hookedLanes.opportunity, oppUnread);
 
   useEffect(() => {
     if (!loading && !user) {
@@ -73,6 +78,8 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
         setViewingInternalChannelId,
         inboxUnread,
         setInboxUnread,
+        oppUnread,
+        setOppUnread,
         chatsUnread,
         internalUnread,
         notificationUnread,
@@ -87,7 +94,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
           <main
             className={cn(
               "min-h-0 flex-1",
-              isInbox
+              isChatLane
                 ? "overflow-hidden p-0"
                 : isInternalChat
                   ? "overflow-hidden max-lg:p-0 p-4 sm:p-6"
@@ -101,6 +108,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
               <MobileTabBarFallback
                 hidden={mobileChatOpen}
                 chatsUnread={chatsUnread}
+                oppUnread={opportunitiesUnread}
                 internalUnread={internalUnread}
                 unreadNotifications={notificationUnread}
               />
@@ -109,6 +117,7 @@ function DashboardShellInner({ children }: { children: React.ReactNode }) {
             <MobileTabBar
               hidden={mobileChatOpen}
               chatsUnread={chatsUnread}
+              oppUnread={opportunitiesUnread}
               internalUnread={internalUnread}
               unreadNotifications={notificationUnread}
             />

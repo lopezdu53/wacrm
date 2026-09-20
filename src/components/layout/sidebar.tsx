@@ -79,8 +79,12 @@ export function Sidebar() {
   const t = useTranslations("Sidebar");
   const pathname = usePathname() ?? "";
   const { profile, profileLoading, account, accountRole, signOut } = useAuth();
-  const { chatsUnread: totalUnread, notificationUnread: unreadNotifications, internalUnread } =
-    useDashboardNav();
+  const {
+    chatsUnread: totalUnread,
+    oppUnread,
+    notificationUnread: unreadNotifications,
+    internalUnread,
+  } = useDashboardNav();
 
   // Agents and viewers see a trimmed main menu. Owners/admins (and while
   // the role is still resolving) see the full set.
@@ -128,6 +132,8 @@ export function Sidebar() {
 
               const showUnreadDot =
                 item.href === "/inbox" && totalUnread > 0 && !isActive;
+              const showOppBadge =
+                item.href === "/opportunities" && oppUnread > 0;
 
               // Unlike the inbox dot, the notifications count stays visible
               // even while the page is active — it reflects unread state
@@ -168,6 +174,14 @@ export function Sidebar() {
                       >
                         <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
                         <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
+                      </span>
+                    )}
+                    {showOppBadge && (
+                      <span
+                        aria-label={t("unreadOpportunities", { count: oppUnread })}
+                        className="flex h-5 min-w-5 items-center justify-center rounded-full bg-primary px-1 text-[10px] font-semibold text-primary-foreground"
+                      >
+                        {oppUnread > 9 ? "9+" : oppUnread}
                       </span>
                     )}
                     {showNotificationBadge && (

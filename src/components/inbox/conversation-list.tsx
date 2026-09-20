@@ -6,7 +6,9 @@ import { useAuth } from "@/hooks/use-auth";
 import {
   CONVERSATION_SELECT,
   matchesContactFilters,
+  matchesInboxLane,
   normalizeConversations,
+  type InboxLane,
 } from "@/lib/inbox/conversations";
 import { cn } from "@/lib/utils";
 import { formatWhatsAppAddress } from "@/lib/whatsapp/phone-utils";
@@ -37,6 +39,8 @@ interface ConversationListProps {
    * or the tab was throttled. Optional so existing callers keep working.
    */
   resyncToken?: number;
+  /** Regular inbox vs Oportunidades / Opp. */
+  lane?: InboxLane;
 }
 
 const STATUS_COLORS: Record<ConversationStatus, string> = {
@@ -55,6 +59,7 @@ export function ConversationList({
   conversations,
   onConversationsLoaded,
   resyncToken = 0,
+  lane = "inbox",
 }: ConversationListProps) {
   const t = useTranslations("Inbox.conversationList");
   const tNav = useTranslations("Sidebar");
@@ -134,7 +139,11 @@ export function ConversationList({
         return;
       }
 
-      onConversationsLoadedRef.current(normalizeConversations(data ?? []));
+      onConversationsLoadedRef.current(
+        normalizeConversations(data ?? []).filter((c) =>
+          matchesInboxLane(c, lane),
+        ),
+      );
       setLoading(false);
     })();
 
@@ -144,7 +153,7 @@ export function ConversationList({
     // `resyncToken` is included so the parent can force a refetch when
     // the realtime channel reconnects or the tab regains focus — catches
     // up on any events sent while the WS was disconnected or throttled.
-  }, [resyncToken]);
+  }, [resyncToken, lane]);
 
   // Tag definitions for the filter picker — loaded once so labels/colours
   // stay stable regardless of which conversations happen to be loaded.
@@ -298,7 +307,7 @@ export function ConversationList({
           because the dashboard header is already visible there. */}
       <div className="flex items-center px-4 pb-1 pt-[max(0.5rem,env(safe-area-inset-top))] lg:hidden">
         <h1 className="truncate text-xl font-semibold text-foreground">
-          {tNav("tabChats")}
+          {lane === "opportunity" ? tNav("tabOpp") : tNav("tabChats")}
         </h1>
       </div>
 
@@ -560,7 +569,11 @@ export function ConversationList({
           </div>
         ) : filtered.length === 0 ? (
           <div className="px-4 py-12 text-center">
-            <p className="text-sm text-muted-foreground">{t("noConversations")}</p>
+            <p className="text-sm text-muted-foreground">
+              {lane === "opportunity"
+                ? t("noOpportunities")
+                : t("noConversations")}
+            </p>
           </div>
         ) : (
           <div className="flex flex-col">

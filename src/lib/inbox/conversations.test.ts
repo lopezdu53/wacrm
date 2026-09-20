@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
+  inboxPathForConversation,
   matchesContactFilters,
+  matchesInboxLane,
   normalizeConversation,
 } from "./conversations";
 import type { Conversation } from "@/types";
@@ -36,6 +38,21 @@ const tag = (id: string, name = id) => ({
   name,
   color: "#fff",
   created_at: "",
+});
+
+describe("matchesInboxLane", () => {
+  it("puts unmarked chats in the regular inbox", () => {
+    const conv = makeConversation(null);
+    expect(matchesInboxLane(conv, "inbox")).toBe(true);
+    expect(matchesInboxLane(conv, "opportunity")).toBe(false);
+  });
+
+  it("puts flagged chats in Oportunidades", () => {
+    const conv = { ...makeConversation(null), is_opportunity: true };
+    expect(matchesInboxLane(conv, "inbox")).toBe(false);
+    expect(matchesInboxLane(conv, "opportunity")).toBe(true);
+    expect(inboxPathForConversation(conv)).toBe(`/opportunities?c=${conv.id}`);
+  });
 });
 
 describe("matchesContactFilters", () => {

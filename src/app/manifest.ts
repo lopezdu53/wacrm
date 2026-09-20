@@ -53,6 +53,12 @@ export default function manifest(): MetadataRoute.Manifest {
         description: "Open the WhatsApp inbox",
       },
       {
+        name: "Oportunidades",
+        short_name: "Opp",
+        url: "/opportunities",
+        description: "High-attention chats",
+      },
+      {
         name: "Notifications",
         short_name: "Alerts",
         url: "/notifications",

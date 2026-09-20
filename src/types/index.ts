@@ -177,6 +177,11 @@ export interface Conversation {
   last_message_text?: string;
   last_message_at?: string;
   unread_count: number;
+  /**
+   * High-attention lane (migration 054). When true the chat lives in
+   * Oportunidades / Opp instead of the regular inbox.
+   */
+  is_opportunity?: boolean;
   created_at: string;
   updated_at: string;
   contact?: Contact;

@@ -9,9 +9,10 @@ import {
 } from "./nav-items";
 
 describe("mobile tab destinations", () => {
-  it("pins Chats, Interno, and Noti as the three link tabs", () => {
+  it("pins Chats, Opp, Interno, and Noti as the four link tabs", () => {
     expect([...MOBILE_TAB_HREFS]).toEqual([
       "/inbox",
+      "/opportunities",
       "/internal-chat",
       "/notifications",
     ]);
@@ -25,6 +26,7 @@ describe("mobile tab destinations", () => {
     expect(extra).toContain("/dashboard");
     expect(extra).toContain("/contacts");
     expect(extra).not.toContain("/inbox");
+    expect(extra).not.toContain("/opportunities");
     expect(SETTINGS_NAV_ITEM.href).toBe("/settings");
   });
 });
@@ -38,6 +40,7 @@ describe("dashboard shell tab placement", () => {
     expect(src).toMatch(/MobileTabBarFallback/);
     expect(src).toMatch(/MobileTabBar/);
     expect(src).toMatch(/chatsUnread=\{chatsUnread\}/);
+    expect(src).toMatch(/oppUnread=\{opportunitiesUnread\}/);
     expect(src).toMatch(/unreadNotifications=\{notificationUnread\}/);
   });
 });
@@ -54,7 +57,10 @@ describe("mobile tab bar", () => {
     expect(src).toMatch(/fixed inset-x-0/);
     expect(src).toMatch(/BottomDrawer/);
     expect(src).toMatch(/tabChats/);
+    expect(src).toMatch(/tabOpp/);
+    expect(src).toMatch(/grid-cols-5/);
     expect(src).toMatch(/badge=\{totalUnread\}/);
+    expect(src).toMatch(/badge=\{oppUnread\}/);
     expect(src).toMatch(/badge=\{internalUnread\}/);
     expect(src).toMatch(/badge=\{unreadNotifications\}/);
     expect(src).toMatch(/badge=\{chatsUnread\}/);
@@ -98,5 +104,7 @@ describe("inbox thread overflow menu", () => {
     expect(src).not.toMatch(/DropdownMenuSub/);
     expect(src).toMatch(/toolsOpen/);
     expect(src).toMatch(/setToolsOpen\(true\)/);
+    expect(src).toMatch(/sendToOpportunities/);
+    expect(src).toMatch(/onOpportunityChange/);
   });
 });

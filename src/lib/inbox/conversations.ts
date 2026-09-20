@@ -48,6 +48,33 @@ export function normalizeConversations(
   return rows.map(normalizeConversation);
 }
 
+export type InboxLane = "inbox" | "opportunity";
+
+/** Absent / null `is_opportunity` means the regular inbox. */
+export function conversationIsOpportunity(conversation: {
+  is_opportunity?: boolean | null;
+}): boolean {
+  return conversation.is_opportunity === true;
+}
+
+export function matchesInboxLane(
+  conversation: { is_opportunity?: boolean | null },
+  lane: InboxLane,
+): boolean {
+  const isOpp = conversationIsOpportunity(conversation);
+  return lane === "opportunity" ? isOpp : !isOpp;
+}
+
+export function inboxPathForConversation(conversation: {
+  id: string;
+  is_opportunity?: boolean | null;
+}): string {
+  const base = conversationIsOpportunity(conversation)
+    ? "/opportunities"
+    : "/inbox";
+  return `${base}?c=${conversation.id}`;
+}
+
 export interface ContactFilters {
   /** Tag ids; a conversation matches if its contact has ANY of them (OR). */
   tagIds: string[];
