@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
   isContactOnPayload,
   isProvenPeerPair,
+  listComplementaryNameTwinPairs,
   pickComplementaryNameTwin,
   pickSurvivorContact,
   preferE164ContactPhone,
@@ -140,7 +141,38 @@ describe('isProvenPeerPair', () => {
   });
 });
 
+describe('listComplementaryNameTwinPairs', () => {
+  it('joins the unique Sebastian LID + phone pair and skips another name', () => {
+    const pairs = listComplementaryNameTwinPairs([
+      { id: 'p', phone: '573112423412', name: 'Sebastian' },
+      { id: 'l', phone: 'lid:244327888465953', name: 'Sebastian' },
+      { id: 'z', phone: '573000000000', name: 'sebastian lozano mtto' },
+    ]);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].survivor.id).toBe('p');
+    expect(pairs[0].loser.id).toBe('l');
+  });
+
+  it('does not join two people who happen to share a first name with extras', () => {
+    expect(
+      listComplementaryNameTwinPairs([
+        { id: 'p', phone: '573112423412', name: 'Sebastian' },
+        { id: 'l', phone: 'lid:244327888465953', name: 'Sebastian' },
+        { id: 'x', phone: 'lid:999', name: 'Sebastian' },
+      ]),
+    ).toEqual([]);
+  });
+});
+
 describe('pickComplementaryNameTwin', () => {
+  it('joins a LID and a phone that share a real first name like Sebastian', () => {
+    expect(
+      pickComplementaryNameTwin('lid:244327888465953', 'Sebastian', [
+        { id: 'p', phone: '573112423412', name: 'Sebastian' },
+      ])?.id,
+    ).toBe('p');
+  });
+
   it('joins a LID and a phone that share the same pushName and nobody else does', () => {
     expect(
       pickComplementaryNameTwin('lid:6611235915522259', 'AL', [

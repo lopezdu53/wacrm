@@ -207,7 +207,9 @@ export function pickComplementaryNameTwin(
 ): ExistingContact | null {
   const name = incomingName.trim();
   if (name.length < 2) return null;
-  if (isWhatsAppHandleKey(name)) return null;
+  // Only reject names that are stored identity keys — "Sebastian" is a
+  // valid @username *pattern* but it is also a real pushName.
+  if (/^(lid:|user:|@)/i.test(name) || /@lid$/i.test(name)) return null;
   if (/^\d{6,}$/.test(name)) return null;
 
   const key = canonicalContactKey(incomingKey);
@@ -225,6 +227,57 @@ export function pickComplementaryNameTwin(
   const twinHandle = isWhatsAppHandleKey(canonicalContactKey(twin.phone));
   if (incomingHandle === twinHandle) return null;
   return twin;
+}
+
+/**
+ * Unique same-name pairs that are complementary (one E.164, one
+ * LID/@username). Used to join chats that Evolution already split
+ * before a payload listed both identities.
+ */
+export function listComplementaryNameTwinPairs(
+  contacts: ExistingContact[],
+): Array<{ survivor: ExistingContact; loser: ExistingContact }> {
+  const byName = new Map<string, ExistingContact[]>();
+  for (const contact of contacts) {
+    const n = (contact.name ?? '').trim().toLowerCase();
+    if (n.length < 2) continue;
+    if (/^(lid:|user:|@)/i.test(n) || /@lid$/i.test(n)) continue;
+    if (/^\d{6,}$/.test(n)) continue;
+    const list = byName.get(n) ?? [];
+    list.push(contact);
+    byName.set(n, list);
+  }
+
+  const pairs: Array<{ survivor: ExistingContact; loser: ExistingContact }> = [];
+  for (const group of byName.values()) {
+    if (group.length !== 2) continue;
+    const [a, b] = group;
+    const twin = pickComplementaryNameTwin(a.phone, a.name ?? '', [b]);
+    if (!twin) continue;
+    const survivor = pickSurvivorContact([a, b], a.phone);
+    const loser = survivor.id === a.id ? b : a;
+    pairs.push({ survivor, loser });
+  }
+  return pairs;
+}
+
+export async function repairComplementaryNameSplits(
+  db: SupabaseClient,
+  accountId: string,
+): Promise<number> {
+  const { data, error } = await db
+    .from('contacts')
+    .select('id, phone, name, whatsapp_lid, whatsapp_username')
+    .eq('account_id', accountId);
+  if (error || !data?.length) return 0;
+
+  const pairs = listComplementaryNameTwinPairs(data as ExistingContact[]);
+  let merged = 0;
+  for (const { survivor, loser } of pairs) {
+    await mergePeerContacts(db, survivor, [loser]);
+    merged += 1;
+  }
+  return merged;
 }
 
 export function lidFromContact(contact: ExistingContact): string {
