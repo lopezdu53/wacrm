@@ -2,10 +2,7 @@
 
 import { useEffect, useId, useRef, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import {
-  conversationIsOpportunity,
-  type InboxLane,
-} from "@/lib/inbox/conversations";
+import { conversationIsOpportunity } from "@/lib/inbox/conversations";
 import type { Conversation } from "@/types";
 
 export type LaneUnread = { inbox: number; opportunity: number };
@@ -110,11 +107,4 @@ export function useLaneUnread(userId?: string | null): LaneUnread {
   }, [channelName, userId]);
 
   return totals;
-}
-
-export function laneUnreadFor(
-  totals: LaneUnread,
-  lane: InboxLane,
-): number {
-  return lane === "opportunity" ? totals.opportunity : totals.inbox;
 }
