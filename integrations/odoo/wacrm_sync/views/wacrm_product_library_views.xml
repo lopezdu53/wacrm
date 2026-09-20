@@ -85,10 +85,11 @@
               action="action_wacrm_product_library"
               sequence="5"/>
 
-    <!-- Home-menu tile so agents open the library without digging into wacrm. -->
+    <!-- Home-menu tile. Reuse icon.png so upgrade does not need a new
+         static file the Odoo process may not be allowed to read. -->
     <menuitem id="menu_wacrm_product_library_root"
               name="Product library"
-              web_icon="wacrm_sync,static/description/icon_library.png"
+              web_icon="wacrm_sync,static/description/icon.png"
               action="action_wacrm_product_library"
               sequence="97"/>
 </odoo>
