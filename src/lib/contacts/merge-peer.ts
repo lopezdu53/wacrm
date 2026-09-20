@@ -218,19 +218,20 @@ export function pickComplementaryNameTwin(
   candidates: ExistingContact[],
 ): ExistingContact | null {
   const name = incomingName.trim();
-  if (name.length < 2) return null;
-  // Only reject names that are stored identity keys — "Sebastian" is a
-  // valid @username *pattern* but it is also a real pushName.
+  if (!name) return null;
+  const hasEmoji = /\p{Extended_Pictographic}/u.test(name);
+  if (!hasEmoji && name.length < 2) return null;
   if (/^(lid:|user:|@)/i.test(name) || /@lid$/i.test(name)) return null;
   if (/^\d{6,}$/.test(name)) return null;
 
   const key = canonicalContactKey(incomingKey);
   if (!key) return null;
   const incomingHandle = isWhatsAppHandleKey(key);
-  const needle = name.toLowerCase();
+  const needle = normalizePeerDisplayName(name);
+  if (!needle) return null;
 
   const sameName = candidates.filter((c) => {
-    const n = (c.name ?? '').trim().toLowerCase();
+    const n = normalizePeerDisplayName(c.name ?? '');
     if (n !== needle) return false;
     return canonicalContactKey(c.phone) !== key;
   });
@@ -239,6 +240,44 @@ export function pickComplementaryNameTwin(
   const twinHandle = isWhatsAppHandleKey(canonicalContactKey(twin.phone));
   if (incomingHandle === twinHandle) return null;
   return twin;
+}
+
+/** WhatsApp often sends ⚽ vs ⚽️; treat them as the same pushName. */
+export function normalizePeerDisplayName(
+  name: string | null | undefined,
+): string {
+  if (!name) return '';
+  return name.replace(/\uFE0F/g, '').replace(/\u200D/g, '').trim().toLowerCase();
+}
+
+/**
+ * LID row `lid:X` + E.164 row whose `whatsapp_lid` is X — same person
+ * even when their display names differ (number vs emoji).
+ */
+export function listStampedLidPairs(
+  contacts: ExistingContact[],
+): Array<{ survivor: ExistingContact; loser: ExistingContact }> {
+  const pairs: Array<{ survivor: ExistingContact; loser: ExistingContact }> = [];
+  const seen = new Set<string>();
+  for (const a of contacts) {
+    const lidA = lidFromContact(a);
+    if (!lidA) continue;
+    const kindA = identityKind(canonicalContactKey(a.phone));
+    if (!kindA) continue;
+    for (const b of contacts) {
+      if (a.id === b.id) continue;
+      if (lidFromContact(b) !== lidA) continue;
+      const kindB = identityKind(canonicalContactKey(b.phone));
+      if (!kindB || kindA === kindB) continue;
+      const survivor = pickSurvivorContact([a, b], a.phone);
+      const loser = survivor.id === a.id ? b : a;
+      const id = [survivor.id, loser.id].sort().join(':');
+      if (seen.has(id)) continue;
+      seen.add(id);
+      pairs.push({ survivor, loser });
+    }
+  }
+  return pairs;
 }
 
 /**
@@ -251,8 +290,10 @@ export function listComplementaryNameTwinPairs(
 ): Array<{ survivor: ExistingContact; loser: ExistingContact }> {
   const byName = new Map<string, ExistingContact[]>();
   for (const contact of contacts) {
-    const n = (contact.name ?? '').trim().toLowerCase();
-    if (n.length < 2) continue;
+    const n = normalizePeerDisplayName(contact.name ?? '');
+    if (!n) continue;
+    const hasEmoji = /\p{Extended_Pictographic}/u.test(n);
+    if (!hasEmoji && n.length < 2) continue;
     if (/^(lid:|user:|@)/i.test(n) || /@lid$/i.test(n)) continue;
     if (/^\d{6,}$/.test(n)) continue;
     const list = byName.get(n) ?? [];
@@ -283,9 +324,13 @@ export async function repairComplementaryNameSplits(
     .eq('account_id', accountId);
   if (error || !data?.length) return 0;
 
-  const pairs = listComplementaryNameTwinPairs(data as ExistingContact[]);
+  const contacts = data as ExistingContact[];
+  const pairs = [...listStampedLidPairs(contacts), ...listComplementaryNameTwinPairs(contacts)];
+  const seenLoser = new Set<string>();
   let merged = 0;
   for (const { survivor, loser } of pairs) {
+    if (seenLoser.has(loser.id) || survivor.id === loser.id) continue;
+    seenLoser.add(loser.id);
     await mergePeerContacts(db, survivor, [loser]);
     merged += 1;
   }
