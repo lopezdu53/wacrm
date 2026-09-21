@@ -428,6 +428,53 @@ async function resolveInboundMediaUrl(
   );
 }
 
+let storedMediaAttachChain: Promise<void> = Promise.resolve();
+
+function enqueueStoredMediaAttach(
+  config: EvoInboundConfig,
+  item: UpsertData,
+  parsed: ParsedBaileys,
+): void {
+  storedMediaAttachChain = storedMediaAttachChain
+    .then(() => attachStoredEvolutionMedia(config, item, parsed))
+    .catch((err) => {
+      console.warn('[evolution-inbound] background video attach failed:', err);
+    });
+}
+
+async function attachStoredEvolutionMedia(
+  config: EvoInboundConfig,
+  item: UpsertData,
+  parsed: ParsedBaileys,
+): Promise<void> {
+  try {
+    const url = await resolveInboundMediaUrl(config, item, parsed);
+    if (!url) return;
+    const providerId = item.key?.id;
+    if (!providerId) return;
+    const { data: rows } = await supabaseAdmin()
+      .from('messages')
+      .select('id, conversation_id, media_url')
+      .eq('message_id', providerId)
+      .limit(20);
+    for (const row of rows ?? []) {
+      if (row.media_url) continue;
+      const { data: conv } = await supabaseAdmin()
+        .from('conversations')
+        .select('account_id')
+        .eq('id', row.conversation_id)
+        .maybeSingle();
+      if (conv?.account_id !== config.account_id) continue;
+      await supabaseAdmin()
+        .from('messages')
+        .update({ media_url: url })
+        .eq('id', row.id);
+    }
+  } catch (err) {
+    console.warn('[evolution-inbound] background video attach failed:', err);
+  }
+}
+
 /**
  * Process one Baileys message item into wacrm. Returns 'recorded',
  * 'skipped' (not a 1:1 user message, or nothing renderable), or
@@ -453,14 +500,24 @@ export async function processEvolutionItem(
 
     const parsed = parseBaileys(item.message, item.messageType);
 
+    const inline = inlineMediaBase64(item);
     let mediaUrl: string | null = null;
-    if (parsed.mediaKey) {
-      mediaUrl = await resolveInboundMediaUrl(config, item, parsed);
+    if (inline) {
+      mediaUrl = await uploadInboundMedia(
+        config.account_id,
+        inline,
+        parsed.contentType === 'video' ? 'video' : parsed.contentType,
+        parsed.contentType === 'video'
+          ? parsed.mimetype && parsed.mimetype.startsWith('video/')
+            ? parsed.mimetype
+            : 'video/mp4'
+          : parsed.mimetype,
+      );
     }
 
-    // Nothing renderable and no text — skip (e.g. unsupported type).
-    // Media types still persist even if Evolution omitted the bytes;
-    // the inbox can show a placeholder until a later sync fills them.
+    // Persist first. Downloading a WhatsApp Web MP4 from Evolution can
+    // take longer than the EasyPanel/Traefik gateway, which used to
+    // kill the webhook so the video never appeared in the thread.
     if (!parsed.text && !mediaUrl && !parsed.mediaKey) return 'skipped';
 
     const fallbackName = formatWhatsAppAddress(peer.contactKey) || peer.contactKey;
@@ -498,6 +555,10 @@ export async function processEvolutionItem(
       interactiveReply: parsed.interactiveReply,
       replyToMetaMessageId: parsed.replyToMetaMessageId ?? null,
     });
+
+    if (parsed.mediaKey && !mediaUrl && item.key?.id) {
+      enqueueStoredMediaAttach(config, item, parsed);
+    }
     return 'recorded';
   } catch (err) {
     console.error('[evolution-inbound] failed to process item:', err);

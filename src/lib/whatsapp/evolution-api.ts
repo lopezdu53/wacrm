@@ -758,20 +758,51 @@ export async function fetchEvolutionMediaBase64({
   convertToMp4?: boolean;
   timeoutMs?: number;
 }): Promise<string | null> {
-  const url = `${normalizeBaseUrl(baseUrl)}/chat/getBase64FromMediaMessage/${encodeURIComponent(instance)}`;
+  const key = item.key ?? {};
+  const message = item.message;
+  const bodies: Array<Record<string, unknown>> = [
+    {
+      message: { key, message },
+      convertToMp4,
+    },
+    {
+      message: { key },
+      convertToMp4: true,
+    },
+  ];
+  const paths = [
+    `/chat/getBase64FromMediaMessage/${encodeURIComponent(instance)}`,
+    `/message/getBase64FromMediaMessage/${encodeURIComponent(instance)}`,
+  ];
+  for (const path of paths) {
+    for (const body of bodies) {
+      const got = await postMediaBase64(
+        `${normalizeBaseUrl(baseUrl)}${path}`,
+        apiKey,
+        body,
+        timeoutMs,
+      );
+      if (got) return got;
+    }
+  }
+  return null;
+}
+
+async function postMediaBase64(
+  url: string,
+  apiKey: string,
+  body: Record<string, unknown>,
+  timeoutMs: number,
+): Promise<string | null> {
   try {
     const response = await fetch(url, {
       method: 'POST',
       headers: authHeaders(apiKey),
-      body: JSON.stringify({
-        message: { key: item.key, message: item.message },
-        convertToMp4,
-      }),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) return null;
-    const json = (await response.json()) as unknown;
-    return mediaBase64FromEvolutionJson(json);
+    return mediaBase64FromEvolutionJson(await response.json());
   } catch {
     return null;
   }

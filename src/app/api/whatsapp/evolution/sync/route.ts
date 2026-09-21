@@ -17,14 +17,12 @@ import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { contactKeyToRemoteJid } from '@/lib/whatsapp/peer-identity';
 import {
-  fetchEvolutionMessages,
-  fetchEvolutionMediaBase64,
-  type EvolutionHistoryItem,
-} from '@/lib/whatsapp/evolution-api';
-import {
-  parseBaileys,
-  processEvolutionItem,
-} from '@/lib/whatsapp/evolution-inbound';
+  canonicalContactKey,
+  isWhatsAppHandleKey,
+} from '@/lib/whatsapp/phone-utils';
+import { fetchEvolutionMessages } from '@/lib/whatsapp/evolution-api';
+import { processEvolutionItem } from '@/lib/whatsapp/evolution-inbound';
+import { remoteJidsForHistory } from '@/lib/whatsapp/peer-link';
 import { repairMixedEvolutionConversationsOnce } from '@/lib/whatsapp/repair-mixed-conversations';
 
 export async function POST(request: Request) {
@@ -119,35 +117,48 @@ export async function POST(request: Request) {
       .select('phone, whatsapp_lid, whatsapp_username')
       .eq('id', freshConv.contact_id)
       .maybeSingle();
-    const remoteJid =
+    const phoneKey = canonicalContactKey(String(contact?.phone ?? ''));
+    const lid =
+      String(contact?.whatsapp_lid ?? '').replace(/\D/g, '') ||
+      (phoneKey.startsWith('lid:') ? phoneKey.slice(4) : '');
+    const username = String(contact?.whatsapp_username ?? '').trim();
+    const peer = {
+      contactKey: phoneKey || (lid ? `lid:${lid}` : ''),
+      phone: phoneKey && !isWhatsAppHandleKey(phoneKey) ? phoneKey : null,
+      lid: lid || null,
+      username: username || null,
+    };
+    const jids = remoteJidsForHistory(peer);
+    const fallbackJid =
       contactKeyToRemoteJid(String(contact?.phone ?? '')) ||
-      (contact?.whatsapp_lid
-        ? `${contact.whatsapp_lid}@lid`
-        : contact?.whatsapp_username
-          ? `${contact.whatsapp_username}@s.whatsapp.net`
-          : null);
-    if (!remoteJid) {
+      (lid ? `${lid}@lid` : username ? `${username}@s.whatsapp.net` : null);
+    if (fallbackJid && !jids.includes(fallbackJid)) jids.push(fallbackJid);
+    if (jids.length === 0) {
       return NextResponse.json(
         { error: 'Contact has no WhatsApp address' },
         { status: 400 },
       );
     }
 
-    const items = await fetchEvolutionMessages({
-      ...auth,
-      remoteJid,
-      limit: 50,
-    });
+    const byId = new Map<string, boolean>();
+    const items: Awaited<ReturnType<typeof fetchEvolutionMessages>> = [];
+    for (const jid of jids) {
+      const batch = await fetchEvolutionMessages({
+        ...auth,
+        remoteJid: jid,
+        limit: 50,
+        timeoutMs: 12_000,
+      });
+      for (const item of batch) {
+        const id = item.key?.id ?? `anon:${items.length}`;
+        if (byId.has(id)) continue;
+        byId.set(id, true);
+        items.push(item);
+      }
+    }
 
     let recorded = 0;
-    for (const item of items as EvolutionHistoryItem[]) {
-      // Media isn't in the history payload — fetch base64 so audios /
-      // images / PDFs are playable once backfilled.
-      const parsed = parseBaileys(item.message);
-      if (parsed.mediaKey && item.message) {
-        const base64 = await fetchEvolutionMediaBase64({ ...auth, item });
-        if (base64) (item.message as Record<string, unknown>).base64 = base64;
-      }
+    for (const item of items) {
       const outcome = await processEvolutionItem(cfg, item);
       if (outcome === 'recorded') recorded += 1;
     }
