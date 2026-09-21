@@ -314,91 +314,6 @@ export function listComplementaryNameTwinPairs(
   return pairs;
 }
 
-export interface ContactLaneActivity {
-  contactId: string;
-  lastMessageAt: number;
-  channel: string;
-}
-
-const RECENT_SPLIT_WINDOW_MS = 6 * 60 * 60 * 1000;
-
-function isUnnamedPhoneContact(contact: ExistingContact): boolean {
-  const key = canonicalContactKey(contact.phone);
-  if (!key || isWhatsAppHandleKey(key)) return false;
-  return contactNameLooksLikeId(contact.name, contact.phone);
-}
-
-function isNamedHandleContact(contact: ExistingContact): boolean {
-  const key = canonicalContactKey(contact.phone);
-  if (!key || !isWhatsAppHandleKey(key)) return false;
-  return !contactNameLooksLikeId(contact.name, contact.phone);
-}
-
-/**
- * Memo (LID, real pushName) vs 573212030877 (E.164 labeled as the
- * number): Evolution split the customer inbound and the agent reply.
- * Join only when that unnamed phone is the unique recent twin of that
- * named handle on the same WhatsApp number.
- */
-export function listUnnamedPhoneNamedHandlePairs(
-  contacts: ExistingContact[],
-  activity: ContactLaneActivity[],
-  windowMs: number = RECENT_SPLIT_WINDOW_MS,
-): Array<{ survivor: ExistingContact; loser: ExistingContact }> {
-  const byContact = new Map<string, ContactLaneActivity[]>();
-  for (const row of activity) {
-    const list = byContact.get(row.contactId) ?? [];
-    list.push(row);
-    byContact.set(row.contactId, list);
-  }
-
-  const phones = contacts.filter(isUnnamedPhoneContact);
-  const handles = contacts.filter(isNamedHandleContact);
-  const pairs: Array<{ survivor: ExistingContact; loser: ExistingContact }> = [];
-  const claimedPhone = new Set<string>();
-  const claimedHandle = new Set<string>();
-
-  for (const handle of handles) {
-    const handleActs = byContact.get(handle.id) ?? [];
-    if (handleActs.length === 0) continue;
-    const matches: ExistingContact[] = [];
-    for (const phone of phones) {
-      if (claimedPhone.has(phone.id)) continue;
-      const phoneActs = byContact.get(phone.id) ?? [];
-      const close = phoneActs.some((p) =>
-        handleActs.some(
-          (h) =>
-            p.channel === h.channel &&
-            Math.abs(p.lastMessageAt - h.lastMessageAt) <= windowMs,
-        ),
-      );
-      if (close) matches.push(phone);
-    }
-    if (matches.length !== 1) continue;
-    const phone = matches[0];
-    const alsoHandles = handles.filter((other) => {
-      if (other.id === handle.id) return false;
-      const otherActs = byContact.get(other.id) ?? [];
-      const phoneActs = byContact.get(phone.id) ?? [];
-      return phoneActs.some((p) =>
-        otherActs.some(
-          (h) =>
-            p.channel === h.channel &&
-            Math.abs(p.lastMessageAt - h.lastMessageAt) <= windowMs,
-        ),
-      );
-    });
-    if (alsoHandles.length > 0) continue;
-    if (claimedHandle.has(handle.id) || claimedPhone.has(phone.id)) continue;
-    claimedHandle.add(handle.id);
-    claimedPhone.add(phone.id);
-    const survivor = pickSurvivorContact([phone, handle], phone.phone);
-    const loser = survivor.id === phone.id ? handle : phone;
-    pairs.push({ survivor, loser });
-  }
-  return pairs;
-}
-
 export async function repairComplementaryNameSplits(
   db: SupabaseClient,
   accountId: string,
@@ -410,25 +325,7 @@ export async function repairComplementaryNameSplits(
   if (error || !data?.length) return 0;
 
   const contacts = data as ExistingContact[];
-  const { data: convos } = await db
-    .from('conversations')
-    .select('contact_id, last_message_at, whatsapp_config_id')
-    .eq('account_id', accountId);
-  const activity: ContactLaneActivity[] = [];
-  for (const row of convos ?? []) {
-    const at = Date.parse(String(row.last_message_at ?? ''));
-    if (!row.contact_id || !Number.isFinite(at)) continue;
-    activity.push({
-      contactId: row.contact_id as string,
-      lastMessageAt: at,
-      channel: String(row.whatsapp_config_id ?? '__null__'),
-    });
-  }
-  const pairs = [
-    ...listStampedLidPairs(contacts),
-    ...listComplementaryNameTwinPairs(contacts),
-    ...listUnnamedPhoneNamedHandlePairs(contacts, activity),
-  ];
+  const pairs = [...listStampedLidPairs(contacts), ...listComplementaryNameTwinPairs(contacts)];
   const seenLoser = new Set<string>();
   let merged = 0;
   for (const { survivor, loser } of pairs) {

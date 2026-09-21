@@ -28,6 +28,29 @@ No new migration. Redeploy and hard-refresh the inbox once.
   same channel are merged so the greeting and the customer line sit in
   one thread.
 
+## [0.8.25] — 2026-09-21
+
+Memo vs `573212030877` can still look split when Evolution puts the
+customer on a LID chat and the agent reply on the phone chat. We do
+**not** glue those threads just because they arrived in the same
+minute — that would mix two different people.
+
+Join only with proof: the same WhatsApp `message_id`, a stamped
+`whatsapp_lid` on the phone row, or a unique matching pushName (one
+E.164 + one LID/@username, nobody else with that name).
+
+No new migration. Redeploy and hard-refresh.
+
+### Fixed
+
+- **LID/phone link.** One shared WhatsApp message id is enough to
+  attach the echo to the existing thread (it used to require two).
+
+### Security
+
+- Inbox repair never merges two chats only because they were busy at
+  the same time.
+
 ## [0.8.24] — 2026-09-20
 
 A 50 MB Odoo library video failed with `JSON body is required` because
