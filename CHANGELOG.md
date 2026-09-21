@@ -9,6 +9,25 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.25] — 2026-09-21
+
+Memo vs `573212030877` split again: the customer wrote on the LID chat
+(pushName *Memo*) and the agent reply landed on the E.164 chat labeled
+as the number. Inbox repair only joined matching display names.
+
+Opening the inbox now also joins a named LID/@username with the unique
+unnamed phone thread on the same WhatsApp number whose last messages
+are within 6 hours. A single shared WhatsApp `message_id` is enough to
+link LID and phone (not two).
+
+No new migration. Redeploy and hard-refresh the inbox once.
+
+### Fixed
+
+- **Memo / number split.** Unnamed phone + unique named handle on the
+  same channel are merged so the greeting and the customer line sit in
+  one thread.
+
 ## [0.8.24] — 2026-09-20
 
 A 50 MB Odoo library video failed with `JSON body is required` because

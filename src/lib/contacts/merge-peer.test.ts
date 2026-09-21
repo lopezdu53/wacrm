@@ -5,6 +5,7 @@ import {
   isProvenPeerPair,
   listComplementaryNameTwinPairs,
   listStampedLidPairs,
+  listUnnamedPhoneNamedHandlePairs,
   pickComplementaryNameTwin,
   pickSurvivorContact,
   preferE164ContactPhone,
@@ -181,6 +182,43 @@ describe('listComplementaryNameTwinPairs', () => {
     expect(pairs).toHaveLength(1);
     expect(pairs[0].survivor.id).toBe('p');
     expect(pairs[0].loser.id).toBe('l');
+  });
+});
+
+describe('listUnnamedPhoneNamedHandlePairs', () => {
+  const t = Date.parse('2026-09-20T20:48:00Z');
+  const activity = [
+    { contactId: 'p', lastMessageAt: t, channel: 'wa1' },
+    { contactId: 'l', lastMessageAt: t - 60_000, channel: 'wa1' },
+  ];
+
+  it('joins Memo (LID) with the number-labeled phone chat a minute later', () => {
+    const pairs = listUnnamedPhoneNamedHandlePairs(
+      [
+        { id: 'p', phone: '573212030877', name: '573212030877' },
+        { id: 'l', phone: 'lid:43048675373122', name: 'Memo' },
+      ],
+      activity,
+    );
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].survivor.id).toBe('p');
+    expect(pairs[0].loser.id).toBe('l');
+  });
+
+  it('does not join when two unnamed phones are equally close', () => {
+    expect(
+      listUnnamedPhoneNamedHandlePairs(
+        [
+          { id: 'p', phone: '573212030877', name: '573212030877' },
+          { id: 'q', phone: '573000000001', name: '573000000001' },
+          { id: 'l', phone: 'lid:43048675373122', name: 'Memo' },
+        ],
+        [
+          ...activity,
+          { contactId: 'q', lastMessageAt: t, channel: 'wa1' },
+        ],
+      ),
+    ).toEqual([]);
   });
 });
 
