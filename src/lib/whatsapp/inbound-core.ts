@@ -14,6 +14,7 @@ import { supabaseAdmin } from '@/lib/flows/admin-client';
 import {
   canonicalContactKey,
   formatWhatsAppAddress,
+  isWhatsAppHandleKey,
 } from '@/lib/whatsapp/phone-utils';
 import {
   findExistingContact,
@@ -26,6 +27,7 @@ import {
   lidFromContact,
   mergePeerContacts,
   pickComplementaryNameTwin,
+  pickSurvivorContact,
   preferE164ContactPhone,
   selectMergeableLosers,
   usernameFromContact,
@@ -201,7 +203,9 @@ export async function findOrCreateContact(
     name: name || key,
   };
   if (options.lid) insertRow.whatsapp_lid = options.lid;
+  else if (key.startsWith('lid:')) insertRow.whatsapp_lid = key.slice(4);
   if (options.username) insertRow.whatsapp_username = options.username;
+  else if (key.startsWith('user:')) insertRow.whatsapp_username = key.slice(5);
 
   const { data: newContact, error } = await supabaseAdmin()
     .from('contacts')
@@ -481,6 +485,123 @@ async function lookupInternalIdByProviderId(
   return (data?.id as string | undefined) ?? null;
 }
 
+interface HomeThread {
+  conversation: ConversationRow;
+  contact: ContactRow;
+}
+
+/**
+ * The same WhatsApp message (or a swipe-reply to it) already lives on
+ * a thread in this account+channel. That thread is the home for this
+ * peer — Evolution often echoes fromMe on the phone JID after we sent
+ * to the LID chat.
+ */
+async function findHomeThreadByProviderId(
+  accountId: string,
+  whatsappConfigId: string | null,
+  providerId: string | null | undefined,
+): Promise<HomeThread | null> {
+  if (!providerId) return null;
+  const { data: msgs } = await supabaseAdmin()
+    .from('messages')
+    .select('conversation_id')
+    .eq('message_id', providerId)
+    .limit(10);
+  const convIds = [
+    ...new Set(
+      (msgs ?? [])
+        .map((row) => row.conversation_id as string | undefined)
+        .filter((id): id is string => Boolean(id)),
+    ),
+  ];
+  if (convIds.length === 0) return null;
+  const { data: convos } = await supabaseAdmin()
+    .from('conversations')
+    .select('*')
+    .eq('account_id', accountId)
+    .in('id', convIds);
+  const onChannel = (convos ?? []).filter(
+    (row) => (row.whatsapp_config_id ?? null) === whatsappConfigId,
+  );
+  if (onChannel.length === 0) return null;
+
+  let homeConv = onChannel[0] as ConversationRow;
+  if (onChannel.length > 1) {
+    const contactIds = onChannel
+      .map((row) => row.contact_id as string | undefined)
+      .filter((id): id is string => Boolean(id));
+    const { data: candidates } = await supabaseAdmin()
+      .from('contacts')
+      .select('*')
+      .in('id', contactIds);
+    const e164 = (candidates ?? []).find(
+      (row) => !isWhatsAppHandleKey(String(row.phone ?? '')),
+    );
+    const preferred = onChannel.find(
+      (row) => e164 && row.contact_id === e164.id,
+    );
+    if (preferred) homeConv = preferred as ConversationRow;
+  }
+
+  const { data: contact } = await supabaseAdmin()
+    .from('contacts')
+    .select('*')
+    .eq('id', homeConv.contact_id)
+    .maybeSingle();
+  if (!contact) return null;
+  return { conversation: homeConv, contact: contact as ContactRow };
+}
+
+async function adoptIncomingIdentityOntoHome(
+  accountId: string,
+  home: HomeThread,
+  incomingKey: string,
+  options: FindOrCreateContactOptions,
+): Promise<ContactRow> {
+  const other = await findExistingContact(
+    supabaseAdmin(),
+    accountId,
+    incomingKey,
+  );
+  let contact: ExistingContact = home.contact;
+  if (other && other.id !== home.contact.id) {
+    const survivor = pickSurvivorContact(
+      [home.contact, other],
+      incomingKey,
+    );
+    const losers = survivor.id === home.contact.id ? [other] : [home.contact];
+    contact = await mergePeerContacts(supabaseAdmin(), survivor, losers);
+  }
+
+  const patch: Record<string, unknown> = {
+    updated_at: new Date().toISOString(),
+  };
+  const mergeLid =
+    options.lid ||
+    (incomingKey.startsWith('lid:') ? incomingKey.slice(4) : '') ||
+    lidFromContact(contact);
+  const mergeUsername =
+    options.username ||
+    (incomingKey.startsWith('user:') ? incomingKey.slice(5) : '') ||
+    usernameFromContact(contact);
+  if (mergeLid && !contact.whatsapp_lid) patch.whatsapp_lid = mergeLid;
+  if (mergeUsername && !contact.whatsapp_username) {
+    patch.whatsapp_username = mergeUsername;
+  }
+  const e164 = preferE164ContactPhone(contact.phone, incomingKey);
+  if (e164) {
+    const existingKey = canonicalContactKey(contact.phone);
+    patch.phone = e164;
+    if (existingKey.startsWith('lid:') && !contact.whatsapp_lid && !patch.whatsapp_lid) {
+      patch.whatsapp_lid = existingKey.slice(4);
+    }
+  }
+  if (Object.keys(patch).length > 1) {
+    await supabaseAdmin().from('contacts').update(patch).eq('id', contact.id);
+  }
+  return { ...contact, ...patch } as ContactRow;
+}
+
 /**
  * The full inbound pipeline. Idempotent-ish: a duplicate provider
  * `messageId` on the same conversation is a no-op (pre-insert check
@@ -506,31 +627,80 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
   if (!senderPhone) return;
   const contentType = normalizeInboundContentType(args.contentType);
 
-  const contactOutcome = await findOrCreateContact(
-    accountId,
-    configOwnerUserId,
-    senderPhone,
-    contactName,
-    {
+  const home =
+    (await findHomeThreadByProviderId(
+      accountId,
+      whatsappConfigId,
+      messageId,
+    )) ??
+    (await findHomeThreadByProviderId(
+      accountId,
+      whatsappConfigId,
+      args.replyToMetaMessageId,
+    ));
+
+  let contactRecord: ContactRow;
+  let conversation: ConversationRow;
+  let createdConversation = false;
+  let contactWasCreated = false;
+
+  if (home) {
+    contactRecord = await adoptIncomingIdentityOntoHome(
+      accountId,
+      home,
+      senderPhone,
+      {
       aliases: args.identityAliases ?? [],
       lid: args.whatsappLid,
       username: args.whatsappUsername,
       allowRename: !outbound,
-    },
-  );
-  if (!contactOutcome) return;
-  const contactRecord = contactOutcome.contact;
+    });
+    const homeStill =
+      String(home.conversation.contact_id) === contactRecord.id
+        ? home.conversation
+        : null;
+    if (homeStill) {
+      conversation = homeStill;
+    } else {
+      const moved = await findOrCreateConversation(
+        accountId,
+        configOwnerUserId,
+        contactRecord.id,
+        whatsappConfigId,
+      );
+      if (!moved) return;
+      conversation = moved.conversation;
+      createdConversation = moved.created;
+    }
+  } else {
+    const contactOutcome = await findOrCreateContact(
+      accountId,
+      configOwnerUserId,
+      senderPhone,
+      contactName,
+      {
+        aliases: args.identityAliases ?? [],
+        lid: args.whatsappLid,
+        username: args.whatsappUsername,
+        allowRename: !outbound,
+      },
+    );
+    if (!contactOutcome) return;
+    contactRecord = contactOutcome.contact;
+    contactWasCreated = contactOutcome.wasCreated;
 
-  const convResult = await findOrCreateConversation(
-    accountId,
-    configOwnerUserId,
-    contactRecord.id,
-    whatsappConfigId,
-  );
-  if (!convResult) return;
-  const conversation = convResult.conversation;
+    const convResult = await findOrCreateConversation(
+      accountId,
+      configOwnerUserId,
+      contactRecord.id,
+      whatsappConfigId,
+    );
+    if (!convResult) return;
+    conversation = convResult.conversation;
+    createdConversation = convResult.created;
+  }
 
-  if (convResult.created) {
+  if (createdConversation) {
     await dispatchWebhookEvent(supabaseAdmin(), accountId, 'conversation.created', {
       conversation_id: conversation.id,
       contact_id: contactRecord.id,
@@ -644,7 +814,7 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
       automationTriggers.push('interactive_reply');
     }
   }
-  if (contactOutcome.wasCreated) automationTriggers.unshift('new_contact_created');
+  if (contactWasCreated) automationTriggers.unshift('new_contact_created');
   if (isFirstInboundMessage) automationTriggers.unshift('first_inbound_message');
 
   for (const triggerType of automationTriggers) {

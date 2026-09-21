@@ -9,6 +9,32 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.25] — 2026-09-21
+
+One WhatsApp person stays one inbox thread. Evolution often delivers
+the customer on a LID chat (*Memo*) and the agent echo on the phone
+JID (`573212030877`). Those are the **same message id**, not two
+people.
+
+When that id (or a swipe-reply to it) already exists on this number,
+the new event is adopted onto that thread and the LID/phone aliases
+are stamped. Two different users cannot share a WhatsApp message id,
+so simultaneous inbound from two people never merges.
+
+Inbox repair also joins complementary LID+phone rows that already
+stored the same provider id (last 7 days). We do **not** join chats
+only because they were busy at the same time. Evolution LID/phone
+lookups no longer block the webhook, so a busy inbox stays responsive.
+
+No new migration. Redeploy and hard-refresh the inbox once.
+
+### Fixed
+
+- **Split Memo / number threads.** Agent replies from the LID chat
+  stay on that chat when WhatsApp echoes the send on the phone JID.
+- **Shared `message_id`.** One id is enough to link; two E.164s with
+  the same id are not merged.
+
 ## [0.8.24] — 2026-09-20
 
 A 50 MB Odoo library video failed with `JSON body is required` because

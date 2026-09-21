@@ -122,7 +122,7 @@ export async function findExclusiveAliasByMessageIds(
   items: EvolutionHistoryItem[],
 ): Promise<string[]> {
   const ids = historyMessageIds(items).slice(0, 40);
-  if (ids.length < 2) return [];
+  if (ids.length < 1) return [];
 
   const { data: rows, error } = await db
     .from('messages')
@@ -169,7 +169,7 @@ export async function findExclusiveAliasByMessageIds(
   const e164: ExistingContact[] = [];
   const handles: ExistingContact[] = [];
   for (const row of (contacts ?? []) as ExistingContact[]) {
-    if ((overlap.get(row.id) ?? 0) < 2) continue;
+    if ((overlap.get(row.id) ?? 0) < 1) continue;
     if (isWhatsAppHandleKey(row.phone)) handles.push(row);
     else e164.push(row);
   }

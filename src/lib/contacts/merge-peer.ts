@@ -52,6 +52,16 @@ function identityKind(key: string): 'user' | 'lid' | 'phone' | '' {
   return 'phone';
 }
 
+/** True when one key is E.164 and the other is LID or @username. */
+export function areComplementaryContactPhones(
+  phoneA: string,
+  phoneB: string,
+): boolean {
+  const kindA = identityKind(canonicalContactKey(phoneA));
+  const kindB = identityKind(canonicalContactKey(phoneB));
+  return Boolean(kindA && kindB && kindA !== kindB);
+}
+
 /**
  * One WhatsApp person can have at most three rows (E.164, LID, @username).
  * Merge only when every row's phone key is on THIS payload and the kinds
@@ -314,6 +324,60 @@ export function listComplementaryNameTwinPairs(
   return pairs;
 }
 
+export interface SharedProviderMessageRow {
+  messageId: string;
+  conversationId: string;
+  contactId: string;
+  contactPhone: string;
+  channel: string;
+}
+
+/**
+ * Same WhatsApp message id on two complementary contacts (LID vs phone)
+ * is the same person — never two customers. Two E.164s sharing an id
+ * are left alone.
+ */
+export function listSharedProviderMessagePairs(
+  rows: SharedProviderMessageRow[],
+): Array<{ survivor: ExistingContact; loserId: string; homeConversationId: string }> {
+  const byId = new Map<string, SharedProviderMessageRow[]>();
+  for (const row of rows) {
+    if (!row.messageId) continue;
+    const key = `${row.channel}::${row.messageId}`;
+    const list = byId.get(key) ?? [];
+    list.push(row);
+    byId.set(key, list);
+  }
+  const pairs: Array<{
+    survivor: ExistingContact;
+    loserId: string;
+    homeConversationId: string;
+  }> = [];
+  const seen = new Set<string>();
+  for (const group of byId.values()) {
+    const uniqueContacts = new Map<string, SharedProviderMessageRow>();
+    for (const row of group) uniqueContacts.set(row.contactId, row);
+    if (uniqueContacts.size !== 2) continue;
+    const [a, b] = [...uniqueContacts.values()];
+    if (!areComplementaryContactPhones(a.contactPhone, b.contactPhone)) continue;
+    const contacts = [
+      { id: a.contactId, phone: a.contactPhone },
+      { id: b.contactId, phone: b.contactPhone },
+    ];
+    const survivor = pickSurvivorContact(contacts, a.contactPhone);
+    const loser = survivor.id === a.contactId ? b : a;
+    const id = [survivor.id, loser.contactId].sort().join(':');
+    if (seen.has(id)) continue;
+    seen.add(id);
+    pairs.push({
+      survivor,
+      loserId: loser.contactId,
+      homeConversationId: survivor.id === a.contactId ? a.conversationId : b.conversationId,
+    });
+  }
+  return pairs;
+}
+
 export async function repairComplementaryNameSplits(
   db: SupabaseClient,
   accountId: string,
@@ -332,6 +396,64 @@ export async function repairComplementaryNameSplits(
     if (seenLoser.has(loser.id) || survivor.id === loser.id) continue;
     seenLoser.add(loser.id);
     await mergePeerContacts(db, survivor, [loser]);
+    merged += 1;
+  }
+  merged += await repairSharedProviderMessageSplits(db, accountId, contacts);
+  return merged;
+}
+
+async function repairSharedProviderMessageSplits(
+  db: SupabaseClient,
+  accountId: string,
+  contacts: ExistingContact[],
+): Promise<number> {
+  const { data: convos } = await db
+    .from('conversations')
+    .select('id, contact_id, whatsapp_config_id')
+    .eq('account_id', accountId);
+  if (!convos?.length) return 0;
+  const convById = new Map(
+    convos.map((c) => [
+      c.id as string,
+      {
+        contactId: c.contact_id as string,
+        channel: String(c.whatsapp_config_id ?? '__null__'),
+      },
+    ]),
+  );
+  const convIds = [...convById.keys()];
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const { data: msgs } = await db
+    .from('messages')
+    .select('message_id, conversation_id')
+    .in('conversation_id', convIds)
+    .not('message_id', 'is', null)
+    .gte('created_at', since)
+    .limit(2000);
+  if (!msgs?.length) return 0;
+  const byContact = new Map(contacts.map((c) => [c.id, c]));
+  const rows: SharedProviderMessageRow[] = [];
+  for (const msg of msgs) {
+    const conv = convById.get(msg.conversation_id as string);
+    if (!conv) continue;
+    const contact = byContact.get(conv.contactId);
+    if (!contact) continue;
+    rows.push({
+      messageId: String(msg.message_id),
+      conversationId: msg.conversation_id as string,
+      contactId: conv.contactId,
+      contactPhone: contact.phone,
+      channel: conv.channel,
+    });
+  }
+  let merged = 0;
+  const seenLoser = new Set<string>();
+  for (const pair of listSharedProviderMessagePairs(rows)) {
+    if (seenLoser.has(pair.loserId)) continue;
+    const loser = byContact.get(pair.loserId);
+    if (!loser) continue;
+    seenLoser.add(pair.loserId);
+    await mergePeerContacts(db, pair.survivor, [loser]);
     merged += 1;
   }
   return merged;

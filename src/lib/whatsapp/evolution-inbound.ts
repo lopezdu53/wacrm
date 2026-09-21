@@ -356,7 +356,10 @@ export async function processEvolutionItem(
 
     const fallbackName = formatWhatsAppAddress(peer.contactKey) || peer.contactKey;
 
-    const historyKeys = await extraKeysFromOwnChatHistory(config, peer);
+    const historyKeys = await extraKeysFromOwnChatHistory(config, peer, [
+      item.key?.id,
+      parsed.replyToMetaMessageId,
+    ]);
     let lid = peer.lid;
     let username = peer.username;
     for (const extra of historyKeys) {
@@ -417,13 +420,18 @@ export async function linkEvolutionPeerContact(
   );
 }
 
+const evolutionLinkInFlight = new Set<string>();
+
 /**
- * Look up the other half of this WhatsApp identity from THIS chat's
- * Evolution history only. Returns at most one phone or one handle.
+ * Look up the other half of this WhatsApp identity from THIS chat.
+ * Local `message_id` overlap is enough and does not wait on Evolution.
+ * A slower Evolution lookup runs in the background so a busy inbox
+ * can still accept the next message.
  */
 async function extraKeysFromOwnChatHistory(
   config: EvoInboundConfig,
   peer: EvolutionPeer,
+  providerIds: Array<string | null | undefined>,
 ): Promise<string[]> {
   try {
     const existing = await findContactsMatchingKeys(
@@ -432,18 +440,61 @@ async function extraKeysFromOwnChatHistory(
       peerLookupKeys(peer),
     );
     if (!needsHistoryLink(peer, existing)) return [];
-    if (
-      !config.evolution_base_url ||
-      !config.evolution_api_key ||
-      !config.evolution_instance
-    ) {
-      return [];
+
+    const localItems: EvolutionHistoryItem[] = [];
+    const seen = new Set<string>();
+    for (const id of providerIds) {
+      if (!id || seen.has(id)) continue;
+      seen.add(id);
+      localItems.push({ key: { id } });
+    }
+    if (localItems.length > 0) {
+      const fromLocal = await findExclusiveAliasByMessageIds(
+        supabaseAdmin(),
+        config.account_id,
+        config.id,
+        peer,
+        localItems,
+      );
+      if (fromLocal.length > 0) return fromLocal;
     }
 
+    scheduleEvolutionIdentityLink(config, peer);
+    return [];
+  } catch (err) {
+    console.warn('[evolution-inbound] own-chat history link failed:', err);
+    return [];
+  }
+}
+
+function scheduleEvolutionIdentityLink(
+  config: EvoInboundConfig,
+  peer: EvolutionPeer,
+): void {
+  if (
+    !config.evolution_base_url ||
+    !config.evolution_api_key ||
+    !config.evolution_instance
+  ) {
+    return;
+  }
+  const flightKey = `${config.id}:${peer.contactKey}`;
+  if (evolutionLinkInFlight.has(flightKey)) return;
+  evolutionLinkInFlight.add(flightKey);
+  void linkPeerFromEvolutionHistory(config, peer).finally(() => {
+    evolutionLinkInFlight.delete(flightKey);
+  });
+}
+
+async function linkPeerFromEvolutionHistory(
+  config: EvoInboundConfig,
+  peer: EvolutionPeer,
+): Promise<void> {
+  try {
     const auth = {
-      baseUrl: config.evolution_base_url,
-      apiKey: config.evolution_api_key,
-      instance: config.evolution_instance,
+      baseUrl: config.evolution_base_url as string,
+      apiKey: config.evolution_api_key as string,
+      instance: config.evolution_instance as string,
     };
 
     const fromIdentity = complementaryIdentityKeys(
@@ -454,32 +505,52 @@ async function extraKeysFromOwnChatHistory(
         timeoutMs: 2500,
       }),
     );
-    if (fromIdentity.length > 0) return fromIdentity;
+    let extras = fromIdentity;
+    if (extras.length === 0) {
+      const items: EvolutionHistoryItem[] = [];
+      for (const remoteJid of remoteJidsForHistory(peer)) {
+        const batch = await fetchEvolutionMessages({
+          ...auth,
+          remoteJid,
+          limit: 30,
+          timeoutMs: 4000,
+        });
+        items.push(...batch);
+        if (items.length >= 30) break;
+      }
+      extras = exclusiveLinkedKeys(peer, items);
+      if (extras.length === 0) {
+        extras = await findExclusiveAliasByMessageIds(
+          supabaseAdmin(),
+          config.account_id,
+          config.id,
+          peer,
+          items,
+        );
+      }
+    }
+    if (extras.length === 0) return;
 
-    const items: EvolutionHistoryItem[] = [];
-    for (const remoteJid of remoteJidsForHistory(peer)) {
-      const batch = await fetchEvolutionMessages({
-        ...auth,
-        remoteJid,
-        limit: 30,
-        timeoutMs: 4000,
-      });
-      items.push(...batch);
-      if (items.length >= 30) break;
+    let lid = peer.lid;
+    let username = peer.username;
+    for (const extra of extras) {
+      if (extra.startsWith('lid:') && !lid) lid = extra.slice(4);
+      else if (extra.startsWith('user:') && !username) username = extra.slice(5);
     }
 
-    const fromItems = exclusiveLinkedKeys(peer, items);
-    if (fromItems.length > 0) return fromItems;
-
-    return findExclusiveAliasByMessageIds(
-      supabaseAdmin(),
+    await findOrCreateContact(
       config.account_id,
-      config.id,
-      peer,
-      items,
+      config.user_id,
+      peer.contactKey,
+      '',
+      {
+        aliases: [...peerLookupKeys(peer), ...extras],
+        lid,
+        username,
+        allowRename: false,
+      },
     );
   } catch (err) {
-    console.warn('[evolution-inbound] own-chat history link failed:', err);
-    return [];
+    console.warn('[evolution-inbound] background identity link failed:', err);
   }
 }
