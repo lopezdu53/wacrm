@@ -9,6 +9,25 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.26] — 2026-09-21
+
+Videos sent from WhatsApp Web (for example the 2:16 and 1:01 clips
+on Memo) did not show in wacrm. Images and PDFs did, because those
+bytes fit in the Evolution webhook. Videos are wrapped in Baileys
+envelopes and the file is not in the POST, so we skipped them.
+
+The inbox now unwraps those envelopes, downloads the MP4 from
+Evolution (`getBase64FromMediaMessage`), and stores it in chat-media.
+
+**Migration required:** `056_chat_media_64mb.sql` (chat-media bucket
+64 MB). Redeploy, apply the SQL, then hard-refresh. Older videos
+reappear after Inbox → Sync on that chat (or send them again).
+
+### Fixed
+
+- **WhatsApp Web videos in the thread.** Ephemeral/view-once/PTV
+  wrappers and missing webhook base64 no longer drop the clip.
+
 ## [0.8.25] — 2026-09-21
 
 One WhatsApp person stays one inbox thread. Evolution often delivers

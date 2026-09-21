@@ -25,15 +25,32 @@ import {
   needsHistoryLink,
   remoteJidsForHistory,
 } from '@/lib/whatsapp/peer-link';
-import { fetchEvolutionMessages, fetchEvolutionIdentityAliases, type EvolutionHistoryItem } from '@/lib/whatsapp/evolution-api';
+import {
+  fetchEvolutionMediaBase64,
+  fetchEvolutionMessages,
+  fetchEvolutionIdentityAliases,
+  stripMediaDataUrl,
+  type EvolutionHistoryItem,
+} from '@/lib/whatsapp/evolution-api';
 
 export const CONTENT_TYPE_BY_MEDIA = {
   imageMessage: 'image',
   videoMessage: 'video',
+  ptvMessage: 'video',
   audioMessage: 'audio',
   documentMessage: 'document',
   stickerMessage: 'sticker',
 } as const;
+
+const BAILEYS_WRAPPERS = [
+  'ephemeralMessage',
+  'viewOnceMessage',
+  'viewOnceMessageV2',
+  'viewOnceMessageV2Extension',
+  'documentWithCaptionMessage',
+  'editedMessage',
+  'futureProofMessage',
+] as const;
 
 const EXT_BY_MIME: Record<string, string> = {
   'image/png': 'png',
@@ -41,6 +58,7 @@ const EXT_BY_MIME: Record<string, string> = {
   'image/webp': 'webp',
   'video/mp4': 'mp4',
   'video/3gpp': '3gp',
+  'video/quicktime': 'mp4',
   'application/pdf': 'pdf',
   'text/plain': 'txt',
   'audio/ogg': 'ogg',
@@ -171,47 +189,82 @@ function withReply(
   return replyTo ? { ...parsed, replyToMetaMessageId: replyTo } : parsed;
 }
 
-export function parseBaileys(msg: BaileysMessage | undefined): ParsedBaileys {
-  if (!msg) {
-    return { contentType: 'text', text: null, mediaKey: null, mimetype: undefined, fileName: undefined };
+/**
+ * WhatsApp Web / Baileys often wrap video (and some photos) in
+ * ephemeral / view-once envelopes. Unwrap those so `videoMessage`
+ * is visible. PTV (video notes) map onto `videoMessage`.
+ */
+export function unwrapBaileysMessage(
+  msg: BaileysMessage | undefined,
+): BaileysMessage | undefined {
+  if (!msg) return msg;
+  let current: BaileysMessage = msg;
+  for (let depth = 0; depth < 5; depth++) {
+    let inner: BaileysMessage | undefined;
+    for (const key of BAILEYS_WRAPPERS) {
+      const wrap = current[key];
+      if (!wrap || typeof wrap !== 'object') continue;
+      const nested = (wrap as { message?: BaileysMessage }).message;
+      if (nested && typeof nested === 'object') {
+        inner = nested;
+        break;
+      }
+    }
+    if (!inner) break;
+    current = inner;
+  }
+  const ptv = current.ptvMessage;
+  if (ptv && typeof ptv === 'object' && !current.videoMessage) {
+    return { ...current, videoMessage: ptv };
+  }
+  return current;
+}
+
+export function parseBaileys(
+  msg: BaileysMessage | undefined,
+  messageType?: string | null,
+): ParsedBaileys {
+  const source = unwrapBaileysMessage(msg);
+  if (!source) {
+    return mediaTypeFallback(messageType);
   }
 
-  if (typeof msg.conversation === 'string') {
+  if (typeof source.conversation === 'string' && source.conversation.trim()) {
     return withReply(
-      { contentType: 'text', text: msg.conversation, mediaKey: null, mimetype: undefined, fileName: undefined },
-      msg,
+      { contentType: 'text', text: source.conversation, mediaKey: null, mimetype: undefined, fileName: undefined },
+      source,
     );
   }
-  const ext = msg.extendedTextMessage as { text?: string } | undefined;
+  const ext = source.extendedTextMessage as { text?: string } | undefined;
   if (ext?.text) {
     return withReply(
       { contentType: 'text', text: ext.text, mediaKey: null, mimetype: undefined, fileName: undefined },
-      msg,
+      source,
     );
   }
 
   // Shared contact card(s) — flatten to a labelled text line.
-  const contactMsg = msg.contactMessage as
+  const contactMsg = source.contactMessage as
     | { displayName?: string; vcard?: string }
     | undefined;
   if (contactMsg?.vcard || contactMsg?.displayName) {
     return withReply(
       { contentType: 'text', text: vcardsToText([contactMsg]), mediaKey: null, mimetype: undefined, fileName: undefined },
-      msg,
+      source,
     );
   }
-  const contactsArr = msg.contactsArrayMessage as
+  const contactsArr = source.contactsArrayMessage as
     | { contacts?: { displayName?: string; vcard?: string }[] }
     | undefined;
   if (contactsArr?.contacts?.length) {
     return withReply(
       { contentType: 'text', text: vcardsToText(contactsArr.contacts), mediaKey: null, mimetype: undefined, fileName: undefined },
-      msg,
+      source,
     );
   }
 
   // Button / list replies (Evolution's rendering of interactive menus).
-  const buttons = msg.buttonsResponseMessage as
+  const buttons = source.buttonsResponseMessage as
     | { selectedButtonId?: string; selectedDisplayText?: string }
     | undefined;
   if (buttons?.selectedButtonId || buttons?.selectedDisplayText) {
@@ -227,10 +280,10 @@ export function parseBaileys(msg: BaileysMessage | undefined): ParsedBaileys {
           reply_title: buttons.selectedDisplayText ?? buttons.selectedButtonId ?? '',
         },
       },
-      msg,
+      source,
     );
   }
-  const list = msg.listResponseMessage as
+  const list = source.listResponseMessage as
     | {
         title?: string;
         singleSelectReply?: { selectedRowId?: string };
@@ -247,13 +300,9 @@ export function parseBaileys(msg: BaileysMessage | undefined): ParsedBaileys {
         fileName: undefined,
         interactiveReply: { reply_id: replyId, reply_title: list.title ?? replyId },
       },
-      msg,
+      source,
     );
   }
-
-  // Documents can arrive wrapped in documentWithCaptionMessage.
-  const wrapped = (msg.documentWithCaptionMessage as { message?: BaileysMessage } | undefined)?.message;
-  const source = wrapped ?? msg;
 
   for (const key of Object.keys(CONTENT_TYPE_BY_MEDIA) as (keyof typeof CONTENT_TYPE_BY_MEDIA)[]) {
     const media = source[key] as
@@ -268,15 +317,33 @@ export function parseBaileys(msg: BaileysMessage | undefined): ParsedBaileys {
           mimetype: baseMime(media.mimetype),
           fileName: media.fileName,
         },
-        { ...msg, ...source },
+        source,
       );
     }
   }
 
-  return withReply(
-    { contentType: 'text', text: null, mediaKey: null, mimetype: undefined, fileName: undefined },
-    msg,
-  );
+  const fallback = mediaTypeFallback(messageType);
+  return withReply(fallback, source);
+}
+
+function mediaTypeFallback(messageType?: string | null): ParsedBaileys {
+  const key = messageType as keyof typeof CONTENT_TYPE_BY_MEDIA | undefined;
+  if (key && key in CONTENT_TYPE_BY_MEDIA) {
+    return {
+      contentType: CONTENT_TYPE_BY_MEDIA[key],
+      text: null,
+      mediaKey: key,
+      mimetype: key === 'videoMessage' || key === 'ptvMessage' ? 'video/mp4' : undefined,
+      fileName: undefined,
+    };
+  }
+  return {
+    contentType: 'text',
+    text: null,
+    mediaKey: null,
+    mimetype: undefined,
+    fileName: undefined,
+  };
 }
 
 /**
@@ -292,7 +359,9 @@ export async function uploadInboundMedia(
   const mime = mimetype ?? 'application/octet-stream';
   const ext = EXT_BY_MIME[mime] ?? 'bin';
   try {
-    const buffer = Buffer.from(base64, 'base64');
+    const payload = stripMediaDataUrl(base64);
+    const buffer = Buffer.from(payload, 'base64');
+    if (buffer.length === 0) return null;
     const path = `account-${accountId}/${Date.now()}-evo-${contentType}.${ext}`;
     const { error } = await supabaseAdmin()
       .storage.from('chat-media')
@@ -307,6 +376,56 @@ export async function uploadInboundMedia(
     console.error('[evolution-inbound] media upload threw:', err);
     return null;
   }
+}
+
+function inlineMediaBase64(item: UpsertData): string | undefined {
+  const nested = item.message?.base64;
+  if (typeof nested === 'string' && nested.trim()) return nested;
+  if (typeof item.base64 === 'string' && item.base64.trim()) return item.base64;
+  if (typeof item.mediaBase64 === 'string' && item.mediaBase64.trim()) {
+    return item.mediaBase64;
+  }
+  return undefined;
+}
+
+async function resolveInboundMediaUrl(
+  config: EvoInboundConfig,
+  item: UpsertData,
+  parsed: ParsedBaileys,
+): Promise<string | null> {
+  let raw = inlineMediaBase64(item);
+  if (
+    !raw &&
+    config.evolution_base_url &&
+    config.evolution_api_key &&
+    config.evolution_instance
+  ) {
+    raw =
+      (await fetchEvolutionMediaBase64({
+        baseUrl: config.evolution_base_url,
+        apiKey: config.evolution_api_key,
+        instance: config.evolution_instance,
+        item: {
+          key: item.key,
+          message: unwrapBaileysMessage(item.message) ?? item.message,
+        },
+        convertToMp4: parsed.contentType === 'video',
+        timeoutMs: parsed.contentType === 'video' ? 45_000 : 20_000,
+      })) ?? undefined;
+  }
+  if (!raw) return null;
+  const mime =
+    parsed.contentType === 'video'
+      ? parsed.mimetype && parsed.mimetype.startsWith('video/')
+        ? parsed.mimetype
+        : 'video/mp4'
+      : parsed.mimetype;
+  return uploadInboundMedia(
+    config.account_id,
+    raw,
+    parsed.contentType,
+    mime,
+  );
 }
 
 /**
@@ -332,27 +451,17 @@ export async function processEvolutionItem(
 
     const outbound = item.key?.fromMe === true;
 
-    const parsed = parseBaileys(item.message);
+    const parsed = parseBaileys(item.message, item.messageType);
 
     let mediaUrl: string | null = null;
     if (parsed.mediaKey) {
-      const base64 =
-        (item.message?.base64 as string | undefined) ??
-        item.base64 ??
-        item.mediaBase64 ??
-        undefined;
-      if (base64) {
-        mediaUrl = await uploadInboundMedia(
-          config.account_id,
-          base64,
-          parsed.contentType,
-          parsed.mimetype,
-        );
-      }
+      mediaUrl = await resolveInboundMediaUrl(config, item, parsed);
     }
 
     // Nothing renderable and no text — skip (e.g. unsupported type).
-    if (!parsed.text && !mediaUrl && parsed.contentType === 'text') return 'skipped';
+    // Media types still persist even if Evolution omitted the bytes;
+    // the inbox can show a placeholder until a later sync fills them.
+    if (!parsed.text && !mediaUrl && !parsed.mediaKey) return 'skipped';
 
     const fallbackName = formatWhatsAppAddress(peer.contactKey) || peer.contactKey;
 

@@ -714,15 +714,50 @@ export async function fetchEvolutionIdentityAliases({
 
 /**
  * Fetch the base64 payload for one media message. Media isn't included
- * in findMessages, so the sync pulls it per message to make audios /
- * images / PDFs playable. Returns null on any failure.
+ * in findMessages / many live webhooks, so we pull it per message to
+ * make audios, images, PDFs, and WhatsApp Web videos playable.
  */
+export function stripMediaDataUrl(raw: string): string {
+  const trimmed = raw.trim();
+  const marker = 'base64,';
+  const idx = trimmed.indexOf(marker);
+  if (idx >= 0) return trimmed.slice(idx + marker.length);
+  return trimmed.replace(/\s/g, '');
+}
+
+export function mediaBase64FromEvolutionJson(json: unknown): string | null {
+  if (!json || typeof json !== 'object') return null;
+  const row = json as {
+    base64?: unknown;
+    data?: unknown;
+  };
+  if (typeof row.base64 === 'string' && row.base64.trim()) {
+    return stripMediaDataUrl(row.base64);
+  }
+  if (typeof row.data === 'string' && row.data.trim()) {
+    return stripMediaDataUrl(row.data);
+  }
+  if (row.data && typeof row.data === 'object') {
+    const nested = (row.data as { base64?: unknown }).base64;
+    if (typeof nested === 'string' && nested.trim()) {
+      return stripMediaDataUrl(nested);
+    }
+  }
+  return null;
+}
+
 export async function fetchEvolutionMediaBase64({
   baseUrl,
   apiKey,
   instance,
   item,
-}: EvolutionAuth & { item: EvolutionHistoryItem }): Promise<string | null> {
+  convertToMp4 = false,
+  timeoutMs = 20_000,
+}: EvolutionAuth & {
+  item: EvolutionHistoryItem;
+  convertToMp4?: boolean;
+  timeoutMs?: number;
+}): Promise<string | null> {
   const url = `${normalizeBaseUrl(baseUrl)}/chat/getBase64FromMediaMessage/${encodeURIComponent(instance)}`;
   try {
     const response = await fetch(url, {
@@ -730,12 +765,13 @@ export async function fetchEvolutionMediaBase64({
       headers: authHeaders(apiKey),
       body: JSON.stringify({
         message: { key: item.key, message: item.message },
-        convertToMp4: false,
+        convertToMp4,
       }),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!response.ok) return null;
-    const json = (await response.json()) as { base64?: string } | null;
-    return json?.base64 ?? null;
+    const json = (await response.json()) as unknown;
+    return mediaBase64FromEvolutionJson(json);
   } catch {
     return null;
   }
