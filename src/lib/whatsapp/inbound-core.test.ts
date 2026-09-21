@@ -17,8 +17,13 @@ const h = vi.hoisted(() => ({
   conversation: { id: 'conv-1', unread_count: 3 } as {
     id: string;
     unread_count: number;
+    contact_id?: string;
+    account_id?: string;
+    whatsapp_config_id?: string | null;
   },
   priorCustomerCount: 2,
+  messagesForProviderId: {} as Record<string, { conversation_id: string }[]>,
+  contactsById: {} as Record<string, Record<string, unknown>>,
 }));
 
 vi.mock('@/lib/contacts/dedupe', () => ({
@@ -101,6 +106,12 @@ vi.mock('@/lib/flows/admin-client', () => ({
             }
             return Promise.resolve({ data: h.existingDup, error: null });
           }
+          if (table === 'contacts' && state.op === 'select') {
+            const id = state.filters.id as string | undefined;
+            if (id && h.contactsById[id]) {
+              return Promise.resolve({ data: h.contactsById[id], error: null });
+            }
+          }
           return Promise.resolve({ data: null, error: null });
         },
         single: () => Promise.resolve({ data: { id: 'new-row' }, error: null }),
@@ -117,6 +128,18 @@ vi.mock('@/lib/flows/admin-client', () => ({
           if (table === 'messages' && state.op === 'select' && state.countHead) {
             return Promise.resolve({
               count: h.priorCustomerCount,
+              error: null,
+            }).then(onFulfilled, onRejected);
+          }
+          if (
+            table === 'messages' &&
+            state.op === 'select' &&
+            state.filters.message_id &&
+            !state.filters.conversation_id
+          ) {
+            const id = String(state.filters.message_id);
+            return Promise.resolve({
+              data: h.messagesForProviderId[id] ?? [],
               error: null,
             }).then(onFulfilled, onRejected);
           }
@@ -197,7 +220,15 @@ beforeEach(() => {
   h.replyParent = null;
   h.insertMessageError = null;
   h.priorCustomerCount = 2;
-  h.conversation = { id: 'conv-1', unread_count: 3 };
+  h.conversation = {
+    id: 'conv-1',
+    unread_count: 3,
+    contact_id: 'contact-1',
+    account_id: 'acct-1',
+    whatsapp_config_id: 'cfg-1',
+  };
+  h.messagesForProviderId = {};
+  h.contactsById = {};
 });
 
 describe('normalizeInboundContentType', () => {
@@ -394,6 +425,44 @@ describe('recordInboundMessage', () => {
     expect(contactUpdates.some((row) => row.payload.phone === 'lid:244327888465953')).toBe(
       false,
     );
+  });
+
+  it('keeps a phone echo of the same WhatsApp id on the Memo thread', async () => {
+    h.messagesForProviderId = {
+      'wamid-shared': [{ conversation_id: 'conv-1' }],
+    };
+    h.contactsById = {
+      'contact-1': {
+        id: 'contact-1',
+        name: 'Memo',
+        phone: 'lid:43048675373122',
+      },
+    };
+    h.findExistingContact.mockImplementation(
+      async (_db: unknown, _acct: string, phone: string) => {
+        if (phone === '573212030877') return null;
+        if (phone === 'lid:43048675373122') {
+          return h.contactsById['contact-1'];
+        }
+        return null;
+      },
+    );
+    h.existingDup = { id: 'already-on-home' };
+    await recordInboundMessage({
+      ...BASE,
+      senderPhone: '573212030877',
+      contactName: '',
+      messageId: 'wamid-shared',
+      outbound: true,
+    });
+    expect(h.inserts.filter((row) => row.table === 'contacts')).toHaveLength(0);
+    expect(h.inserts.filter((row) => row.table === 'messages')).toHaveLength(0);
+    expect(
+      h.updates.some(
+        (row) =>
+          row.table === 'contacts' && row.payload.phone === '573212030877',
+      ),
+    ).toBe(true);
   });
 });
 

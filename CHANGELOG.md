@@ -11,45 +11,29 @@ and polish.
 
 ## [0.8.25] — 2026-09-21
 
-Memo vs `573212030877` split again: the customer wrote on the LID chat
-(pushName *Memo*) and the agent reply landed on the E.164 chat labeled
-as the number. Inbox repair only joined matching display names.
+One WhatsApp person stays one inbox thread. Evolution often delivers
+the customer on a LID chat (*Memo*) and the agent echo on the phone
+JID (`573212030877`). Those are the **same message id**, not two
+people.
 
-Opening the inbox now also joins a named LID/@username with the unique
-unnamed phone thread on the same WhatsApp number whose last messages
-are within 6 hours. A single shared WhatsApp `message_id` is enough to
-link LID and phone (not two).
+When that id (or a swipe-reply to it) already exists on this number,
+the new event is adopted onto that thread and the LID/phone aliases
+are stamped. Two different users cannot share a WhatsApp message id,
+so simultaneous inbound from two people never merges.
+
+Inbox repair also joins complementary LID+phone rows that already
+stored the same provider id (last 7 days). We do **not** join chats
+only because they were busy at the same time. Evolution LID/phone
+lookups no longer block the webhook, so a busy inbox stays responsive.
 
 No new migration. Redeploy and hard-refresh the inbox once.
 
 ### Fixed
 
-- **Memo / number split.** Unnamed phone + unique named handle on the
-  same channel are merged so the greeting and the customer line sit in
-  one thread.
-
-## [0.8.25] — 2026-09-21
-
-Memo vs `573212030877` can still look split when Evolution puts the
-customer on a LID chat and the agent reply on the phone chat. We do
-**not** glue those threads just because they arrived in the same
-minute — that would mix two different people.
-
-Join only with proof: the same WhatsApp `message_id`, a stamped
-`whatsapp_lid` on the phone row, or a unique matching pushName (one
-E.164 + one LID/@username, nobody else with that name).
-
-No new migration. Redeploy and hard-refresh.
-
-### Fixed
-
-- **LID/phone link.** One shared WhatsApp message id is enough to
-  attach the echo to the existing thread (it used to require two).
-
-### Security
-
-- Inbox repair never merges two chats only because they were busy at
-  the same time.
+- **Split Memo / number threads.** Agent replies from the LID chat
+  stay on that chat when WhatsApp echoes the send on the phone JID.
+- **Shared `message_id`.** One id is enough to link; two E.164s with
+  the same id are not merged.
 
 ## [0.8.24] — 2026-09-20
 

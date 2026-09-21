@@ -4,6 +4,7 @@ import {
   isContactOnPayload,
   isProvenPeerPair,
   listComplementaryNameTwinPairs,
+  listSharedProviderMessagePairs,
   listStampedLidPairs,
   pickComplementaryNameTwin,
   pickSurvivorContact,
@@ -188,6 +189,51 @@ describe('listComplementaryNameTwinPairs', () => {
       listComplementaryNameTwinPairs([
         { id: 'p', phone: '573212030877', name: '573212030877' },
         { id: 'l', phone: 'lid:43048675373122', name: 'Memo' },
+      ]),
+    ).toEqual([]);
+  });
+});
+
+describe('listSharedProviderMessagePairs', () => {
+  it('joins LID and phone that stored the same WhatsApp message id', () => {
+    const pairs = listSharedProviderMessagePairs([
+      {
+        messageId: 'ABC',
+        conversationId: 'c-lid',
+        contactId: 'l',
+        contactPhone: 'lid:43048675373122',
+        channel: 'wa1',
+      },
+      {
+        messageId: 'ABC',
+        conversationId: 'c-pn',
+        contactId: 'p',
+        contactPhone: '573212030877',
+        channel: 'wa1',
+      },
+    ]);
+    expect(pairs).toHaveLength(1);
+    expect(pairs[0].survivor.id).toBe('p');
+    expect(pairs[0].loserId).toBe('l');
+  });
+
+  it('does not join two phones that share an id', () => {
+    expect(
+      listSharedProviderMessagePairs([
+        {
+          messageId: 'ABC',
+          conversationId: 'c1',
+          contactId: 'a',
+          contactPhone: '573212030877',
+          channel: 'wa1',
+        },
+        {
+          messageId: 'ABC',
+          conversationId: 'c2',
+          contactId: 'b',
+          contactPhone: '573000000001',
+          channel: 'wa1',
+        },
       ]),
     ).toEqual([]);
   });
