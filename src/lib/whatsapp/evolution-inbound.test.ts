@@ -5,7 +5,12 @@ import {
   parseBaileys,
   phoneFromJid,
   resolveEvolutionSenderPhone,
+  unwrapBaileysMessage,
 } from './evolution-inbound';
+import {
+  mediaBase64FromEvolutionJson,
+  stripMediaDataUrl,
+} from './evolution-api';
 
 describe('extractContextStanzaId', () => {
   it('reads stanzaId off extendedTextMessage.contextInfo', () => {
@@ -45,6 +50,65 @@ describe('parseBaileys', () => {
       reply_id: 'btn-1',
       reply_title: 'Yes',
     });
+  });
+
+  it('unwraps WhatsApp Web videos inside ephemeralMessage', () => {
+    const parsed = parseBaileys({
+      ephemeralMessage: {
+        message: {
+          videoMessage: {
+            mimetype: 'video/mp4',
+            seconds: 136,
+            caption: 'Precio de esta máquina',
+          },
+        },
+      },
+    });
+    expect(parsed.contentType).toBe('video');
+    expect(parsed.mediaKey).toBe('videoMessage');
+    expect(parsed.text).toBe('Precio de esta máquina');
+  });
+
+  it('maps PTV video notes to video', () => {
+    const parsed = parseBaileys({
+      ptvMessage: { mimetype: 'video/mp4', seconds: 8 },
+    });
+    expect(parsed.contentType).toBe('video');
+    expect(parsed.mediaKey).toBe('videoMessage');
+  });
+
+  it('does not treat an empty conversation string as the whole message', () => {
+    const parsed = parseBaileys({
+      conversation: '',
+      videoMessage: { mimetype: 'video/mp4' },
+    });
+    expect(parsed.contentType).toBe('video');
+  });
+
+  it('uses Evolution messageType when the body is an empty envelope', () => {
+    const parsed = parseBaileys({}, 'videoMessage');
+    expect(parsed.contentType).toBe('video');
+    expect(parsed.mediaKey).toBe('videoMessage');
+  });
+});
+
+describe('unwrapBaileysMessage', () => {
+  it('walks viewOnceMessageV2', () => {
+    const inner = unwrapBaileysMessage({
+      viewOnceMessageV2: {
+        message: { videoMessage: { mimetype: 'video/mp4' } },
+      },
+    });
+    expect(inner?.videoMessage).toEqual({ mimetype: 'video/mp4' });
+  });
+});
+
+describe('stripMediaDataUrl', () => {
+  it('strips a data URL prefix', () => {
+    expect(stripMediaDataUrl('data:video/mp4;base64,AAAA')).toBe('AAAA');
+    expect(mediaBase64FromEvolutionJson({ base64: 'data:video/mp4;base64,QQ==' })).toBe(
+      'QQ==',
+    );
   });
 });
 
