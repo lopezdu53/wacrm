@@ -9,6 +9,25 @@ Versions follow [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Pre-1.0, `MINOR` bumps cover new modules; `PATCH` bumps cover bug fixes
 and polish.
 
+## [0.8.27] — 2026-09-21
+
+#67 unwrapped WhatsApp Web videos, but Loag’s 10:25 p.m. clips still
+never landed: the webhook waited on Evolution to download the MP4,
+EasyPanel cut the request, and wacrm stored nothing.
+
+The thread row is saved immediately (placeholder if needed). The MP4
+is fetched in the background and patched onto that row. Inbox Sync
+also walks LID + phone JIDs and no longer blocks on each file.
+
+No new migration (still apply `056_chat_media_64mb.sql` if you have
+not). Redeploy, hard-refresh, open Loag, click the cloud-download
+Sync on the thread.
+
+### Fixed
+
+- **Webhook timeout dropped videos.** Persist first, attach bytes after.
+- **Sync missed the phone JID** when the contact also has a LID.
+
 ## [0.8.26] — 2026-09-21
 
 Videos sent from WhatsApp Web (for example the 2:16 and 1:01 clips
