@@ -89,6 +89,26 @@ Saving (or **Push to wacrm**) upserts the sheet into wacrm. The
 configured API key needs **`products:write`**. In the inbox, open
 **+ → Products**, then **Send all** or tick pieces and **Send selected**.
 
+## Opening a lead from outside Odoo (`/wacrm/open-lead`)
+
+The reverse direction of the SSO bridge: given a wacrm deal id
+(`?wacrm_id=<uuid>`), this route finds the matching `crm.lead` (by its
+`wacrm_id` field) and opens it. Nothing in this module calls it
+directly — it exists for **other tools that know a deal's wacrm id and
+want to jump straight into its Odoo record**, most notably the
+[wacrm MCP server](../../../mcp-server/)'s `list_deals`/`get_deal`
+tools, which include this link automatically when that server is
+configured with `ODOO_BASE_URL`. For example, asking an MCP client
+"how many deals need a quote?" can return a direct link per deal to
+open it in Odoo and build the quotation there.
+
+- Requires an active Odoo session, same as any other page — if you're
+  not logged in, Odoo's normal login screen appears first.
+- Respects normal Odoo access rules (not `sudo()`'d): it only opens a
+  lead the clicking user could already see in Odoo.
+- A deal that hasn't synced to Odoo yet (or one you don't have access
+  to) shows a plain "not synced yet" page rather than a dead link.
+
 ## Pipeline Mapping
 
 Like other CRM connectors, you can control exactly which Odoo stage each
@@ -146,6 +166,10 @@ just clear them by hand once; nothing will write there again.
 
 ## Notes / limits
 
+- **v19.0.1.14.5 — `/wacrm/open-lead`**: a new route that opens a
+  synced opportunity given its wacrm deal id (see **Opening a lead
+  from outside Odoo** above) — for other tools to deep-link into
+  Odoo, not used by this module itself.
 - **v19.0.1.13.0 — incremental cron, won deals, default salesperson**:
   the 15-minute cron now pulls only rows changed since the last
   watermark (`updated_since` on `/api/v1/contacts` and `/api/v1/deals`).

@@ -8,6 +8,7 @@ and others) drive your CRM in natural language:
 > "How many conversations are still open?"
 > "Find the contact for +1 415 555 0123 and show the last few messages."
 > "Draft and send an order-update template to Jane."
+> "How many deals are in 'Calificado' but haven't been quoted yet?"
 
 It's a thin wrapper over wacrm's public [`/api/v1`](../docs/public-api.md)
 REST API. All auth, scoping, and rate limiting are enforced by your
@@ -21,8 +22,8 @@ wacrm instance — this server just exposes the API as MCP tools.
 
 ## Install & configure
 
-The server reads two required environment variables and two optional
-write guards:
+The server reads two required environment variables, two optional
+write guards, and one optional Odoo link:
 
 | Variable                  | Required | Purpose                                                        |
 | ------------------------- | -------- | -------------------------------------------------------------- |
@@ -30,6 +31,7 @@ write guards:
 | `WACRM_API_KEY`           | yes      | An API key from the dashboard                                  |
 | `WACRM_ENABLE_WRITES`     | no       | `true` to expose contact writes + message sending             |
 | `WACRM_ENABLE_BROADCASTS` | no       | `true` to expose mass broadcasts (needs `WACRM_ENABLE_WRITES`) |
+| `ODOO_BASE_URL`           | no       | Your Odoo instance URL — adds a direct link to each deal's synced opportunity (needs the [`wacrm_sync`](../integrations/odoo/wacrm_sync/) Odoo module installed) |
 
 ### Claude Desktop / Claude Code / Cursor
 
@@ -77,10 +79,49 @@ when their guard is set.
 | `get_conversation`   | read      | `conversations:read` | Read one conversation                           |
 | `list_messages`      | read      | `messages:read`      | List a conversation's messages                  |
 | `get_broadcast`      | read      | `broadcasts:send`    | Poll a broadcast's delivery status              |
+| `list_pipelines`     | read      | `deals:read`         | List pipelines + their stages (id, name)        |
+| `list_deals`         | read      | `deals:read`         | List deals, filter by pipeline/stage/status/date|
+| `get_deal`           | read      | `deals:read`         | Read one deal, incl. its AI summary             |
 | `send_message`       | write     | `messages:send`      | Send a WhatsApp message (text/template/media)   |
+| `upload_media`       | write     | `messages:send`      | Stage base64 file bytes, get a sendable URL     |
 | `create_contact`     | write     | `contacts:write`     | Create (find-or-create) a contact               |
 | `update_contact`     | write     | `contacts:write`     | Update a contact / replace its tags             |
 | `send_broadcast`     | broadcast | `broadcasts:send`    | Launch a template broadcast (requires `confirm`)|
+
+## Tracking what still needs a quote
+
+If your pipeline has a stage for "already quoted" (e.g. "Cotizado"),
+you can ask something like *"how many deals are stuck before
+Cotizado?"* and the assistant will:
+
+1. Call `list_pipelines` to find the stage's id by name.
+2. Call `list_deals` filtered to the earlier stage(s), paging through
+   `next_cursor` to get an exact count rather than stopping at one
+   page.
+3. If `ODOO_BASE_URL` is set, each deal in the result carries an
+   `odoo_url` — a direct link into that lead's synced Odoo opportunity
+   (it only works once the deal has reached Odoo on a sync pass; a
+   deal that hasn't synced yet shows a plain "not synced yet" page
+   instead of 404ing). Open it and build the quote there with Odoo's
+   own pricing tools — this server never creates or prices a quote
+   itself.
+
+### Sending the finished quote back on WhatsApp
+
+If your MCP client also has an Odoo MCP server connected in the same
+conversation, you can go further: once Odoo has built the quotation
+and can hand back its PDF report (most Odoo MCP servers return report
+bytes as base64), ask the assistant to send it to the customer. It
+will:
+
+1. Call `upload_media` with that base64 PDF — wacrm stages it and
+   returns a public URL (send_message can't take base64 directly:
+   Meta/Evolution must be able to fetch the file themselves).
+2. Call `send_message` with `type: "document"`, that `media_url`, and
+   the deal's contact phone number (from `get_deal`).
+
+wacrm never builds or prices the quote — it only moves the finished
+PDF from Odoo onto WhatsApp.
 
 ## Safety model
 

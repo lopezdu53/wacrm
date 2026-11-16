@@ -43,3 +43,22 @@ export function handle<A>(
     }
   };
 }
+
+/**
+ * Annotate a deal with a direct link into its synced Odoo opportunity,
+ * when `odooBaseUrl` is configured. Goes through the Odoo module's own
+ * `/wacrm/open-lead` redirect (looks the record up by `wacrm_id` and
+ * hands off to Odoo's standard record-opening route) — this never
+ * needs to know Odoo's internal numeric id, and resolves to a clean
+ * "not synced yet" page if the deal hasn't reached Odoo on its next
+ * sync pass yet.
+ */
+export function withOdooLink<T>(deal: T, odooBaseUrl: string | null): T {
+  if (!odooBaseUrl || typeof deal !== 'object' || deal === null) return deal;
+  const id = (deal as Record<string, unknown>).id;
+  if (typeof id !== 'string') return deal;
+  return {
+    ...deal,
+    odoo_url: `${odooBaseUrl}/wacrm/open-lead?wacrm_id=${encodeURIComponent(id)}`,
+  } as T;
+}
