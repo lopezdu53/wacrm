@@ -176,4 +176,26 @@ export class WacrmClient {
   getBroadcast(id: string): Promise<{ data: unknown }> {
     return this.request('GET', `/broadcasts/${encodeURIComponent(id)}`);
   }
+
+  // --- Deals / pipelines ----------------------------------------------
+
+  listDeals(query: {
+    limit?: number;
+    cursor?: string;
+    pipeline?: string;
+    stage?: string;
+    status?: string;
+    updated_since?: string;
+  }): Promise<Paginated<unknown>> {
+    return this.list('/deals', query);
+  }
+
+  getDeal(id: string): Promise<{ data: unknown }> {
+    return this.request('GET', `/deals/${encodeURIComponent(id)}`);
+  }
+
+  /** Not paginated — an account has a handful of pipelines/stages. */
+  listPipelines(): Promise<{ data: unknown }> {
+    return this.request('GET', '/pipelines');
+  }
 }

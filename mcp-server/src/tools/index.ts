@@ -13,7 +13,7 @@ import { registerBroadcastTools } from './broadcast.js';
 
 export function registerTools(server: McpServer, client: WacrmClient, config: Config): string[] {
   const enabled: string[] = ['read'];
-  registerReadTools(server, client);
+  registerReadTools(server, client, config);
 
   if (config.enableWrites) {
     registerWriteTools(server, client);

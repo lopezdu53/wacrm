@@ -15,6 +15,9 @@ export interface Config {
   apiKey: string;
   enableWrites: boolean;
   enableBroadcasts: boolean;
+  /** Optional Odoo base URL — when set, deal tools include a direct
+   *  link into that deal's synced Odoo opportunity. */
+  odooBaseUrl: string | null;
 }
 
 function truthy(value: string | undefined): boolean {
@@ -55,10 +58,22 @@ export function loadConfig(): Config {
     );
   }
 
+  const odooBaseUrlRaw = process.env.ODOO_BASE_URL?.trim();
+  let odooBaseUrl: string | null = null;
+  if (odooBaseUrlRaw) {
+    odooBaseUrl = odooBaseUrlRaw.replace(/\/+$/, '');
+    if (!/^https?:\/\//.test(odooBaseUrl)) {
+      throw new Error(
+        `ODOO_BASE_URL must start with http:// or https:// (got "${odooBaseUrl}").`,
+      );
+    }
+  }
+
   return {
     baseUrl,
     apiKey: apiKey!,
     enableWrites,
     enableBroadcasts,
+    odooBaseUrl,
   };
 }
