@@ -122,6 +122,15 @@ export class WacrmClient {
     return this.request('POST', '/messages', { body });
   }
 
+  /** Stages file bytes and returns a public URL usable as sendMessage's media_url. */
+  uploadMedia(body: {
+    filename: string;
+    mime_type?: string;
+    content_base64: string;
+  }): Promise<{ data: { url: string } }> {
+    return this.request('POST', '/media', { body });
+  }
+
   // --- Contacts -----------------------------------------------------
 
   listContacts(query: {

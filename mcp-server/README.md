@@ -83,6 +83,7 @@ when their guard is set.
 | `list_deals`         | read      | `deals:read`         | List deals, filter by pipeline/stage/status/date|
 | `get_deal`           | read      | `deals:read`         | Read one deal, incl. its AI summary             |
 | `send_message`       | write     | `messages:send`      | Send a WhatsApp message (text/template/media)   |
+| `upload_media`       | write     | `messages:send`      | Stage base64 file bytes, get a sendable URL     |
 | `create_contact`     | write     | `contacts:write`     | Create (find-or-create) a contact               |
 | `update_contact`     | write     | `contacts:write`     | Update a contact / replace its tags             |
 | `send_broadcast`     | broadcast | `broadcasts:send`    | Launch a template broadcast (requires `confirm`)|
@@ -104,6 +105,23 @@ Cotizado?"* and the assistant will:
    instead of 404ing). Open it and build the quote there with Odoo's
    own pricing tools — this server never creates or prices a quote
    itself.
+
+### Sending the finished quote back on WhatsApp
+
+If your MCP client also has an Odoo MCP server connected in the same
+conversation, you can go further: once Odoo has built the quotation
+and can hand back its PDF report (most Odoo MCP servers return report
+bytes as base64), ask the assistant to send it to the customer. It
+will:
+
+1. Call `upload_media` with that base64 PDF — wacrm stages it and
+   returns a public URL (send_message can't take base64 directly:
+   Meta/Evolution must be able to fetch the file themselves).
+2. Call `send_message` with `type: "document"`, that `media_url`, and
+   the deal's contact phone number (from `get_deal`).
+
+wacrm never builds or prices the quote — it only moves the finished
+PDF from Odoo onto WhatsApp.
 
 ## Safety model
 

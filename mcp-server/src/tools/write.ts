@@ -58,6 +58,27 @@ export function registerWriteTools(server: McpServer, client: WacrmClient): void
   );
 
   server.registerTool(
+    'upload_media',
+    {
+      title: 'Upload media for sending',
+      description:
+        'Stage a file (as base64) in wacrm and get back a public URL to pass as send_message\'s media_url. Use this when you have file bytes from somewhere else — e.g. a PDF a quoting/ERP tool just generated — and need to send it as a WhatsApp document/image/video/audio: send_message cannot take base64 directly because Meta/Evolution must be able to fetch the URL themselves. Max 16 MB.',
+      inputSchema: {
+        filename: z.string().describe('File name, e.g. "cotizacion-1234.pdf". Its extension is kept as-is.'),
+        mime_type: z
+          .string()
+          .optional()
+          .describe('MIME type, e.g. "application/pdf". Defaults to application/octet-stream.'),
+        content_base64: z
+          .string()
+          .describe('The file content, base64-encoded. A data: URL prefix (e.g. "data:application/pdf;base64,...") is fine — it is stripped automatically.'),
+      },
+      annotations: { title: 'Upload media for sending', readOnlyHint: false, openWorldHint: true },
+    },
+    handle(async (args) => jsonResult(await client.uploadMedia(args))),
+  );
+
+  server.registerTool(
     'create_contact',
     {
       title: 'Create contact',
