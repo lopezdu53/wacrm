@@ -23,38 +23,20 @@ import { WebStandardStreamableHTTPServerTransport } from '@modelcontextprotocol/
 import { WacrmClient } from '@/lib/mcp/client';
 import { loadMcpConfig } from '@/lib/mcp/config';
 import { registerTools } from '@/lib/mcp/tools/index';
+import { getBaseUrl } from '@/lib/http/base-url';
 
 export const dynamic = 'force-dynamic';
 
 const MCP_SERVER_VERSION = '1.0.0';
 
 /**
- * This app's own public base URL, for the loopback call to its own
- * `/api/v1/*`. Same resolution order as `/api/v1/sso/login-link`:
- * explicit `NEXT_PUBLIC_SITE_URL` first, else the request's own
- * forwarded/host header.
- */
-function getBaseUrl(request: Request): string {
-  const explicit = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (explicit) return explicit.replace(/\/+$/, '');
-
-  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
-  const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim();
-  if (forwardedHost) return `${forwardedProto || 'https'}://${forwardedHost}`;
-
-  const host = request.headers.get('host')?.trim();
-  if (host) {
-    const proto = new URL(request.url).protocol.replace(':', '');
-    return `${proto}://${host}`;
-  }
-  return 'https://wacrm.tech';
-}
-
-/**
  * The wacrm API key, from either the standard `Authorization: Bearer
  * <key>` header or a `?key=<key>` query parameter. The query param
  * exists for an MCP client whose "add server" UI only takes a URL,
- * with nowhere to set a custom header.
+ * with nowhere to set a custom header. Either way, this is a real
+ * wacrm API key — one pasted in by hand, or one an MCP client minted
+ * for itself via the OAuth dance at /oauth/authorize (see
+ * `src/app/oauth/token/route.ts`): both look identical from here.
  */
 function extractApiKey(request: Request): string | null {
   const auth = request.headers.get('authorization');
@@ -66,10 +48,21 @@ function extractApiKey(request: Request): string | null {
   return key?.trim() || null;
 }
 
-function unauthorized(message: string): Response {
+/**
+ * 401 with a `WWW-Authenticate` header pointing at this resource's
+ * OAuth metadata (RFC 9728), so a client that doesn't already have a
+ * token — in particular, one adding this server by URL with no way
+ * to paste a header — can discover the authorization server and run
+ * the OAuth flow instead of failing silently.
+ */
+function unauthorized(request: Request, message: string): Response {
+  const resourceMetadataUrl = `${getBaseUrl(request)}/.well-known/oauth-protected-resource`;
   return new Response(JSON.stringify({ error: { code: 'unauthorized', message } }), {
     status: 401,
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'WWW-Authenticate': `Bearer resource_metadata="${resourceMetadataUrl}"`,
+    },
   });
 }
 
@@ -77,7 +70,8 @@ async function handleMcpRequest(request: Request): Promise<Response> {
   const apiKey = extractApiKey(request);
   if (!apiKey) {
     return unauthorized(
-      'Missing wacrm API key. Send it as "Authorization: Bearer <key>" or add "?key=<key>" to the URL.',
+      request,
+      'Missing wacrm API key. Send it as "Authorization: Bearer <key>", add "?key=<key>" to the URL, or complete the OAuth flow.',
     );
   }
 

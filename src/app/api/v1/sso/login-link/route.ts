@@ -24,35 +24,12 @@
 
 import { requireApiKey } from '@/lib/auth/api-context';
 import { ok, fail, toApiErrorResponse } from '@/lib/api/v1/respond';
+import { getBaseUrl } from '@/lib/http/base-url';
 
 // Supabase magic links verify server-side at Supabase, then redirect
 // the browser here with the session in the URL — this is where the
 // agent should land once logged in.
 const LOGIN_REDIRECT_PATH = '/inbox';
-
-/**
- * Base URL wacrm itself is served from, for the post-login redirect.
- * `NEXT_PUBLIC_SITE_URL` is the same explicit-config knob every other
- * absolute-URL-building route in this app defers to first (see
- * `/api/account/invitations`); a proxied deploy without it set falls
- * back to the request's own Host header, which is what a real browser
- * hitting this API always sends correctly.
- */
-function getBaseUrl(request: Request): string {
-  const explicit = process.env.NEXT_PUBLIC_SITE_URL?.trim();
-  if (explicit) return explicit.replace(/\/+$/, '');
-
-  const forwardedHost = request.headers.get('x-forwarded-host')?.split(',')[0]?.trim();
-  const forwardedProto = request.headers.get('x-forwarded-proto')?.split(',')[0]?.trim();
-  if (forwardedHost) return `${forwardedProto || 'https'}://${forwardedHost}`;
-
-  const host = request.headers.get('host')?.trim();
-  if (host) {
-    const proto = new URL(request.url).protocol.replace(':', '');
-    return `${proto}://${host}`;
-  }
-  return 'https://wacrm.tech';
-}
 
 export async function POST(request: Request) {
   try {
