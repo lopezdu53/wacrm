@@ -14,6 +14,13 @@ It's a thin wrapper over wacrm's public [`/api/v1`](../docs/public-api.md)
 REST API. All auth, scoping, and rate limiting are enforced by your
 wacrm instance — this server just exposes the API as MCP tools.
 
+**Prefer a URL you can just paste into "Add connector"?** Your wacrm
+deployment also serves these same tools directly at `/mcp` — no local
+process, no config file, nothing to rebuild when tools change (it
+updates on your app's next deploy). See
+[`src/app/mcp/route.ts`](../src/app/mcp/route.ts) in the main app; the
+rest of this README is for the standalone npm package below.
+
 ## Prerequisites
 
 1. A running wacrm instance (your own self-hosted deploy).

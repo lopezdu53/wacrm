@@ -1,0 +1,59 @@
+// ============================================================
+// Shared helpers for tool handlers. Mirrors
+// `mcp-server/src/tools/shared.ts` — see the note in `../client.ts`
+// about why this is a separate copy rather than a shared import.
+// ============================================================
+
+import type { CallToolResult } from '@modelcontextprotocol/sdk/types.js';
+import { WacrmApiError } from '../client';
+
+export function jsonResult(payload: unknown): CallToolResult {
+  return {
+    content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }],
+  };
+}
+
+export function errorResult(message: string): CallToolResult {
+  return {
+    content: [{ type: 'text', text: message }],
+    isError: true,
+  };
+}
+
+/**
+ * Wrap a tool handler so any WacrmApiError becomes a clean, model-
+ * readable error result and unexpected throws don't crash the server.
+ */
+export function handle<A>(
+  fn: (args: A) => Promise<CallToolResult>,
+): (args: A) => Promise<CallToolResult> {
+  return async (args: A) => {
+    try {
+      return await fn(args);
+    } catch (err) {
+      if (err instanceof WacrmApiError) {
+        return errorResult(`wacrm API error [${err.code}]: ${err.message}`);
+      }
+      return errorResult(`Unexpected error: ${(err as Error).message}`);
+    }
+  };
+}
+
+/**
+ * Annotate a deal with a direct link into its synced Odoo opportunity,
+ * when `odooBaseUrl` is configured. Goes through the Odoo module's own
+ * `/wacrm/open-lead` redirect (looks the record up by `wacrm_id` and
+ * hands off to Odoo's standard record-opening route) — this never
+ * needs to know Odoo's internal numeric id, and resolves to a clean
+ * "not synced yet" page if the deal hasn't reached Odoo on its next
+ * sync pass yet.
+ */
+export function withOdooLink<T>(deal: T, odooBaseUrl: string | null): T {
+  if (!odooBaseUrl || typeof deal !== 'object' || deal === null) return deal;
+  const id = (deal as Record<string, unknown>).id;
+  if (typeof id !== 'string') return deal;
+  return {
+    ...deal,
+    odoo_url: `${odooBaseUrl}/wacrm/open-lead?wacrm_id=${encodeURIComponent(id)}`,
+  } as T;
+}
