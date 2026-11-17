@@ -36,6 +36,11 @@ function LoginPageInner() {
   // account. After a successful sign-in we send them to the join
   // page to accept rather than to /dashboard.
   const inviteToken = searchParams.get("invite");
+  // Forwarded from a page that required auth first (e.g.
+  // /oauth/authorize). Only ever followed when it's a same-origin
+  // relative path — an absolute URL here would be an open redirect.
+  const nextParam = searchParams.get("next");
+  const next = nextParam && nextParam.startsWith("/") && !nextParam.startsWith("//") ? nextParam : null;
   const t = useTranslations("LoginPage");
 
   const [email, setEmail] = useState("");
@@ -61,7 +66,9 @@ function LoginPageInner() {
       return;
     }
 
-    if (inviteToken) {
+    if (next) {
+      router.push(next);
+    } else if (inviteToken) {
       router.push(`/join/${encodeURIComponent(inviteToken)}`);
     } else {
       router.push("/dashboard");
