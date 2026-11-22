@@ -67,6 +67,17 @@ const SECURITY_HEADERS = [
 
 const nextConfig: NextConfig = {
   /**
+   * Requests that pass through `src/middleware.ts` have their body
+   * buffered, and anything past this limit is silently CUT OFF (not
+   * rejected) — the route then sees a truncated upload. The 10 MB
+   * default was below what the inbox accepts for documents and video,
+   * so raise it. Webhooks and the public API skip the middleware
+   * entirely (see `config.matcher` there) and are not bound by this.
+   */
+  experimental: {
+    proxyClientMaxBodySize: "100mb",
+  },
+  /**
    * Cache-Control policy.
    *
    * Why this exists:
