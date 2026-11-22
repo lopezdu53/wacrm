@@ -2,8 +2,11 @@
 // GET /api/v1/conversations — list conversations (scope: conversations:read)
 //
 // Keyset-paginated (newest first). Filters: `?status=` (open/pending/
-// closed) and `?contact_id=`. Each conversation embeds its contact +
-// tags via the shared CONVERSATION_SELECT.
+// closed), `?contact_id=`, `?inbox=` (inbox / opportunities) and
+// `?whatsapp_number=` (a number's id or label — see
+// GET /api/v1/whatsapp-numbers). Each conversation embeds its contact +
+// tags via the shared CONVERSATION_SELECT, plus the tray it sits in and
+// the number it belongs to.
 // ============================================================
 
 import { requireApiKey } from '@/lib/auth/api-context';
@@ -18,6 +21,11 @@ import {
   normalizeConversation,
 } from '@/lib/inbox/conversations';
 import { serializeConversation } from '@/lib/api/v1/conversations';
+import {
+  loadWhatsAppNumbers,
+  findWhatsAppNumber,
+  describeNumbers,
+} from '@/lib/api/v1/whatsapp-numbers';
 import type { Conversation } from '@/types';
 
 export async function GET(request: Request) {
@@ -28,6 +36,27 @@ export async function GET(request: Request) {
     const status = url.searchParams.get('status');
     const contactId = url.searchParams.get('contact_id');
 
+    const inbox = url.searchParams.get('inbox');
+    const numberRef = url.searchParams.get('whatsapp_number');
+
+    if (inbox && inbox !== 'inbox' && inbox !== 'opportunities') {
+      return fail(
+        'bad_request',
+        "'inbox' must be 'inbox' or 'opportunities'",
+        400
+      );
+    }
+
+    const numbers = await loadWhatsAppNumbers(ctx.supabase, ctx.accountId);
+    const number = numberRef ? findWhatsAppNumber(numbers, numberRef) : null;
+    if (numberRef && !number) {
+      return fail(
+        'bad_request',
+        `Unknown WhatsApp number '${numberRef}'. Connected numbers: ${describeNumbers(numbers) || 'none'}.`,
+        400
+      );
+    }
+
     let query = ctx.supabase
       .from('conversations')
       .select(CONVERSATION_SELECT)
@@ -35,6 +64,8 @@ export async function GET(request: Request) {
 
     if (status) query = query.eq('status', status);
     if (contactId) query = query.eq('contact_id', contactId);
+    if (inbox) query = query.eq('is_opportunity', inbox === 'opportunities');
+    if (number) query = query.eq('whatsapp_config_id', number.id);
 
     query = query
       .order('created_at', { ascending: false })
@@ -56,7 +87,7 @@ export async function GET(request: Request) {
     );
     return okList(
       items.map((r) =>
-        serializeConversation(normalizeConversation(r as Conversation))
+        serializeConversation(normalizeConversation(r as Conversation), numbers)
       ),
       nextCursor
     );

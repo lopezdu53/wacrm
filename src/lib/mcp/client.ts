@@ -170,8 +170,15 @@ export class WacrmClient {
     cursor?: string;
     status?: string;
     contact_id?: string;
+    inbox?: string;
+    whatsapp_number?: string;
   }): Promise<Paginated<unknown>> {
     return this.list('/conversations', query);
+  }
+
+  /** Not paginated — an account has a handful of connected numbers. */
+  listWhatsAppNumbers(): Promise<{ data: unknown }> {
+    return this.request('GET', '/whatsapp-numbers');
   }
 
   getConversation(id: string): Promise<{ data: unknown }> {

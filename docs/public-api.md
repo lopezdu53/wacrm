@@ -124,8 +124,15 @@ curl https://your-crm.example.com/api/v1/me \
 Send a WhatsApp message to a phone number. Scope: `messages:send`. You
 pass an **E.164 number**, not an internal id — the endpoint
 finds-or-creates the contact + conversation, then sends. Optional
-`whatsapp_config_id` picks which connected number to send from when
-the account has more than one.
+`from` picks which connected number to send from when the account has
+more than one: a number's id or label from
+`GET /api/v1/whatsapp-numbers` (`whatsapp_config_id` is the older name
+for the same field). An unknown value is rejected with `400` rather
+than falling back to another number.
+
+To reply inside an existing chat, pass `conversation_id` instead of
+`to`; the message leaves from the number that chat belongs to. The
+response includes `whatsapp_number`, the number that sent it.
 
 ```bash
 curl -X POST https://your-crm.example.com/api/v1/messages \
@@ -232,11 +239,21 @@ List the account's pipelines, each with its ordered `stages` (id, name,
 color, position). Scope: `deals:read`. Not paginated. Use it to map a
 deal's `pipeline_id` / `stage_id` onto your own system's stages.
 
+### `GET /api/v1/whatsapp-numbers`
+
+List the account's connected WhatsApp numbers: `id`, `label` (the name
+shown in the inbox number selector), `provider` (`meta` / `evolution`),
+`status`, and `requires_template_after_24h`. Scope:
+`conversations:read`. Not paginated.
+
 ### `GET /api/v1/conversations`
 
 List conversations, newest first. Scope: `conversations:read`.
-Paginated. Optional filters: `?status=` (`open` / `pending` / `closed`)
-and `?contact_id=`. Each conversation embeds its contact + tags.
+Paginated. Optional filters: `?status=` (`open` / `pending` / `closed`),
+`?contact_id=`, `?inbox=` (`inbox` / `opportunities`) and
+`?whatsapp_number=` (a number's id or label). Each conversation embeds
+its contact + tags, the tray it sits in (`inbox`) and the number it
+belongs to (`whatsapp_number`).
 
 ### `GET /api/v1/conversations/{id}`
 
