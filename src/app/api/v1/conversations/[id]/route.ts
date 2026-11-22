@@ -10,6 +10,7 @@ import {
   normalizeConversation,
 } from '@/lib/inbox/conversations';
 import { serializeConversation } from '@/lib/api/v1/conversations';
+import { loadWhatsAppNumbers } from '@/lib/api/v1/whatsapp-numbers';
 import type { Conversation } from '@/types';
 
 export async function GET(
@@ -33,7 +34,10 @@ export async function GET(
     }
     if (!data) return fail('not_found', 'Conversation not found', 404);
 
-    return ok(serializeConversation(normalizeConversation(data as Conversation)));
+    const numbers = await loadWhatsAppNumbers(ctx.supabase, ctx.accountId);
+    return ok(
+      serializeConversation(normalizeConversation(data as Conversation), numbers)
+    );
   } catch (err) {
     return toApiErrorResponse(err);
   }

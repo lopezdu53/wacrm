@@ -28,6 +28,36 @@ describe('serializeConversation', () => {
     expect(out).not.toHaveProperty('account_id');
     expect(out.contact?.tags).toEqual([{ id: 't1', name: 'vip', color: '#fff' }]);
     expect(out.unread_count).toBe(2);
+    expect(out.inbox).toBe('inbox');
+    expect(out.whatsapp_number).toBeNull();
+  });
+
+  it('reports the tray and the number the chat belongs to', () => {
+    const conv = {
+      id: 'conv1',
+      contact_id: 'c1',
+      status: 'open',
+      is_opportunity: true,
+      whatsapp_config_id: 'n1',
+      created_at: '2026-01-01T00:00:00Z',
+      updated_at: '2026-01-01T00:00:00Z',
+    } as unknown as Conversation;
+
+    const out = serializeConversation(conv, [
+      {
+        id: 'n1',
+        label: '3134407007',
+        provider: 'evolution',
+        status: 'connected',
+        requires_template_after_24h: false,
+      },
+    ]);
+    expect(out.inbox).toBe('opportunities');
+    expect(out.whatsapp_number).toEqual({
+      id: 'n1',
+      label: '3134407007',
+      provider: 'evolution',
+    });
   });
 });
 

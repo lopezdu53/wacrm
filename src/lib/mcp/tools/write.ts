@@ -26,9 +26,20 @@ export function registerWriteTools(server: McpServer, client: WacrmClient): void
     {
       title: 'Send WhatsApp message',
       description:
-        'Send a WhatsApp message to a phone number (E.164, e.g. +14155550123). The contact and conversation are found-or-created automatically. Use type "text" for a free-form message (only valid inside the 24-hour customer-service window), or "template" to send an approved template (required to open a new conversation). Media types (image/video/document/audio) require a media_url. This sends a real message to a real person — confirm the recipient and content with the user before calling.',
+        'Send a WhatsApp message. Two ways to address it: (1) `conversation_id` — reply inside an existing chat; it always leaves from the number that chat belongs to, which is the safe choice when answering a customer. (2) `to` (phone in E.164, e.g. +14155550123) plus `from` — the connected number to send from (id or label from list_whatsapp_numbers); the contact and the conversation on that number are found-or-created. When the account has more than one number, never send with `to` alone: pass `from` or `conversation_id`, otherwise the message leaves from a default number the customer may not know. Use type "text" for a free-form message — on Evolution numbers always allowed; on Meta numbers only inside the 24-hour customer-service window, after which "template" is required. Media types (image/video/document/audio) require a media_url. The result reports which number sent it. This sends a real message to a real person — confirm the recipient, the sending number and the content with the user before calling.',
       inputSchema: {
-        to: z.string().describe('Recipient phone number in E.164 format, e.g. +14155550123.'),
+        to: z
+          .string()
+          .optional()
+          .describe('Recipient phone number in E.164 format, e.g. +14155550123. Required unless conversation_id is given.'),
+        conversation_id: z
+          .string()
+          .optional()
+          .describe('Reply inside this existing conversation, from the number it belongs to. Use instead of `to`.'),
+        from: z
+          .string()
+          .optional()
+          .describe('Which connected WhatsApp number sends: its id or label from list_whatsapp_numbers. Use together with `to`.'),
         type: z
           .enum(['text', 'template', 'image', 'video', 'document', 'audio'])
           .default('text')

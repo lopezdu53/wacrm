@@ -9,11 +9,23 @@
 // ============================================================
 
 import type { Conversation, Message } from '@/types';
+import type { ApiWhatsAppNumber } from './whatsapp-numbers';
 
 export interface ApiConversation {
   id: string;
   contact_id: string;
   status: string;
+  /**
+   * Which tray the chat sits in: the regular `inbox`, or
+   * `opportunities` — the high-attention tray agents move a chat into.
+   */
+  inbox: 'inbox' | 'opportunities';
+  /** The connected number this chat belongs to; replies leave from it. */
+  whatsapp_number: {
+    id: string;
+    label: string | null;
+    provider: string | null;
+  } | null;
   assigned_agent_id: string | null;
   last_message_text: string | null;
   last_message_at: string | null;
@@ -50,12 +62,25 @@ export interface ApiMessage {
  * Project a normalized `Conversation` (from `normalizeConversation`,
  * which has already flattened `contact.tags`) into the public shape.
  */
-export function serializeConversation(conv: Conversation): ApiConversation {
+export function serializeConversation(
+  conv: Conversation,
+  numbers: ApiWhatsAppNumber[] = []
+): ApiConversation {
   const c = conv.contact;
+  const numberId = conv.whatsapp_config_id ?? null;
+  const number = numberId ? numbers.find((n) => n.id === numberId) : undefined;
   return {
     id: conv.id,
     contact_id: conv.contact_id,
     status: conv.status,
+    inbox: conv.is_opportunity ? 'opportunities' : 'inbox',
+    whatsapp_number: numberId
+      ? {
+          id: numberId,
+          label: number?.label ?? null,
+          provider: number?.provider ?? null,
+        }
+      : null,
     assigned_agent_id: conv.assigned_agent_id ?? null,
     last_message_text: conv.last_message_text ?? null,
     last_message_at: conv.last_message_at ?? null,

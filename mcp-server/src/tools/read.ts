@@ -65,14 +65,34 @@ export function registerReadTools(server: McpServer, client: WacrmClient, config
   );
 
   server.registerTool(
+    'list_whatsapp_numbers',
+    {
+      title: 'List WhatsApp numbers',
+      description:
+        'List the WhatsApp numbers (lines) connected to this account: id, label (the name shown in the inbox number selector), provider (meta / evolution), connection status, and whether the number needs an approved template after 24 hours (Meta only — Evolution numbers can always send free text). Every conversation belongs to exactly one of these numbers. Call this before sending when the account has more than one number, to choose which one a message leaves from.',
+      inputSchema: {},
+      annotations: { ...READ_ONLY, title: 'List WhatsApp numbers' },
+    },
+    handle(async () => jsonResult(await client.listWhatsAppNumbers())),
+  );
+
+  server.registerTool(
     'list_conversations',
     {
       title: 'List conversations',
       description:
-        'List conversations, newest first. Optionally filter by status (open / pending / closed) or by contact id. Paginated.',
+        'List conversations, newest first. Each one reports `inbox` — which tray it sits in: "inbox" (Bandeja de entrada) or "opportunities" (Oportunidades, the high-attention tray) — and `whatsapp_number`, the connected number the chat belongs to. Optionally filter by status (open / pending / closed), contact id, tray, or number. The same contact can have one conversation per number. Paginated.',
       inputSchema: {
         status: z.enum(['open', 'pending', 'closed']).optional().describe('Conversation status filter.'),
         contact_id: z.string().optional().describe('Only conversations for this contact.'),
+        inbox: z
+          .enum(['inbox', 'opportunities'])
+          .optional()
+          .describe('Only conversations in this tray: "inbox" (Bandeja de entrada) or "opportunities" (Oportunidades).'),
+        whatsapp_number: z
+          .string()
+          .optional()
+          .describe('Only conversations on this connected number — its id or label from list_whatsapp_numbers.'),
         limit: z.number().int().min(1).max(100).optional().describe('Page size, 1–100 (default 50).'),
         cursor: z.string().optional().describe('Opaque pagination cursor.'),
       },
@@ -85,7 +105,8 @@ export function registerReadTools(server: McpServer, client: WacrmClient, config
     'get_conversation',
     {
       title: 'Get conversation',
-      description: 'Read a single conversation by id, including its contact and tags.',
+      description:
+        'Read a single conversation by id, including its contact and tags, the tray it sits in (`inbox`: "inbox" or "opportunities") and the connected number it belongs to (`whatsapp_number`).',
       inputSchema: {
         id: z.string().describe('Conversation id.'),
       },
