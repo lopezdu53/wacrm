@@ -1,7 +1,36 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+/**
+ * Machine-to-machine endpoints: provider webhooks, the public REST API
+ * and the MCP / OAuth token endpoints. They authenticate with their own
+ * secret (webhook signature, API key, PKCE) and never carry a browser
+ * session, so the Supabase session check below is pure latency for them
+ * — and it sat in front of EVERY inbound WhatsApp message.
+ *
+ * They are also excluded in `config.matcher`: when this file runs for a
+ * request Next buffers the body and silently truncates it at the proxy
+ * limit, which corrupted large webhook payloads (Evolution sends media
+ * inline as base64, so a ~7 MB file from the phone already overflowed).
+ * The check here is a second line of defence for matcher drift.
+ */
+export function isMachineRoute(pathname: string): boolean {
+  return (
+    pathname === '/api/whatsapp/webhook' ||
+    pathname === '/api/whatsapp/evolution/webhook' ||
+    pathname.startsWith('/api/whatsapp/evolution/webhook/') ||
+    pathname.startsWith('/api/v1/') ||
+    pathname === '/mcp' ||
+    pathname === '/oauth/token' ||
+    pathname === '/oauth/register'
+  )
+}
+
 export async function middleware(request: NextRequest) {
+  if (isMachineRoute(request.nextUrl.pathname)) {
+    return NextResponse.next({ request })
+  }
+
   let supabaseResponse = NextResponse.next({ request })
 
   const supabase = createServerClient(
@@ -149,6 +178,6 @@ export async function middleware(request: NextRequest) {
 
 export const config = {
   matcher: [
-    '/((?!_next/static|_next/image|favicon.ico|sw\\.js|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
+    '/((?!_next/static|_next/image|favicon.ico|sw\\.js|api/whatsapp/webhook$|api/whatsapp/evolution/webhook|api/v1/|mcp$|oauth/token$|oauth/register$|.*\\.(?:svg|png|jpg|jpeg|gif|webp)$).*)',
   ],
 }

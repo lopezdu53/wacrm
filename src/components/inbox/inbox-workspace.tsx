@@ -227,7 +227,9 @@ export function InboxWorkspace({ lane }: { lane: InboxLane }) {
       setWhatsappConnected(configs.some((c) => c.status === "connected"));
       const providers: Record<string, string> = {};
       for (const row of configs) {
-        if (row.id && row.provider) providers[row.id] = row.provider;
+        // Rows from before multi-provider support have no provider
+        // stamped; those are Meta Cloud API numbers.
+        if (row.id) providers[row.id] = row.provider || "meta";
       }
       setProviderByConfigId(providers);
     };

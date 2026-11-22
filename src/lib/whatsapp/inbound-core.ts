@@ -461,6 +461,45 @@ export interface RecordInboundArgs {
    * parent → stored as null.
    */
   replyToMetaMessageId?: string | null;
+  /**
+   * When set, everything that happens AFTER the message is stored
+   * (flows, automations, AI reply, AI qualification, outbound webhook
+   * events) runs in the background and its promise is handed to this
+   * callback instead of being awaited. The caller is expected to keep
+   * the runtime alive for it (e.g. `after()` in a route handler).
+   *
+   * This is what lets a webhook acknowledge as soon as the message is
+   * persisted: an LLM call can take tens of seconds, and a provider
+   * that delivers webhooks one at a time (Evolution) holds back every
+   * following message until the previous call returns.
+   */
+  onPostProcess?: (work: Promise<void>) => void;
+}
+
+/**
+ * Post-insert work is serialised per conversation so two quick
+ * messages on one thread still reach flows / the AI in arrival order,
+ * while different threads never wait on each other.
+ */
+const postInboundChains = new Map<string, Promise<void>>();
+
+function enqueuePostInbound(
+  conversationId: string,
+  task: () => Promise<void>,
+): Promise<void> {
+  const prev = postInboundChains.get(conversationId) ?? Promise.resolve();
+  const next = prev
+    .then(task)
+    .catch((err) =>
+      console.error('[inbound-core] post-processing failed:', err),
+    )
+    .finally(() => {
+      if (postInboundChains.get(conversationId) === next) {
+        postInboundChains.delete(conversationId);
+      }
+    });
+  postInboundChains.set(conversationId, next);
+  return next;
 }
 
 /**
@@ -778,91 +817,10 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
   // flag a broadcast reply, run the bot, or fire automations.
   if (outbound) return;
 
-  await flagBroadcastReplyIfAny(accountId, contactRecord.id);
-
-  const inboundText = contentText ?? '';
-
-  // Flow runner first — it may consume the message and suppress the
-  // content-level automation triggers below.
-  const flowResult = await dispatchInboundToFlows({
-    accountId,
-    userId: configOwnerUserId,
-    contactId: contactRecord.id,
-    conversationId: conversation.id,
-    message: args.interactiveReply
-      ? {
-          kind: 'interactive_reply',
-          reply_id: args.interactiveReply.reply_id,
-          reply_title: args.interactiveReply.reply_title,
-          meta_message_id: messageId,
-        }
-      : { kind: 'text', text: inboundText, meta_message_id: messageId },
-    isFirstInboundMessage,
-  });
-  const flowConsumed = flowResult.consumed;
-
-  const automationTriggers: (
-    | 'new_contact_created'
-    | 'first_inbound_message'
-    | 'new_message_received'
-    | 'keyword_match'
-    | 'interactive_reply'
-  )[] = [];
-  if (!flowConsumed) {
-    automationTriggers.push('new_message_received', 'keyword_match');
-    if (args.interactiveReply?.reply_id) {
-      automationTriggers.push('interactive_reply');
-    }
-  }
-  if (contactWasCreated) automationTriggers.unshift('new_contact_created');
-  if (isFirstInboundMessage) automationTriggers.unshift('first_inbound_message');
-
-  for (const triggerType of automationTriggers) {
-    runAutomationsForTrigger({
-      accountId,
-      triggerType,
-      contactId: contactRecord.id,
-      context: {
-        message_text: inboundText,
-        conversation_id: conversation.id,
-        interactive_reply_id: args.interactiveReply?.reply_id,
-      },
-    }).catch((err) => console.error('[inbound-core] automation dispatch failed:', err));
-  }
-
-  // AI auto-reply for plain text a flow didn't consume. Button/list
-  // taps are not free-text — the menu already chose the next step.
-  if (!flowConsumed && !args.interactiveReply && inboundText.trim()) {
-    await dispatchInboundToAiReply({
-      accountId,
-      conversationId: conversation.id,
-      contactId: contactRecord.id,
-      configOwnerUserId,
-    });
-  }
-
-  // AI lead qualification — runs independently of auto-reply, so wacrm can
-  // read the chat, update the contact, and open a deal even when replies
-  // are handled elsewhere (a human, or Meta's in-app AI). Inbound only.
-  if (!outbound && inboundText.trim()) {
-    await dispatchInboundToQualify({
-      accountId,
-      conversationId: conversation.id,
-      contactId: contactRecord.id,
-      configOwnerUserId,
-    });
-  }
-
-  await dispatchWebhookEvent(supabaseAdmin(), accountId, 'message.received', {
-    conversation_id: conversation.id,
-    contact_id: contactRecord.id,
-    whatsapp_message_id: messageId,
-    content_type: contentType,
-    text: contentText,
-  });
-
-  // Home-screen PWA + in-app bell. Fire-and-forget so a push-service
-  // timeout cannot stall the webhook ack.
+  // Home-screen PWA + in-app bell — fired as soon as the message is
+  // stored, BEFORE flows / the AI run, so the agent's phone buzzes
+  // right away instead of after an LLM round-trip. Fire-and-forget so
+  // a push-service timeout cannot stall the webhook ack.
   const assignedAgentId =
     typeof conversation.assigned_agent_id === 'string'
       ? conversation.assigned_agent_id
@@ -878,4 +836,95 @@ export async function recordInboundMessage(args: RecordInboundArgs): Promise<voi
   }).catch((err) =>
     console.error('[inbound-core] new-message notify failed:', err),
   );
+
+  const postProcess = async (): Promise<void> => {
+    await flagBroadcastReplyIfAny(accountId, contactRecord.id);
+
+    const inboundText = contentText ?? '';
+
+    // Flow runner first — it may consume the message and suppress the
+    // content-level automation triggers below.
+    const flowResult = await dispatchInboundToFlows({
+      accountId,
+      userId: configOwnerUserId,
+      contactId: contactRecord.id,
+      conversationId: conversation.id,
+      message: args.interactiveReply
+        ? {
+            kind: 'interactive_reply',
+            reply_id: args.interactiveReply.reply_id,
+            reply_title: args.interactiveReply.reply_title,
+            meta_message_id: messageId,
+          }
+        : { kind: 'text', text: inboundText, meta_message_id: messageId },
+      isFirstInboundMessage,
+    });
+    const flowConsumed = flowResult.consumed;
+
+    const automationTriggers: (
+      | 'new_contact_created'
+      | 'first_inbound_message'
+      | 'new_message_received'
+      | 'keyword_match'
+      | 'interactive_reply'
+    )[] = [];
+    if (!flowConsumed) {
+      automationTriggers.push('new_message_received', 'keyword_match');
+      if (args.interactiveReply?.reply_id) {
+        automationTriggers.push('interactive_reply');
+      }
+    }
+    if (contactWasCreated) automationTriggers.unshift('new_contact_created');
+    if (isFirstInboundMessage) automationTriggers.unshift('first_inbound_message');
+
+    for (const triggerType of automationTriggers) {
+      runAutomationsForTrigger({
+        accountId,
+        triggerType,
+        contactId: contactRecord.id,
+        context: {
+          message_text: inboundText,
+          conversation_id: conversation.id,
+          interactive_reply_id: args.interactiveReply?.reply_id,
+        },
+      }).catch((err) => console.error('[inbound-core] automation dispatch failed:', err));
+    }
+
+    // AI auto-reply for plain text a flow didn't consume. Button/list
+    // taps are not free-text — the menu already chose the next step.
+    if (!flowConsumed && !args.interactiveReply && inboundText.trim()) {
+      await dispatchInboundToAiReply({
+        accountId,
+        conversationId: conversation.id,
+        contactId: contactRecord.id,
+        configOwnerUserId,
+      });
+    }
+
+    // AI lead qualification — runs independently of auto-reply, so wacrm can
+    // read the chat, update the contact, and open a deal even when replies
+    // are handled elsewhere (a human, or Meta's in-app AI). Inbound only.
+    if (!outbound && inboundText.trim()) {
+      await dispatchInboundToQualify({
+        accountId,
+        conversationId: conversation.id,
+        contactId: contactRecord.id,
+        configOwnerUserId,
+      });
+    }
+
+    await dispatchWebhookEvent(supabaseAdmin(), accountId, 'message.received', {
+      conversation_id: conversation.id,
+      contact_id: contactRecord.id,
+      whatsapp_message_id: messageId,
+      content_type: contentType,
+      text: contentText,
+    });
+  };
+
+  if (args.onPostProcess) {
+    args.onPostProcess(enqueuePostInbound(conversation.id, postProcess));
+    return;
+  }
+  await postProcess();
 }

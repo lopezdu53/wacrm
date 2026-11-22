@@ -1,4 +1,5 @@
-import { NextResponse } from 'next/server';
+import { createHash } from 'node:crypto';
+import { NextResponse, after } from 'next/server';
 import { supabaseAdmin } from '@/lib/flows/admin-client';
 import { decrypt } from '@/lib/whatsapp/encryption';
 import { secretsMatch } from '@/lib/auth/secret-compare';
@@ -22,7 +23,16 @@ import { repairMixedEvolutionConversationsOnce } from '@/lib/whatsapp/repair-mix
  *   - the per-instance token (what recent Evolution puts in `body.apikey`)
  * We accept a match against the stored key, or a presented key that
  * Evolution itself accepts for this instance.
+ *
+ * Speed matters here more than anywhere else: Evolution delivers an
+ * instance's webhooks one after another and retries on timeout, so a
+ * slow answer to one message holds back every message behind it. The
+ * handler therefore only *stores* the message before answering; flows,
+ * automations and the AI (reply + lead qualification — an LLM call that
+ * can take tens of seconds) run after the response via `after()`.
  */
+export const maxDuration = 60;
+
 export async function POST(request: Request) {
   let body: {
     event?: string;
@@ -105,8 +115,19 @@ export async function POST(request: Request) {
         ? [raw as UpsertData]
         : [];
 
+  const background: Promise<void>[] = [];
   for (const item of items) {
-    await processEvolutionItem(inboundCfg, item);
+    await processEvolutionItem(inboundCfg, item, (work) => {
+      background.push(work);
+    });
+  }
+
+  if (background.length > 0) {
+    // Keeps the runtime alive for the deferred work on platforms that
+    // would otherwise freeze the function once the response is sent.
+    after(async () => {
+      await Promise.allSettled(background);
+    });
   }
 
   void repairMixedEvolutionConversationsOnce(inboundCfg);
@@ -164,6 +185,16 @@ async function findEvolutionConfig(instance: string) {
   return fuzzy.data ?? null;
 }
 
+/**
+ * Instance tokens Evolution has already vouched for. Without this,
+ * an instance whose webhook carries its own token (not the key wacrm
+ * stored) costs one extra round-trip to Evolution on EVERY message —
+ * and a slow or briefly unreachable Evolution turned that check into
+ * a 401, i.e. a lost message. Keyed by a hash, never the token itself.
+ */
+const VERIFIED_KEY_TTL_MS = 10 * 60 * 1000;
+const verifiedKeyCache = new Map<string, number>();
+
 async function isPresentedKeyAllowed(
   presented: string,
   config: {
@@ -186,6 +217,14 @@ async function isPresentedKeyAllowed(
 
   if (presented && secretsMatch(presented, storedPlain)) return true;
 
+  const cacheKey = presented
+    ? createHash('sha256')
+        .update(`${String(config.evolution_instance || instance)}\n${presented}`)
+        .digest('hex')
+    : '';
+  const cachedUntil = cacheKey ? verifiedKeyCache.get(cacheKey) : undefined;
+  if (cachedUntil && cachedUntil > Date.now()) return true;
+
   // Evolution often puts the *instance* token in body.apikey while
   // wacrm stored the global manager key used to create the instance.
   const baseUrl = (config.evolution_base_url as string | null) ?? '';
@@ -195,7 +234,11 @@ async function isPresentedKeyAllowed(
       apiKey: presented,
       instance: (config.evolution_instance as string) || instance,
     });
-    if (ok) return true;
+    if (ok) {
+      if (verifiedKeyCache.size > 500) verifiedKeyCache.clear();
+      verifiedKeyCache.set(cacheKey, Date.now() + VERIFIED_KEY_TTL_MS);
+      return true;
+    }
   }
 
   return false;

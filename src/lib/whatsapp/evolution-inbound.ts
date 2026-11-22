@@ -50,6 +50,14 @@ const BAILEYS_WRAPPERS = [
   'documentWithCaptionMessage',
   'editedMessage',
   'futureProofMessage',
+  // A message typed on the linked PHONE reaches the other devices
+  // wrapped like this. Unwrapped by most Baileys builds, but not all —
+  // without it those replies parse as "nothing renderable" and vanish.
+  'deviceSentMessage',
+  'groupMentionedMessage',
+  'botInvokeMessage',
+  'lottieStickerMessage',
+  'associatedChildMessage',
 ] as const;
 
 const EXT_BY_MIME: Record<string, string> = {
@@ -485,6 +493,7 @@ async function attachStoredEvolutionMedia(
 export async function processEvolutionItem(
   config: EvoInboundConfig,
   item: UpsertData,
+  onPostProcess?: (work: Promise<void>) => void,
 ): Promise<'recorded' | 'skipped' | 'error'> {
   try {
     const peer = resolveEvolutionPeer(item);
@@ -554,6 +563,7 @@ export async function processEvolutionItem(
       outbound,
       interactiveReply: parsed.interactiveReply,
       replyToMetaMessageId: parsed.replyToMetaMessageId ?? null,
+      onPostProcess,
     });
 
     if (parsed.mediaKey && !mediaUrl && item.key?.id) {
