@@ -73,7 +73,7 @@ export function registerWriteTools(server: McpServer, client: WacrmClient): void
     {
       title: 'Upload media for sending',
       description:
-        'Stage a file (as base64) in wacrm and get back a public URL to pass as send_message\'s media_url. Use this when you have file bytes from somewhere else — e.g. a PDF a quoting/ERP tool just generated — and need to send it as a WhatsApp document/image/video/audio: send_message cannot take base64 directly because Meta/Evolution must be able to fetch the URL themselves. Max 16 MB.',
+        'Stage a file (as base64) in wacrm and get back a public URL to pass as send_message\'s media_url. Use this when you have file bytes from somewhere else — e.g. a PDF a quoting/ERP tool just generated — and need to send it as a WhatsApp document/image/video/audio: send_message cannot take base64 directly because Meta/Evolution must be able to fetch the URL themselves. Only use this with bytes a tool actually returned to you; you cannot turn an image you are merely looking at (a chat attachment, a picture the user pasted) into base64 — the result would be a corrupt file. If the file already has an https URL, pass that URL as media_url instead. Max 16 MB.',
       inputSchema: {
         filename: z.string().describe('File name, e.g. "cotizacion-1234.pdf". Its extension is kept as-is.'),
         mime_type: z

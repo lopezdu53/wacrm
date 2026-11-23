@@ -260,6 +260,19 @@ belongs to (`whatsapp_number`).
 Read one conversation. Scope: `conversations:read`. `404` if it belongs
 to another account.
 
+### `GET /api/v1/messages/{id}/media`
+
+Read a message's attachment. Scope: `messages:read`. Returns `url` (a
+public https link to the file), `mime_type`, `size_bytes`, `caption`,
+and depending on the file: `image_base64` (photos up to 4 MB) or `text`
+(`text_source`: `audio_transcription`, `pdf_text`, `pdf_ocr`,
+`text_file`). When something can't be read, `note` explains why.
+
+Audio transcription uses the account's OpenAI key (the assistant key
+when the provider is OpenAI, otherwise the embeddings key) or a
+server-wide `OPENAI_API_KEY`. Text is cached on the message
+(migration 058) so the same audio is not transcribed twice.
+
 ### `GET /api/v1/conversations/{id}/messages`
 
 List a conversation's messages, newest first. Scope: `messages:read`.
