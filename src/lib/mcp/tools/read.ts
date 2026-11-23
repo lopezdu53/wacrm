@@ -120,7 +120,7 @@ export function registerReadTools(
     {
       title: 'List messages',
       description:
-        'List the messages in a conversation, newest first. Each message includes its direction (inbound/outbound), delivery status, and content. Paginated.',
+        'List the messages in a conversation, newest first. Each message includes its direction (inbound/outbound), delivery status, and content. A message whose content_type is image / audio / document / video carries an attachment: call get_message_media with its id to see the photo, read the PDF, or get the transcription of the voice note — do not guess what an attachment says. Paginated.',
       inputSchema: {
         conversation_id: z.string().describe('The conversation to read messages from.'),
         limit: z.number().int().min(1).max(100).optional().describe('Page size, 1–100 (default 50).'),
@@ -131,6 +131,32 @@ export function registerReadTools(
     handle(async ({ conversation_id, limit, cursor }) =>
       jsonResult(await client.listConversationMessages(conversation_id, { limit, cursor })),
     ),
+  );
+
+  server.registerTool(
+    'get_message_media',
+    {
+      title: 'Open a message attachment',
+      description:
+        'Open the attachment of one chat message (photo, voice note, PDF, document). Returns: `url` — a public https link to the file; for a photo, the image itself so you can look at it; for a voice note or audio, `text` with its transcription; for a PDF, `text` with its contents. If something could not be read, `note` says why in plain words — relay it instead of inventing the content. To put a chat photo on an Odoo product or quotation (or hand the file to any other tool), pass `url` to that tool\'s URL parameter; never retype or reconstruct an image as base64 yourself — that produces a corrupt (grey) image.',
+      inputSchema: {
+        message_id: z.string().describe('Id of the message that carries the attachment (from list_messages).'),
+      },
+      annotations: { ...READ_ONLY, title: 'Open a message attachment' },
+    },
+    handle(async ({ message_id }) => {
+      const { data } = await client.getMessageMedia(message_id);
+      const { image_base64, ...info } = data;
+      const result = jsonResult(info);
+      if (typeof image_base64 === 'string' && image_base64) {
+        result.content.push({
+          type: 'image',
+          data: image_base64,
+          mimeType: typeof info.mime_type === 'string' ? info.mime_type : 'image/jpeg',
+        });
+      }
+      return result;
+    }),
   );
 
   server.registerTool(

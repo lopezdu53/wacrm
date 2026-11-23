@@ -183,6 +183,11 @@ export class WacrmClient {
     return this.list(`/conversations/${encodeURIComponent(id)}/messages`, query);
   }
 
+  /** A message's attachment: public URL + image bytes / transcript / PDF text. */
+  getMessageMedia(id: string): Promise<{ data: Record<string, unknown> }> {
+    return this.request('GET', `/messages/${encodeURIComponent(id)}/media`);
+  }
+
   // --- Broadcasts ---------------------------------------------------
 
   sendBroadcast(body: unknown): Promise<{ data: unknown }> {

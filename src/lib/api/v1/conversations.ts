@@ -50,6 +50,12 @@ export interface ApiMessage {
   content_type: string;
   content_text: string | null;
   media_url: string | null;
+  /**
+   * Text already read out of the attachment (audio transcription or
+   * PDF text), when someone asked for it before. `null` does not mean
+   * "unreadable" — call GET /api/v1/messages/{id}/media to read it.
+   */
+  media_transcript: string | null;
   template_name: string | null;
   whatsapp_message_id: string | null;
   status: string;
@@ -115,6 +121,9 @@ export function serializeMessage(m: Message): ApiMessage {
     content_type: m.content_type,
     content_text: m.content_text ?? null,
     media_url: m.media_url ?? null,
+    media_transcript:
+      (m as Message & { media_transcript?: string | null }).media_transcript ??
+      null,
     template_name: m.template_name ?? null,
     whatsapp_message_id: m.message_id ?? null,
     status: m.status,
